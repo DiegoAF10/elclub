@@ -1,0 +1,301 @@
+/*
+ * El Club Design System v1.0
+ * elclub.club
+ *
+ * Brand colors (from Brandbook):
+ *   Carbon:    #111111  (primary — negro carbon)
+ *   Sand:      #d4c5a9  (secondary — arena)
+ *   SandLight: #f0ead6  (background — arena claro)
+ *   Cream:     #faf7f2  (page background)
+ *   White:     #ffffff  (text on dark)
+ *   Warm:      #8b7355  (accent text — warm vintage)
+ *   Gold:      #c9a96e  (accent highlights)
+ *   Green:     #059669  (success/stock)
+ *   Red:       #dc2626  (urgency/last units)
+ *
+ * Typography: Montserrat 400-800
+ * Spacing: 8px base grid
+ */
+
+/* ── Tailwind v4 Theme ────────────────────────── */
+@theme {
+  --color-carbon: #111111;
+  --color-carbon-light: #1a1a1a;
+  --color-sand: #d4c5a9;
+  --color-sand-light: #f0ead6;
+  --color-cream: #faf7f2;
+  --color-warm: #8b7355;
+  --color-gold: #c9a96e;
+  --color-success: #059669;
+  --color-urgency: #dc2626;
+}
+
+/* ── Base ─────────────────────────────────────── */
+* { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Montserrat', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #faf7f2;
+  color: #111111;
+}
+
+/* ── Brand Utilities ──────────────────────────── */
+.text-carbon      { color: #111111; }
+.text-warm        { color: #8b7355; }
+.text-gold        { color: #c9a96e; }
+.text-sand        { color: #d4c5a9; }
+.bg-carbon        { background-color: #111111; }
+.bg-carbon-light  { background-color: #1a1a1a; }
+.bg-sand          { background-color: #d4c5a9; }
+.bg-sand-light    { background-color: #f0ead6; }
+.bg-cream         { background-color: #faf7f2; }
+.border-sand      { border-color: #d4c5a9; }
+.border-carbon    { border-color: #111111; }
+
+/* ── Buttons ──────────────────────────────────── */
+.btn-primary {
+  background-color: #111111;
+  color: #ffffff;
+  padding: 12px 28px;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+.btn-primary:hover {
+  background-color: #c9a96e;
+  color: #111111;
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: #111111;
+  padding: 12px 28px;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 2px solid #111111;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-block;
+  text-align: center;
+}
+.btn-secondary:hover {
+  background-color: #111111;
+  color: #ffffff;
+}
+
+.btn-whatsapp {
+  background-color: #25D366;
+  color: #ffffff;
+  padding: 14px 32px;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.03em;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.btn-whatsapp:hover {
+  background-color: #128C7E;
+  transform: translateY(-1px);
+}
+
+/* ── Product Card ─────────────────────────────── */
+.product-card {
+  background: #ffffff;
+  border: 1px solid #f0ead6;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+.product-card:hover {
+  border-color: #d4c5a9;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+.product-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background-color: #f0ead6;
+}
+
+/* ── Badge ────────────────────────────────────── */
+.badge-urgency {
+  background-color: #dc2626;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.badge-new {
+  background-color: #c9a96e;
+  color: #111111;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ── WhatsApp Float ───────────────────────────── */
+.whatsapp-float {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 60px;
+  height: 60px;
+  background-color: #25D366;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
+  z-index: 50;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+.whatsapp-float:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(37, 211, 102, 0.5);
+}
+.whatsapp-float svg {
+  width: 32px;
+  height: 32px;
+  fill: #ffffff;
+}
+
+/* ── Cart Badge ───────────────────────────────── */
+.cart-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background-color: #dc2626;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* ── Size Selector ────────────────────────────── */
+.size-btn {
+  width: 44px;
+  height: 44px;
+  border: 2px solid #d4c5a9;
+  background: transparent;
+  color: #111111;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.size-btn:hover {
+  border-color: #111111;
+}
+.size-btn.active {
+  background-color: #111111;
+  color: #ffffff;
+  border-color: #111111;
+}
+.size-btn.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── Animations ───────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease forwards;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+
+/* ── Cart Drawer ──────────────────────────────── */
+.cart-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 60;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.cart-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.cart-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: 400px;
+  background: #ffffff;
+  z-index: 61;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+.cart-drawer.open {
+  transform: translateX(0);
+}
+
+/* ── Mobile Nav ───────────────────────────────── */
+.mobile-menu {
+  position: fixed;
+  inset: 0;
+  background: #111111;
+  z-index: 55;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
+}
+.mobile-menu.open {
+  transform: translateX(0);
+}
+
+/* ── Scroll-triggered visibility ──────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: all 0.7s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}

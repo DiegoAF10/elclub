@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="es-GT">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nosotros — El Club</title>
+
+  <!-- SEO -->
+  <meta name="description" content="El Club no es una tienda. Es un ritual. Descubri la historia detras de la unica experiencia futbolera en Guatemala donde el futbol no se compra, se revela.">
+  <meta name="keywords" content="el club, nosotros, mystery box guatemala, camisetas futbol, cultura futbol, streetwear guatemala">
+  <meta name="author" content="El Club">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://elclub.club/nosotros.html">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://elclub.club/nosotros.html">
+  <meta property="og:title" content="Nosotros — El Club">
+  <meta property="og:description" content="El Club no es una tienda. Es un ritual. La unica experiencia futbolera en Guatemala.">
+  <meta property="og:image" content="https://elclub.club/assets/img/brand/og-image.png">
+  <meta property="og:site_name" content="El Club">
+  <meta property="og:locale" content="es_GT">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/assets/img/brand/favicon.png">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS v4 Browser -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <!-- Custom Design System -->
+  <link rel="stylesheet" href="/assets/css/elclub.css">
+</head>
+<body class="bg-cream text-carbon">
+
+  <!-- ============================================================ -->
+  <!-- NAV                                                          -->
+  <!-- ============================================================ -->
+  <header id="site-header" class="fixed top-0 left-0 right-0 z-40 bg-carbon">
+    <nav class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+
+      <!-- Logo -->
+      <a href="/" class="flex-shrink-0">
+        <img src="/assets/img/brand/logo.png" alt="El Club" class="h-10">
+      </a>
+
+      <!-- Desktop Links -->
+      <div class="hidden md:flex items-center gap-8">
+        <a href="/tienda.html" class="text-sm font-semibold text-white uppercase tracking-wider hover:text-gold transition-colors">Tienda</a>
+        <a href="/mystery-box.html" class="text-sm font-semibold text-white uppercase tracking-wider hover:text-gold transition-colors">Mystery Box</a>
+        <a href="/nosotros.html" class="text-sm font-semibold text-gold uppercase tracking-wider hover:text-sand transition-colors">Nosotros</a>
+      </div>
+
+      <!-- Right: Cart + Mobile Hamburger -->
+      <div class="flex items-center gap-4">
+
+        <!-- Cart Button -->
+        <button onclick="openCartDrawer()" class="relative text-white hover:text-gold transition-colors cursor-pointer" aria-label="Abrir carrito">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+          </svg>
+          <span class="cart-badge hidden">0</span>
+        </button>
+
+        <!-- Mobile Hamburger -->
+        <button onclick="toggleMobileMenu()" class="md:hidden text-white hover:text-gold transition-colors cursor-pointer" aria-label="Menu">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
+          </svg>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- MOBILE MENU                                                  -->
+  <!-- ============================================================ -->
+  <div id="mobile-menu" class="mobile-menu">
+    <div class="flex flex-col h-full px-6 py-8">
+
+      <!-- Close Button -->
+      <div class="flex justify-end mb-12">
+        <button onclick="closeMobileMenu()" class="text-white hover:text-gold transition-colors cursor-pointer" aria-label="Cerrar menu">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Mobile Links -->
+      <nav class="flex flex-col gap-8">
+        <a href="/tienda.html" onclick="closeMobileMenu()" class="text-2xl font-bold text-white uppercase tracking-wider hover:text-gold transition-colors">Tienda</a>
+        <a href="/mystery-box.html" onclick="closeMobileMenu()" class="text-2xl font-bold text-white uppercase tracking-wider hover:text-gold transition-colors">Mystery Box</a>
+        <a href="/nosotros.html" onclick="closeMobileMenu()" class="text-2xl font-bold text-gold uppercase tracking-wider hover:text-sand transition-colors">Nosotros</a>
+        <a href="/contacto.html" onclick="closeMobileMenu()" class="text-2xl font-bold text-white uppercase tracking-wider hover:text-gold transition-colors">Contacto</a>
+      </nav>
+
+      <!-- Mobile Social Links -->
+      <div class="mt-auto flex items-center gap-6">
+        <a href="https://www.instagram.com/club.gt" target="_blank" rel="noopener" class="text-sand hover:text-gold transition-colors" aria-label="Instagram">
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+          </svg>
+        </a>
+        <a href="https://www.tiktok.com/@club.gtm" target="_blank" rel="noopener" class="text-sand hover:text-gold transition-colors" aria-label="TikTok">
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.15V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- HERO — MANIFESTO HEADER                                      -->
+  <!-- ============================================================ -->
+  <section class="relative min-h-[70vh] flex items-center justify-center bg-carbon overflow-hidden pt-16">
+
+    <!-- Subtle gradient overlay -->
+    <div class="absolute inset-0 bg-gradient-to-b from-carbon-light/50 via-carbon to-carbon"></div>
+
+    <!-- Decorative lines -->
+    <div class="absolute inset-0 opacity-5">
+      <div class="absolute top-1/4 left-0 right-0 h-px bg-sand"></div>
+      <div class="absolute top-2/4 left-0 right-0 h-px bg-sand"></div>
+      <div class="absolute top-3/4 left-0 right-0 h-px bg-sand"></div>
+    </div>
+
+    <div class="relative z-10 max-w-4xl mx-auto px-6 text-center">
+
+      <!-- Pretitle -->
+      <p class="text-gold text-xs font-bold uppercase tracking-[0.3em] mb-6 animate-fade-in-up">
+        Quienes somos
+      </p>
+
+      <!-- Main headline -->
+      <h1 class="text-4xl md:text-6xl lg:text-7xl font-extrabold text-white leading-tight mb-8" style="animation: fadeInUp 0.6s ease 0.15s forwards; opacity: 0;">
+        El Club no es una tienda.<br>
+        <span class="text-gold">Es un ritual.</span>
+      </h1>
+
+      <!-- Sub-copy -->
+      <p class="text-sand text-base md:text-lg max-w-xl mx-auto leading-relaxed" style="animation: fadeInUp 0.6s ease 0.3s forwards; opacity: 0;">
+        Donde la nostalgia del futbol se encuentra con la emocion de lo desconocido.
+      </p>
+    </div>
+
+    <!-- Scroll indicator -->
+    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-50">
+      <span class="text-sand text-[10px] uppercase tracking-[0.2em] font-semibold">Scroll</span>
+      <div class="w-px h-8 bg-sand/50 animate-pulse"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- MANIFESTO                                                    -->
+  <!-- ============================================================ -->
+  <section class="py-16 md:py-24 px-4">
+    <div class="max-w-3xl mx-auto">
+
+      <div class="reveal">
+        <p class="text-gold text-xs font-bold uppercase tracking-[0.25em] mb-6 text-center">Nuestro manifiesto</p>
+      </div>
+
+      <div class="space-y-6 reveal">
+        <p class="text-lg md:text-xl leading-relaxed text-carbon font-medium">
+          Cada caja que abris es un pedazo de historia que no sabias que necesitabas.
+        </p>
+
+        <p class="text-lg md:text-xl leading-relaxed text-carbon font-medium">
+          No elegis la camisa &mdash; la camisa te elige a vos.
+        </p>
+
+        <p class="text-base md:text-lg leading-relaxed text-warm">
+          Somos el punto de encuentro entre la nostalgia del futbol y la emocion de lo desconocido. Curamos piezas que cuentan historias, de ligas que admiras, de equipos que tal vez no conocias, de momentos que cambiaron el deporte.
+        </p>
+
+        <p class="text-lg md:text-xl leading-relaxed text-carbon font-bold">
+          El Club es para los que entienden que el futbol no es solo un juego.
+        </p>
+
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-6 text-center pt-4">
+          <span class="text-gold font-extrabold text-xl uppercase tracking-wider">Es identidad.</span>
+          <span class="text-gold font-extrabold text-xl uppercase tracking-wider">Es cultura.</span>
+          <span class="text-gold font-extrabold text-xl uppercase tracking-wider">Es historia.</span>
+        </div>
+      </div>
+
+      <!-- Decorative divider -->
+      <div class="flex items-center justify-center mt-12 reveal">
+        <div class="h-px w-16 bg-sand"></div>
+        <div class="w-2 h-2 rounded-full bg-gold mx-4"></div>
+        <div class="h-px w-16 bg-sand"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- VALUES                                                       -->
+  <!-- ============================================================ -->
+  <section class="py-16 md:py-24 px-4 bg-sand-light">
+    <div class="max-w-5xl mx-auto">
+
+      <div class="text-center mb-12 reveal">
+        <p class="text-gold text-xs font-bold uppercase tracking-[0.25em] mb-3">Lo que nos mueve</p>
+        <h2 class="text-3xl md:text-4xl font-extrabold text-carbon">Nuestros valores</h2>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-8 reveal">
+
+        <!-- Value 1: Historia -->
+        <div class="bg-white rounded-lg p-8 border border-sand hover:border-gold transition-colors text-center">
+          <div class="w-16 h-16 mx-auto mb-6 rounded-full bg-carbon flex items-center justify-center">
+            <svg class="w-7 h-7 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/>
+            </svg>
+          </div>
+          <h3 class="font-extrabold text-xl mb-3 text-carbon uppercase tracking-wider">Historia</h3>
+          <p class="text-warm text-sm leading-relaxed">
+            Cada pieza tiene una historia. Nosotros la descubrimos para vos.
+          </p>
+        </div>
+
+        <!-- Value 2: Mistica -->
+        <div class="bg-white rounded-lg p-8 border border-sand hover:border-gold transition-colors text-center">
+          <div class="w-16 h-16 mx-auto mb-6 rounded-full bg-carbon flex items-center justify-center">
+            <svg class="w-7 h-7 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z"/>
+            </svg>
+          </div>
+          <h3 class="font-extrabold text-xl mb-3 text-carbon uppercase tracking-wider">Mistica</h3>
+          <p class="text-warm text-sm leading-relaxed">
+            No sabes que vas a recibir. Esa es la magia.
+          </p>
+        </div>
+
+        <!-- Value 3: Comunidad -->
+        <div class="bg-white rounded-lg p-8 border border-sand hover:border-gold transition-colors text-center">
+          <div class="w-16 h-16 mx-auto mb-6 rounded-full bg-carbon flex items-center justify-center">
+            <svg class="w-7 h-7 text-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"/>
+            </svg>
+          </div>
+          <h3 class="font-extrabold text-xl mb-3 text-carbon uppercase tracking-wider">Comunidad</h3>
+          <p class="text-warm text-sm leading-relaxed">
+            Somos un club. No una tienda.
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- TEAM / ORIGIN                                                -->
+  <!-- ============================================================ -->
+  <section class="py-16 md:py-24 px-4">
+    <div class="max-w-3xl mx-auto text-center reveal">
+
+      <p class="text-gold text-xs font-bold uppercase tracking-[0.25em] mb-3">El origen</p>
+      <h2 class="text-3xl md:text-4xl font-extrabold text-carbon mb-8">De donde venimos</h2>
+
+      <p class="text-warm text-base md:text-lg leading-relaxed mb-6">
+        Fundado en 2025 en Ciudad de Guatemala. Un proyecto de pasion por el futbol y la cultura que lo rodea.
+      </p>
+      <p class="text-warm text-base md:text-lg leading-relaxed">
+        Creemos que cada camisa es mas que tela y escudo. Es un momento. Una final. Un gol que cambio todo. Nosotros coleccionamos esos momentos y los ponemos en una caja para vos.
+      </p>
+
+      <!-- Decorative divider -->
+      <div class="flex items-center justify-center mt-10">
+        <div class="h-px w-16 bg-sand"></div>
+        <div class="w-2 h-2 rounded-full bg-gold mx-4"></div>
+        <div class="h-px w-16 bg-sand"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- CTA BANNER                                                   -->
+  <!-- ============================================================ -->
+  <section class="bg-carbon py-16 md:py-20 px-4">
+    <div class="max-w-3xl mx-auto text-center reveal">
+      <h2 class="text-3xl md:text-4xl font-extrabold text-white leading-tight mb-4">
+        Tu historia esta<br>
+        <span class="text-gold">esperandote.</span>
+      </h2>
+      <p class="text-sand text-base md:text-lg mb-8 max-w-lg mx-auto leading-relaxed">
+        Unite al Club. Descubri piezas que no sabias que necesitabas.
+      </p>
+      <a href="/mystery-box.html" class="btn-primary text-base px-10 py-4 bg-gold text-carbon hover:bg-sand hover:text-carbon">
+        Unite al Club
+      </a>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- FOOTER                                                       -->
+  <!-- ============================================================ -->
+  <footer class="bg-carbon border-t border-sand/10 pt-12 pb-8 px-4">
+    <div class="max-w-6xl mx-auto">
+
+      <div class="grid md:grid-cols-3 gap-10 mb-10">
+
+        <!-- Col 1: Brand -->
+        <div>
+          <a href="/" class="inline-block mb-4">
+            <img src="/assets/img/brand/logo.png" alt="El Club" class="h-12">
+          </a>
+          <p class="text-sand/70 text-sm leading-relaxed max-w-xs">
+            La unica experiencia futbolera en Guatemala donde el futbol no se compra, se revela.
+          </p>
+        </div>
+
+        <!-- Col 2: Links -->
+        <div>
+          <p class="text-white font-bold text-sm uppercase tracking-wider mb-4">Navegacion</p>
+          <nav class="flex flex-col gap-3">
+            <a href="/tienda.html" class="text-sand/70 text-sm hover:text-gold transition-colors">Tienda</a>
+            <a href="/mystery-box.html" class="text-sand/70 text-sm hover:text-gold transition-colors">Mystery Box</a>
+            <a href="/nosotros.html" class="text-sand/70 text-sm hover:text-gold transition-colors">Nosotros</a>
+            <a href="/contacto.html" class="text-sand/70 text-sm hover:text-gold transition-colors">Contacto</a>
+          </nav>
+        </div>
+
+        <!-- Col 3: Social -->
+        <div>
+          <p class="text-white font-bold text-sm uppercase tracking-wider mb-4">Seguinos</p>
+          <div class="flex items-center gap-4 mb-6">
+            <!-- Instagram -->
+            <a href="https://www.instagram.com/club.gt" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-sand/20 flex items-center justify-center text-sand hover:text-gold hover:border-gold transition-colors" aria-label="Instagram">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+              </svg>
+            </a>
+            <!-- TikTok -->
+            <a href="https://www.tiktok.com/@club.gtm" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-sand/20 flex items-center justify-center text-sand hover:text-gold hover:border-gold transition-colors" aria-label="TikTok">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.15V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/>
+              </svg>
+            </a>
+            <!-- WhatsApp -->
+            <a href="https://wa.me/50212345678" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-sand/20 flex items-center justify-center text-sand hover:text-gold hover:border-gold transition-colors" aria-label="WhatsApp">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+              </svg>
+            </a>
+          </div>
+
+          <!-- WhatsApp CTA -->
+          <a href="https://wa.me/50212345678?text=Hola%21%20Quiero%20saber%20mas%20sobre%20El%20Club." target="_blank" rel="noopener" class="btn-whatsapp text-xs py-3 px-5">
+            <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+            </svg>
+            Escribinos por WhatsApp
+          </a>
+        </div>
+      </div>
+
+      <!-- Bottom bar -->
+      <div class="border-t border-sand/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <p class="text-sand/40 text-xs">El Club 2026. Todos los derechos reservados.</p>
+        <p class="text-sand/40 text-xs">Guatemala</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============================================================ -->
+  <!-- CART OVERLAY + DRAWER                                        -->
+  <!-- ============================================================ -->
+  <div id="cart-overlay" class="cart-overlay"></div>
+
+  <div id="cart-drawer" class="cart-drawer">
+
+    <!-- Drawer Header -->
+    <div class="flex items-center justify-between px-5 py-4 border-b border-sand-light">
+      <h2 class="font-bold text-lg uppercase tracking-wider">Tu carrito</h2>
+      <button onclick="closeCartDrawer()" class="text-warm hover:text-carbon transition-colors cursor-pointer" aria-label="Cerrar carrito">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Empty State -->
+    <div id="cart-empty" class="flex-1 flex flex-col items-center justify-center px-5 text-center">
+      <svg class="w-16 h-16 text-sand mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+      </svg>
+      <p class="text-warm font-semibold mb-1">Tu carrito esta vacio</p>
+      <p class="text-warm/60 text-sm mb-6">Agrega algo increible para empezar.</p>
+      <a href="/tienda.html" onclick="closeCartDrawer()" class="btn-primary text-sm">Ver tienda</a>
+    </div>
+
+    <!-- Filled State -->
+    <div id="cart-filled" class="hidden flex-1 flex flex-col">
+      <!-- Items -->
+      <div id="cart-items" class="flex-1 overflow-y-auto px-5">
+        <!-- Rendered by cart.js -->
+      </div>
+
+      <!-- Footer -->
+      <div class="border-t border-sand-light px-5 py-4">
+        <div class="flex items-center justify-between mb-4">
+          <span class="font-bold text-sm uppercase tracking-wider">Total</span>
+          <span id="cart-total" class="font-extrabold text-xl">Q0</span>
+        </div>
+        <p class="text-warm/60 text-xs mb-4">Envio coordinado por WhatsApp despues de tu pedido.</p>
+        <button onclick="checkoutWhatsApp()" class="btn-whatsapp w-full justify-center text-sm py-3.5">
+          <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+          </svg>
+          Pedir por WhatsApp
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- WHATSAPP FLOATING BUTTON                                     -->
+  <!-- ============================================================ -->
+  <a
+    href="https://wa.me/50212345678?text=Hola%21%20Quiero%20saber%20mas%20sobre%20El%20Club."
+    target="_blank"
+    rel="noopener"
+    class="whatsapp-float"
+    aria-label="Contactar por WhatsApp"
+  >
+    <svg viewBox="0 0 24 24">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+  </a>
+
+  <!-- ============================================================ -->
+  <!-- SCRIPTS                                                      -->
+  <!-- ============================================================ -->
+  <script src="/assets/js/cart.js"></script>
+  <script src="/assets/js/app.js"></script>
+
+</body>
+</html>

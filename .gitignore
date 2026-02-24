@@ -1,0 +1,15 @@
+# Loki Mode runtime
+.loki/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+*.swp
+*.swo
+
+# Node (if ever needed)
+node_modules/

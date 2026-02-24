@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="es-GT">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Producto | El Club — Jerseys de Futbol en Guatemala</title>
+  <meta name="description" content="Detalle del producto. Jerseys de futbol originales en Guatemala. Envio a toda Guatemala.">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/assets/img/brand/favicon.png">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS v4 Browser -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <!-- Custom Design System -->
+  <link rel="stylesheet" href="/assets/css/elclub.css">
+</head>
+<body class="bg-cream text-carbon">
+
+  <!-- ── Nav ─────────────────────────────────────── -->
+  <nav class="bg-carbon text-white">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2">
+        <img src="/assets/img/brand/logo.png" alt="El Club" class="h-10 w-auto brightness-0 invert">
+      </a>
+      <div class="hidden md:flex items-center gap-8">
+        <a href="/tienda.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-white">Tienda</a>
+        <a href="/mystery-box.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-white">Mystery Box</a>
+        <a href="/nosotros.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-white">Nosotros</a>
+      </div>
+      <div class="flex items-center gap-4">
+        <button onclick="openCartDrawer()" class="relative cursor-pointer bg-transparent border-none text-white">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+          <span class="cart-badge hidden">0</span>
+        </button>
+        <button onclick="toggleMobileMenu()" class="md:hidden cursor-pointer bg-transparent border-none text-white">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Breadcrumb ──────────────────────────────── -->
+  <div class="bg-sand-light border-b border-sand">
+    <div class="max-w-6xl mx-auto px-4 py-3">
+      <nav id="breadcrumb" class="text-xs text-warm" aria-label="Breadcrumb">
+        <a href="/tienda.html" class="hover:text-carbon transition-colors no-underline text-warm">Tienda</a>
+        <span class="mx-2">/</span>
+        <span id="breadcrumb-league" class="text-warm">...</span>
+        <span class="mx-2">/</span>
+        <span id="breadcrumb-name" class="text-carbon font-semibold">...</span>
+      </nav>
+    </div>
+  </div>
+
+  <!-- ── Product Detail ──────────────────────────── -->
+  <main class="max-w-6xl mx-auto px-4 py-8 md:py-12">
+
+    <!-- Loading State -->
+    <div id="product-loading" class="text-center py-16">
+      <p class="text-warm text-sm">Cargando producto...</p>
+    </div>
+
+    <!-- Not Found State -->
+    <div id="product-not-found" class="hidden text-center py-16">
+      <svg class="w-16 h-16 mx-auto text-sand mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <h2 class="text-2xl font-extrabold mb-2">Producto no encontrado</h2>
+      <p class="text-warm text-sm mb-6">El producto que buscas no existe o ya no esta disponible.</p>
+      <a href="/tienda.html" class="btn-primary">Volver a la tienda</a>
+    </div>
+
+    <!-- Product Content (hidden until loaded) -->
+    <div id="product-content" class="hidden">
+      <div class="grid md:grid-cols-2 gap-8 md:gap-12">
+
+        <!-- Left: Product Image -->
+        <div>
+          <div class="aspect-square bg-sand-light rounded-lg overflow-hidden">
+            <img id="product-image" src="" alt="" class="w-full h-full object-cover" loading="eager">
+          </div>
+        </div>
+
+        <!-- Right: Product Info -->
+        <div class="flex flex-col">
+
+          <!-- League Badge -->
+          <p id="product-league" class="text-warm text-xs font-bold uppercase tracking-[0.2em] mb-2"></p>
+
+          <!-- Product Name -->
+          <h1 id="product-name" class="text-2xl md:text-3xl font-extrabold text-carbon leading-tight mb-2"></h1>
+
+          <!-- Season / Team -->
+          <p id="product-meta" class="text-sm text-warm mb-4"></p>
+
+          <!-- Price -->
+          <p id="product-price" class="text-2xl md:text-3xl font-extrabold text-carbon mb-4"></p>
+
+          <!-- Stock Status -->
+          <div id="product-stock" class="mb-6"></div>
+
+          <!-- Size Selector -->
+          <div class="mb-6">
+            <p class="text-sm font-bold uppercase tracking-wider mb-3">Talla</p>
+            <div id="size-buttons" class="flex gap-2 flex-wrap"></div>
+          </div>
+
+          <!-- Add to Cart -->
+          <button
+            id="btn-add-to-cart"
+            onclick="addProductToCart()"
+            class="btn-primary w-full py-4 text-center opacity-50 pointer-events-none mb-4"
+            disabled
+          >
+            Selecciona una talla
+          </button>
+
+          <!-- Share WhatsApp -->
+          <button
+            id="btn-share-whatsapp"
+            onclick="shareWhatsApp()"
+            class="inline-flex items-center justify-center gap-2 text-sm text-warm hover:text-carbon transition-colors cursor-pointer bg-transparent border border-sand rounded-lg py-3 w-full mb-6"
+          >
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            Compartir por WhatsApp
+          </button>
+
+          <!-- Description -->
+          <div class="border-t border-sand pt-6">
+            <p class="text-sm font-bold uppercase tracking-wider mb-2">Descripcion</p>
+            <p id="product-description" class="text-sm text-warm leading-relaxed"></p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── Related Products ────────────────────────── -->
+  <section id="related-section" class="hidden bg-sand-light py-12 md:py-16 px-4">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-xl md:text-2xl font-extrabold text-carbon mb-8">Tambien te puede gustar</h2>
+      <div id="related-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6"></div>
+    </div>
+  </section>
+
+  <!-- ── Footer ──────────────────────────────────── -->
+  <footer class="bg-carbon border-t border-sand/10 pt-12 pb-8 px-4">
+    <div class="max-w-6xl mx-auto">
+      <div class="grid md:grid-cols-3 gap-10 mb-10">
+
+        <!-- Col 1: Brand -->
+        <div>
+          <a href="/" class="inline-block mb-4">
+            <img src="/assets/img/brand/logo.png" alt="El Club" class="h-12 brightness-0 invert">
+          </a>
+          <p class="text-sand/70 text-sm leading-relaxed max-w-xs">
+            La unica experiencia futbolera en Guatemala donde el futbol no se compra, se revela.
+          </p>
+        </div>
+
+        <!-- Col 2: Links -->
+        <div>
+          <p class="text-white font-bold text-sm uppercase tracking-wider mb-4">Navegacion</p>
+          <nav class="flex flex-col gap-3">
+            <a href="/tienda.html" class="text-sand/70 text-sm hover:text-gold transition-colors no-underline">Tienda</a>
+            <a href="/mystery-box.html" class="text-sand/70 text-sm hover:text-gold transition-colors no-underline">Mystery Box</a>
+            <a href="/nosotros.html" class="text-sand/70 text-sm hover:text-gold transition-colors no-underline">Nosotros</a>
+            <a href="/contacto.html" class="text-sand/70 text-sm hover:text-gold transition-colors no-underline">Contacto</a>
+          </nav>
+        </div>
+
+        <!-- Col 3: Social -->
+        <div>
+          <p class="text-white font-bold text-sm uppercase tracking-wider mb-4">Seguinos</p>
+          <div class="flex items-center gap-4 mb-6">
+            <a href="https://www.instagram.com/club.gt" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-sand/20 flex items-center justify-center text-sand hover:text-gold hover:border-gold transition-colors" aria-label="Instagram">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+              </svg>
+            </a>
+            <a href="https://www.tiktok.com/@club.gtm" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-sand/20 flex items-center justify-center text-sand hover:text-gold hover:border-gold transition-colors" aria-label="TikTok">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.15V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/>
+              </svg>
+            </a>
+            <a href="https://wa.me/50212345678" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-sand/20 flex items-center justify-center text-sand hover:text-gold hover:border-gold transition-colors" aria-label="WhatsApp">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+              </svg>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom bar -->
+      <div class="border-t border-sand/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <p class="text-sand/40 text-xs">El Club 2026. Todos los derechos reservados.</p>
+        <p class="text-sand/40 text-xs">Guatemala</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ── Cart Overlay & Drawer ───────────────────── -->
+  <div id="cart-overlay" class="cart-overlay"></div>
+  <div id="cart-drawer" class="cart-drawer">
+
+    <!-- Drawer Header -->
+    <div class="flex items-center justify-between px-5 py-4 border-b border-sand-light">
+      <h2 class="font-bold text-lg uppercase tracking-wider">Tu carrito</h2>
+      <button onclick="closeCartDrawer()" class="text-warm hover:text-carbon transition-colors cursor-pointer" aria-label="Cerrar carrito">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Empty State -->
+    <div id="cart-empty" class="flex-1 flex flex-col items-center justify-center px-5 text-center">
+      <svg class="w-16 h-16 text-sand mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+      </svg>
+      <p class="text-warm font-semibold mb-1">Tu carrito esta vacio</p>
+      <p class="text-warm/60 text-sm mb-6">Agrega algo increible para empezar.</p>
+      <a href="/tienda.html" onclick="closeCartDrawer()" class="btn-primary text-sm">Ver tienda</a>
+    </div>
+
+    <!-- Filled State -->
+    <div id="cart-filled" class="hidden flex-1 flex flex-col">
+      <div id="cart-items" class="flex-1 overflow-y-auto px-5"></div>
+      <div class="border-t border-sand-light px-5 py-4">
+        <div class="flex items-center justify-between mb-4">
+          <span class="font-bold text-sm uppercase tracking-wider">Total</span>
+          <span id="cart-total" class="font-extrabold text-xl">Q0</span>
+        </div>
+        <p class="text-warm/60 text-xs mb-4">Envio coordinado por WhatsApp despues de tu pedido.</p>
+        <button onclick="checkoutWhatsApp()" class="btn-whatsapp w-full justify-center text-sm py-3.5">
+          <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+          </svg>
+          Pedir por WhatsApp
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Mobile Menu ─────────────────────────────── -->
+  <div id="mobile-menu" class="mobile-menu">
+    <div class="flex flex-col h-full px-6 py-8">
+      <div class="flex justify-end mb-12">
+        <button onclick="closeMobileMenu()" class="text-white hover:text-gold transition-colors cursor-pointer" aria-label="Cerrar menu">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <nav class="flex flex-col gap-8">
+        <a href="/tienda.html" onclick="closeMobileMenu()" class="text-2xl font-bold text-white uppercase tracking-wider hover:text-gold transition-colors no-underline">Tienda</a>
+        <a href="/mystery-box.html" onclick="closeMobileMenu()" class="text-2xl font-bold text-white uppercase tracking-wider hover:text-gold transition-colors no-underline">Mystery Box</a>
+        <a href="/nosotros.html" onclick="closeMobileMenu()" class="text-2xl font-bold text-white uppercase tracking-wider hover:text-gold transition-colors no-underline">Nosotros</a>
+        <a href="/contacto.html" onclick="closeMobileMenu()" class="text-2xl font-bold text-white uppercase tracking-wider hover:text-gold transition-colors no-underline">Contacto</a>
+      </nav>
+      <div class="mt-auto flex items-center gap-6">
+        <a href="https://www.instagram.com/club.gt" target="_blank" rel="noopener" class="text-sand hover:text-gold transition-colors" aria-label="Instagram">
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+          </svg>
+        </a>
+        <a href="https://www.tiktok.com/@club.gtm" target="_blank" rel="noopener" class="text-sand hover:text-gold transition-colors" aria-label="TikTok">
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.15V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── WhatsApp Float ──────────────────────────── -->
+  <a
+    href="https://wa.me/50212345678?text=Hola%21%20Quiero%20saber%20mas%20sobre%20El%20Club."
+    target="_blank"
+    rel="noopener"
+    class="whatsapp-float"
+    aria-label="Contactar por WhatsApp"
+  >
+    <svg viewBox="0 0 24 24">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+  </a>
+
+  <!-- ── Scripts ──────────────────────────────────── -->
+  <script src="/assets/js/cart.js"></script>
+  <script src="/assets/js/app.js"></script>
+  <script>
+    (function() {
+      var currentProduct = null;
+      var selectedSize = null;
+      var allProducts = [];
+
+      // ── Get product ID from URL ──
+      function getProductIdFromURL() {
+        var params = new URLSearchParams(window.location.search);
+        return params.get('id');
+      }
+
+      // ── Select size ──
+      window.selectSize = function(size) {
+        selectedSize = size;
+
+        // Update button states
+        var buttons = document.querySelectorAll('.size-btn');
+        for (var i = 0; i < buttons.length; i++) {
+          if (buttons[i].getAttribute('data-size') === size) {
+            buttons[i].classList.add('active');
+          } else {
+            buttons[i].classList.remove('active');
+          }
+        }
+
+        // Enable add-to-cart button
+        var btn = document.getElementById('btn-add-to-cart');
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('opacity-50', 'pointer-events-none');
+          btn.textContent = 'Agregar al carrito';
+        }
+      };
+
+      // ── Add product to cart ──
+      window.addProductToCart = function() {
+        if (!currentProduct || !selectedSize) return;
+        addToCart(
+          currentProduct.id,
+          currentProduct.name,
+          currentProduct.price,
+          selectedSize,
+          currentProduct.image
+        );
+      };
+
+      // ── Share on WhatsApp ──
+      window.shareWhatsApp = function() {
+        if (!currentProduct) return;
+        var text = 'Mira esta camiseta en El Club: ' + currentProduct.name + ' — Q' + currentProduct.price + '\n' + window.location.href;
+        var url = 'https://wa.me/?text=' + encodeURIComponent(text);
+        window.open(url, '_blank');
+      };
+
+      // ── Render size buttons ──
+      function renderSizeButtons(product) {
+        var container = document.getElementById('size-buttons');
+        if (!container) return;
+
+        var allSizes = ['S', 'M', 'L', 'XL'];
+        var availableSizes = product.sizes || [];
+        var html = '';
+
+        for (var i = 0; i < allSizes.length; i++) {
+          var size = allSizes[i];
+          var isAvailable = availableSizes.indexOf(size) !== -1;
+          if (isAvailable) {
+            html += '<button type="button" class="size-btn" data-size="' + size + '" onclick="selectSize(\'' + size + '\')">' + size + '</button>';
+          } else {
+            html += '<button type="button" class="size-btn disabled" disabled>' + size + '</button>';
+          }
+        }
+
+        container.innerHTML = html;
+      }
+
+      // ── Render stock status ──
+      function renderStockStatus(product) {
+        var container = document.getElementById('product-stock');
+        if (!container) return;
+
+        if (product.stock <= 0) {
+          container.innerHTML = '<span class="inline-block text-sm font-bold text-urgency uppercase tracking-wider">Agotado</span>';
+          // Disable add-to-cart completely
+          var btn = document.getElementById('btn-add-to-cart');
+          if (btn) {
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'pointer-events-none');
+            btn.textContent = 'Agotado';
+          }
+        } else if (product.stock <= 3) {
+          container.innerHTML = '<span class="inline-flex items-center gap-1.5 text-sm font-bold text-urgency"><span class="w-2 h-2 rounded-full bg-urgency animate-pulse"></span>Ultimas ' + product.stock + ' unidades</span>';
+        } else {
+          container.innerHTML = '<span class="inline-flex items-center gap-1.5 text-sm font-semibold text-success"><span class="w-2 h-2 rounded-full bg-success"></span>En stock</span>';
+        }
+      }
+
+      // ── Populate product detail ──
+      function populateProduct(product) {
+        currentProduct = product;
+
+        // Update page title
+        document.title = product.name + ' | El Club — Jerseys de Futbol en Guatemala';
+
+        // Breadcrumb
+        var leagueLabel = product.league || product.type || '';
+        document.getElementById('breadcrumb-league').textContent = leagueLabel;
+        document.getElementById('breadcrumb-name').textContent = product.name;
+
+        // Image
+        var img = document.getElementById('product-image');
+        img.src = product.image;
+        img.alt = product.name;
+
+        // League
+        document.getElementById('product-league').textContent = leagueLabel;
+
+        // Name
+        document.getElementById('product-name').textContent = product.name;
+
+        // Season / Team meta
+        var metaParts = [];
+        if (product.team) metaParts.push(product.team);
+        if (product.season) metaParts.push('Temporada ' + product.season);
+        document.getElementById('product-meta').textContent = metaParts.join(' — ');
+
+        // Price
+        document.getElementById('product-price').textContent = 'Q' + product.price;
+
+        // Stock
+        renderStockStatus(product);
+
+        // Size buttons
+        renderSizeButtons(product);
+
+        // Description
+        document.getElementById('product-description').textContent = product.description || 'Camiseta de futbol original. Calidad garantizada por El Club.';
+
+        // Show content, hide loading
+        document.getElementById('product-loading').classList.add('hidden');
+        document.getElementById('product-content').classList.remove('hidden');
+      }
+
+      // ── Render related products ──
+      function renderRelated(product, products) {
+        var related = [];
+        var leagueOrType = product.league || product.type;
+
+        for (var i = 0; i < products.length; i++) {
+          if (products[i].id === product.id) continue;
+          var pLeagueOrType = products[i].league || products[i].type;
+          if (pLeagueOrType === leagueOrType) {
+            related.push(products[i]);
+          }
+          if (related.length >= 4) break;
+        }
+
+        // If not enough from same league, fill with other products
+        if (related.length < 4) {
+          for (var j = 0; j < products.length; j++) {
+            if (products[j].id === product.id) continue;
+            var alreadyIncluded = false;
+            for (var k = 0; k < related.length; k++) {
+              if (related[k].id === products[j].id) { alreadyIncluded = true; break; }
+            }
+            if (!alreadyIncluded) {
+              related.push(products[j]);
+            }
+            if (related.length >= 4) break;
+          }
+        }
+
+        if (related.length > 0) {
+          renderProductGrid('related-grid', related);
+          document.getElementById('related-section').classList.remove('hidden');
+        }
+      }
+
+      // ── Init on DOMContentLoaded ──
+      document.addEventListener('DOMContentLoaded', function() {
+        var productId = getProductIdFromURL();
+
+        if (!productId) {
+          document.getElementById('product-loading').classList.add('hidden');
+          document.getElementById('product-not-found').classList.remove('hidden');
+          return;
+        }
+
+        loadProducts(function(products) {
+          allProducts = products;
+          var product = getProductById(productId);
+
+          if (!product) {
+            document.getElementById('product-loading').classList.add('hidden');
+            document.getElementById('product-not-found').classList.remove('hidden');
+            return;
+          }
+
+          populateProduct(product);
+          renderRelated(product, products);
+        });
+      });
+    })();
+  </script>
+
+</body>
+</html>

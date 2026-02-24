@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="es-GT">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mystery Box — El Club</title>
+  <meta name="description" content="La experiencia que no sabias que necesitabas. 2 o 3 camisas de futbol curadas por El Club en una mystery box. Envio a toda Guatemala.">
+  <meta name="keywords" content="mystery box, camisas futbol, guatemala, unboxing, el club">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Mystery Box — El Club">
+  <meta property="og:description" content="Camisas de futbol curadas en una mystery box. La experiencia que no sabias que necesitabas.">
+  <meta property="og:image" content="/assets/img/products/mystery-box-clasica.jpg">
+  <meta property="og:type" content="website">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS v4 Browser CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <!-- Brand CSS -->
+  <link rel="stylesheet" href="/assets/css/elclub.css">
+
+  <!-- Favicon -->
+  <link rel="icon" href="/assets/img/brand/logo.png" type="image/png">
+</head>
+<body class="bg-cream text-carbon">
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- NAV                                            -->
+  <!-- ══════════════════════════════════════════════ -->
+  <nav class="bg-carbon text-white">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2">
+        <img src="/assets/img/brand/logo.png" alt="El Club" class="h-10 w-auto brightness-0 invert">
+      </a>
+      <div class="hidden md:flex items-center gap-8">
+        <a href="/tienda.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-white">Tienda</a>
+        <a href="/mystery-box.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-gold">Mystery Box</a>
+        <a href="/nosotros.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-white">Nosotros</a>
+      </div>
+      <div class="flex items-center gap-4">
+        <button onclick="openCartDrawer()" class="relative cursor-pointer bg-transparent border-none text-white">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+          <span class="cart-badge hidden">0</span>
+        </button>
+        <button onclick="toggleMobileMenu()" class="md:hidden cursor-pointer bg-transparent border-none text-white">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- HERO                                           -->
+  <!-- ══════════════════════════════════════════════ -->
+  <section class="bg-carbon text-white relative overflow-hidden">
+    <!-- Subtle pattern overlay -->
+    <div class="absolute inset-0 opacity-5" style="background-image: url('data:image/svg+xml,%3Csvg width=&quot;60&quot; height=&quot;60&quot; viewBox=&quot;0 0 60 60&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;%3E%3Cg fill=&quot;none&quot; fill-rule=&quot;evenodd&quot;%3E%3Cg fill=&quot;%23ffffff&quot; fill-opacity=&quot;0.4&quot;%3E%3Cpath d=&quot;M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z&quot;/%3E%3C/g%3E%3C/g%3E%3C/svg%3E');"></div>
+
+    <div class="max-w-4xl mx-auto px-4 py-24 md:py-36 text-center relative z-10">
+      <span class="inline-block text-gold text-xs font-bold uppercase tracking-[0.25em] mb-6">La experiencia definitiva</span>
+      <h1 class="text-4xl md:text-6xl font-extrabold leading-tight mb-6">
+        La experiencia que<br>
+        <span class="text-gold">no sabias que necesitabas.</span>
+      </h1>
+      <p class="text-lg md:text-xl text-sand max-w-2xl mx-auto mb-10 leading-relaxed">
+        Cada Mystery Box es una pieza unica. Nosotros curamos las camisas, vos vivis la historia.
+        No hay dos boxes iguales — y eso es exactamente lo que la hace mistica.
+      </p>
+      <a href="#tiers" class="btn-primary inline-block text-white no-underline">
+        Elegir mi box
+      </a>
+    </div>
+
+    <!-- Gradient fade to cream -->
+    <div class="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-cream to-transparent"></div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- COMO FUNCIONA                                  -->
+  <!-- ══════════════════════════════════════════════ -->
+  <section class="py-20 md:py-28 bg-cream">
+    <div class="max-w-5xl mx-auto px-4">
+      <div class="text-center mb-16 reveal">
+        <span class="text-gold text-xs font-bold uppercase tracking-[0.25em]">Tres pasos</span>
+        <h2 class="text-3xl md:text-4xl font-extrabold mt-3">Como funciona</h2>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-8 md:gap-12">
+        <!-- Step 1 -->
+        <div class="text-center reveal" style="transition-delay: 0.1s;">
+          <div class="w-16 h-16 bg-carbon rounded-full flex items-center justify-center mx-auto mb-6">
+            <span class="text-gold font-extrabold text-xl">1</span>
+          </div>
+          <h3 class="text-lg font-bold mb-3">Elegis tu box</h3>
+          <p class="text-warm text-sm leading-relaxed">
+            Clasica o Premium — vos decidis el nivel de la experiencia.
+            Seleccionas tu talla y listo.
+          </p>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="text-center reveal" style="transition-delay: 0.2s;">
+          <div class="w-16 h-16 bg-carbon rounded-full flex items-center justify-center mx-auto mb-6">
+            <span class="text-gold font-extrabold text-xl">2</span>
+          </div>
+          <h3 class="text-lg font-bold mb-3">Te llega a tu puerta</h3>
+          <p class="text-warm text-sm leading-relaxed">
+            Empaque exclusivo, listo para unboxing.
+            Envio a toda Guatemala por courier.
+          </p>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="text-center reveal" style="transition-delay: 0.3s;">
+          <div class="w-16 h-16 bg-carbon rounded-full flex items-center justify-center mx-auto mb-6">
+            <span class="text-gold font-extrabold text-xl">3</span>
+          </div>
+          <h3 class="text-lg font-bold mb-3">Revelas tu historia</h3>
+          <p class="text-warm text-sm leading-relaxed">
+            Descubris que camisas te tocaron. Cada pieza tiene una historia,
+            y ahora es tuya.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- TIER SELECTION                                 -->
+  <!-- ══════════════════════════════════════════════ -->
+  <section id="tiers" class="py-20 md:py-28 bg-sand-light">
+    <div class="max-w-5xl mx-auto px-4">
+      <div class="text-center mb-16 reveal">
+        <span class="text-gold text-xs font-bold uppercase tracking-[0.25em]">Elegi la tuya</span>
+        <h2 class="text-3xl md:text-4xl font-extrabold mt-3">Mystery Boxes</h2>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+
+        <!-- Mystery Box Clasica -->
+        <div class="bg-white rounded-lg overflow-hidden border border-sand hover:border-gold transition-colors reveal" style="transition-delay: 0.1s;">
+          <div class="bg-sand-light p-6 flex items-center justify-center">
+            <img src="/assets/img/products/mystery-box-clasica.jpg" alt="Mystery Box Clasica" class="w-64 h-64 object-contain">
+          </div>
+          <div class="p-6">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xl font-extrabold">Mystery Box Clasica</h3>
+              <span class="text-2xl font-extrabold text-gold">Q.400</span>
+            </div>
+            <div class="border-t border-sand-light my-4"></div>
+            <ul class="space-y-3 mb-6">
+              <li class="flex items-start gap-3 text-sm">
+                <svg class="w-5 h-5 text-gold flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                <span><strong>2 camisas de futbol</strong> curadas por El Club</span>
+              </li>
+              <li class="flex items-start gap-3 text-sm">
+                <svg class="w-5 h-5 text-gold flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                <span>Empaque exclusivo listo para unboxing</span>
+              </li>
+              <li class="flex items-start gap-3 text-sm">
+                <svg class="w-5 h-5 text-gold flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                <span>Ligas europeas, selecciones y mas</span>
+              </li>
+            </ul>
+
+            <!-- Size Selector -->
+            <p class="text-xs font-semibold uppercase tracking-wider text-warm mb-3">Talla</p>
+            <div class="flex gap-2 mb-6" id="sizes-clasica">
+              <button class="size-btn rounded" onclick="selectSize('clasica', 'S', this)">S</button>
+              <button class="size-btn rounded" onclick="selectSize('clasica', 'M', this)">M</button>
+              <button class="size-btn rounded" onclick="selectSize('clasica', 'L', this)">L</button>
+              <button class="size-btn rounded" onclick="selectSize('clasica', 'XL', this)">XL</button>
+            </div>
+
+            <!-- Add to Cart -->
+            <button
+              id="btn-clasica"
+              onclick="addMysteryBox('clasica')"
+              class="w-full btn-primary rounded opacity-50 cursor-not-allowed"
+              disabled
+            >
+              Agregar al carrito
+            </button>
+            <p id="size-hint-clasica" class="text-xs text-warm text-center mt-2">Selecciona tu talla</p>
+          </div>
+        </div>
+
+        <!-- Mystery Box Premium -->
+        <div class="bg-white rounded-lg overflow-hidden border-2 border-gold relative reveal" style="transition-delay: 0.2s;">
+          <!-- Premium badge -->
+          <div class="absolute top-4 right-4 z-10">
+            <span class="badge-new rounded-full px-3">Premium</span>
+          </div>
+
+          <div class="bg-sand-light p-6 flex items-center justify-center">
+            <img src="/assets/img/products/mystery-box-clasica.jpg" alt="Mystery Box Premium" class="w-64 h-64 object-contain">
+          </div>
+          <div class="p-6">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xl font-extrabold">Mystery Box Premium</h3>
+              <span class="text-2xl font-extrabold text-gold">Q.600</span>
+            </div>
+            <div class="border-t border-sand-light my-4"></div>
+            <ul class="space-y-3 mb-6">
+              <li class="flex items-start gap-3 text-sm">
+                <svg class="w-5 h-5 text-gold flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                <span><strong>3 camisas de futbol</strong> seleccion premium</span>
+              </li>
+              <li class="flex items-start gap-3 text-sm">
+                <svg class="w-5 h-5 text-gold flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                <span><strong>Item bonus sorpresa</strong> (bufanda, gorra o accesorio)</span>
+              </li>
+              <li class="flex items-start gap-3 text-sm">
+                <svg class="w-5 h-5 text-gold flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                <span>Empaque exclusivo listo para unboxing</span>
+              </li>
+              <li class="flex items-start gap-3 text-sm">
+                <svg class="w-5 h-5 text-gold flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                <span>Piezas legendarias y retro incluidas</span>
+              </li>
+            </ul>
+
+            <!-- Size Selector -->
+            <p class="text-xs font-semibold uppercase tracking-wider text-warm mb-3">Talla</p>
+            <div class="flex gap-2 mb-6" id="sizes-premium">
+              <button class="size-btn rounded" onclick="selectSize('premium', 'S', this)">S</button>
+              <button class="size-btn rounded" onclick="selectSize('premium', 'M', this)">M</button>
+              <button class="size-btn rounded" onclick="selectSize('premium', 'L', this)">L</button>
+              <button class="size-btn rounded" onclick="selectSize('premium', 'XL', this)">XL</button>
+            </div>
+
+            <!-- Add to Cart -->
+            <button
+              id="btn-premium"
+              onclick="addMysteryBox('premium')"
+              class="w-full btn-primary rounded opacity-50 cursor-not-allowed"
+              disabled
+            >
+              Agregar al carrito
+            </button>
+            <p id="size-hint-premium" class="text-xs text-warm text-center mt-2">Selecciona tu talla</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- UNBOXINGS REALES                               -->
+  <!-- ══════════════════════════════════════════════ -->
+  <section class="py-20 md:py-28 bg-cream">
+    <div class="max-w-5xl mx-auto px-4">
+      <div class="text-center mb-16 reveal">
+        <span class="text-gold text-xs font-bold uppercase tracking-[0.25em]">La comunidad</span>
+        <h2 class="text-3xl md:text-4xl font-extrabold mt-3">Unboxings reales</h2>
+        <p class="text-warm mt-4 max-w-lg mx-auto">Mira lo que otros miembros de El Club han recibido. Cada box es una sorpresa diferente.</p>
+      </div>
+
+      <div class="grid md:grid-cols-3 gap-6 reveal">
+        <!-- TikTok Embed Placeholder 1 -->
+        <div class="bg-white rounded-lg border border-sand overflow-hidden flex items-center justify-center aspect-[9/16]">
+          <div class="text-center px-6">
+            <svg class="w-12 h-12 text-sand mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <p class="text-sm text-warm font-semibold">Pronto</p>
+            <p class="text-xs text-warm mt-1">Unboxing TikTok</p>
+          </div>
+        </div>
+
+        <!-- TikTok Embed Placeholder 2 -->
+        <div class="bg-white rounded-lg border border-sand overflow-hidden flex items-center justify-center aspect-[9/16]">
+          <div class="text-center px-6">
+            <svg class="w-12 h-12 text-sand mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <p class="text-sm text-warm font-semibold">Pronto</p>
+            <p class="text-xs text-warm mt-1">Unboxing TikTok</p>
+          </div>
+        </div>
+
+        <!-- TikTok Embed Placeholder 3 -->
+        <div class="bg-white rounded-lg border border-sand overflow-hidden flex items-center justify-center aspect-[9/16]">
+          <div class="text-center px-6">
+            <svg class="w-12 h-12 text-sand mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <p class="text-sm text-warm font-semibold">Pronto</p>
+            <p class="text-xs text-warm mt-1">Unboxing TikTok</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- FAQ                                            -->
+  <!-- ══════════════════════════════════════════════ -->
+  <section class="py-20 md:py-28 bg-sand-light">
+    <div class="max-w-3xl mx-auto px-4">
+      <div class="text-center mb-16 reveal">
+        <span class="text-gold text-xs font-bold uppercase tracking-[0.25em]">Dudas</span>
+        <h2 class="text-3xl md:text-4xl font-extrabold mt-3">Preguntas frecuentes</h2>
+      </div>
+
+      <div class="space-y-3 reveal">
+        <!-- FAQ 1 -->
+        <div class="faq-item bg-white rounded-lg border border-sand overflow-hidden">
+          <button onclick="toggleFaq(this)" class="w-full flex items-center justify-between p-5 text-left cursor-pointer bg-transparent border-none">
+            <span class="font-bold text-sm pr-4">Que talla debo elegir?</span>
+            <svg class="faq-icon w-5 h-5 text-warm flex-shrink-0 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div class="faq-answer hidden px-5 pb-5">
+            <p class="text-sm text-warm leading-relaxed">
+              Las camisas son talla estandar internacional. Si usas M en camisas deportivas regulares,
+              pedi M aca. Si tenes dudas entre dos tallas, te recomendamos ir por la mas grande para
+              un fit mas comodo y relajado.
+            </p>
+          </div>
+        </div>
+
+        <!-- FAQ 2 -->
+        <div class="faq-item bg-white rounded-lg border border-sand overflow-hidden">
+          <button onclick="toggleFaq(this)" class="w-full flex items-center justify-between p-5 text-left cursor-pointer bg-transparent border-none">
+            <span class="font-bold text-sm pr-4">Puedo elegir los equipos?</span>
+            <svg class="faq-icon w-5 h-5 text-warm flex-shrink-0 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div class="faq-answer hidden px-5 pb-5">
+            <p class="text-sm text-warm leading-relaxed">
+              No, esa es la magia. Nosotros curamos cada box con piezas de diferentes ligas,
+              epocas y equipos. Eso es lo que hace que cada unboxing sea una experiencia unica.
+              Puede que descubras una camisa que nunca habrias elegido — y que termine siendo tu favorita.
+            </p>
+          </div>
+        </div>
+
+        <!-- FAQ 3 -->
+        <div class="faq-item bg-white rounded-lg border border-sand overflow-hidden">
+          <button onclick="toggleFaq(this)" class="w-full flex items-center justify-between p-5 text-left cursor-pointer bg-transparent border-none">
+            <span class="font-bold text-sm pr-4">Como recibo mi box?</span>
+            <svg class="faq-icon w-5 h-5 text-warm flex-shrink-0 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div class="faq-answer hidden px-5 pb-5">
+            <p class="text-sm text-warm leading-relaxed">
+              Envio a toda Guatemala por courier. Despues de confirmar tu pedido por WhatsApp
+              y recibir tu pago, preparamos tu box y la enviamos. Te compartimos numero de
+              seguimiento para que sepas exactamente cuando llega.
+            </p>
+          </div>
+        </div>
+
+        <!-- FAQ 4 -->
+        <div class="faq-item bg-white rounded-lg border border-sand overflow-hidden">
+          <button onclick="toggleFaq(this)" class="w-full flex items-center justify-between p-5 text-left cursor-pointer bg-transparent border-none">
+            <span class="font-bold text-sm pr-4">Puedo devolver mi box?</span>
+            <svg class="faq-icon w-5 h-5 text-warm flex-shrink-0 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div class="faq-answer hidden px-5 pb-5">
+            <p class="text-sm text-warm leading-relaxed">
+              Por la naturaleza del producto, no aceptamos devoluciones. Cada Mystery Box es una
+              experiencia sellada — una vez abierta, es tuya. Si tenes algun problema con tu pedido,
+              escribinos por WhatsApp y lo resolvemos.
+            </p>
+          </div>
+        </div>
+
+        <!-- FAQ 5 -->
+        <div class="faq-item bg-white rounded-lg border border-sand overflow-hidden">
+          <button onclick="toggleFaq(this)" class="w-full flex items-center justify-between p-5 text-left cursor-pointer bg-transparent border-none">
+            <span class="font-bold text-sm pr-4">Cuanto tarda en llegar?</span>
+            <svg class="faq-icon w-5 h-5 text-warm flex-shrink-0 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          </button>
+          <div class="faq-answer hidden px-5 pb-5">
+            <p class="text-sm text-warm leading-relaxed">
+              3-5 dias habiles en Ciudad de Guatemala, 5-7 dias habiles en departamentos.
+              En temporada alta puede haber un par de dias extra, pero siempre te mantenemos
+              informado del estado de tu envio.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- CTA FINAL                                      -->
+  <!-- ══════════════════════════════════════════════ -->
+  <section class="py-24 md:py-32 bg-carbon text-white relative overflow-hidden">
+    <div class="absolute inset-0 opacity-10">
+      <div class="absolute top-0 right-0 w-96 h-96 bg-gold rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+      <div class="absolute bottom-0 left-0 w-64 h-64 bg-gold rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
+    </div>
+
+    <div class="max-w-3xl mx-auto px-4 text-center relative z-10 reveal">
+      <h2 class="text-3xl md:text-5xl font-extrabold leading-tight mb-6">
+        Tu historia esta<br><span class="text-gold">esperandote.</span>
+      </h2>
+      <p class="text-sand text-lg max-w-xl mx-auto mb-10 leading-relaxed">
+        Cada Mystery Box tiene piezas que alguien mas queria.
+        Si la estas viendo, es por algo. No la dejes pasar.
+      </p>
+      <a href="https://wa.me/50212345678?text=Hola!%20Quiero%20saber%20mas%20sobre%20la%20Mystery%20Box" target="_blank" rel="noopener" class="btn-whatsapp no-underline text-white">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+        Escribinos por WhatsApp
+      </a>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- FOOTER                                         -->
+  <!-- ══════════════════════════════════════════════ -->
+  <footer class="bg-carbon text-white border-t border-white/10">
+    <div class="max-w-6xl mx-auto px-4 py-12">
+      <div class="grid md:grid-cols-3 gap-8">
+        <!-- Brand -->
+        <div>
+          <img src="/assets/img/brand/logo.png" alt="El Club" class="h-8 w-auto brightness-0 invert mb-4">
+          <p class="text-sm text-sand leading-relaxed">
+            Camisas de futbol curadas para quienes entienden que cada pieza tiene una historia.
+          </p>
+        </div>
+
+        <!-- Links -->
+        <div>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-gold mb-4">Navegacion</h4>
+          <div class="space-y-2">
+            <a href="/" class="block text-sm text-sand hover:text-white transition-colors no-underline">Inicio</a>
+            <a href="/tienda.html" class="block text-sm text-sand hover:text-white transition-colors no-underline">Tienda</a>
+            <a href="/mystery-box.html" class="block text-sm text-sand hover:text-white transition-colors no-underline">Mystery Box</a>
+            <a href="/nosotros.html" class="block text-sm text-sand hover:text-white transition-colors no-underline">Nosotros</a>
+          </div>
+        </div>
+
+        <!-- Contact -->
+        <div>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-gold mb-4">Contacto</h4>
+          <div class="space-y-2">
+            <a href="https://wa.me/50212345678" target="_blank" rel="noopener" class="block text-sm text-sand hover:text-white transition-colors no-underline">WhatsApp</a>
+            <a href="https://instagram.com/elclub.gt" target="_blank" rel="noopener" class="block text-sm text-sand hover:text-white transition-colors no-underline">Instagram</a>
+            <a href="https://tiktok.com/@elclub.gt" target="_blank" rel="noopener" class="block text-sm text-sand hover:text-white transition-colors no-underline">TikTok</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="border-t border-white/10 mt-10 pt-6 text-center">
+        <p class="text-xs text-warm">El Club &mdash; Guatemala. Todos los derechos reservados.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- CART DRAWER                                    -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div id="cart-overlay" class="cart-overlay" onclick="closeCartDrawer()"></div>
+  <div id="cart-drawer" class="cart-drawer">
+    <!-- Header -->
+    <div class="flex items-center justify-between px-5 py-4 border-b border-sand-light">
+      <h3 class="font-bold text-lg">Tu carrito</h3>
+      <button onclick="closeCartDrawer()" class="p-1 cursor-pointer bg-transparent border-none hover:text-warm">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <!-- Empty State -->
+    <div id="cart-empty" class="flex-1 flex flex-col items-center justify-center px-5 text-center">
+      <svg class="w-16 h-16 text-sand mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+      <p class="font-bold mb-1">Tu carrito esta vacio</p>
+      <p class="text-sm text-warm">Agrega una Mystery Box para comenzar.</p>
+    </div>
+
+    <!-- Filled State -->
+    <div id="cart-filled" class="flex-1 flex flex-col hidden">
+      <div id="cart-items" class="flex-1 overflow-y-auto px-5"></div>
+      <div class="px-5 py-4 border-t border-sand-light">
+        <div class="flex items-center justify-between mb-4">
+          <span class="font-bold">Total</span>
+          <span id="cart-total" class="text-xl font-extrabold">Q0</span>
+        </div>
+        <button onclick="checkoutWhatsApp()" class="w-full btn-whatsapp justify-center rounded-lg text-white no-underline">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          Pedir por WhatsApp
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- MOBILE MENU                                    -->
+  <!-- ══════════════════════════════════════════════ -->
+  <div id="mobile-menu" class="mobile-menu">
+    <div class="flex items-center justify-between px-4 py-4 border-b border-white/10">
+      <img src="/assets/img/brand/logo.png" alt="El Club" class="h-10 w-auto brightness-0 invert">
+      <button onclick="closeMobileMenu()" class="p-1 cursor-pointer bg-transparent border-none text-white">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="flex flex-col gap-1 p-4">
+      <a href="/" class="block py-3 px-4 text-white text-lg font-semibold no-underline hover:bg-white/5 rounded transition-colors">Inicio</a>
+      <a href="/tienda.html" class="block py-3 px-4 text-white text-lg font-semibold no-underline hover:bg-white/5 rounded transition-colors">Tienda</a>
+      <a href="/mystery-box.html" class="block py-3 px-4 text-gold text-lg font-semibold no-underline hover:bg-white/5 rounded transition-colors">Mystery Box</a>
+      <a href="/nosotros.html" class="block py-3 px-4 text-white text-lg font-semibold no-underline hover:bg-white/5 rounded transition-colors">Nosotros</a>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- WHATSAPP FLOAT                                 -->
+  <!-- ══════════════════════════════════════════════ -->
+  <a href="https://wa.me/50212345678?text=Hola!%20Vi%20la%20Mystery%20Box%20en%20la%20pagina" target="_blank" rel="noopener" class="whatsapp-float" aria-label="WhatsApp">
+    <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+  </a>
+
+  <!-- ══════════════════════════════════════════════ -->
+  <!-- SCRIPTS                                        -->
+  <!-- ══════════════════════════════════════════════ -->
+  <script src="/assets/js/cart.js"></script>
+  <script src="/assets/js/app.js"></script>
+
+  <script>
+    /**
+     * Mystery Box Page — Size selection & add-to-cart logic
+     */
+
+    // Track selected sizes per tier
+    var selectedSizes = {
+      clasica: null,
+      premium: null
+    };
+
+    // Mystery Box product data
+    var mysteryBoxes = {
+      clasica: {
+        id: 'MB-CLASICA',
+        name: 'Mystery Box Clasica',
+        price: 400,
+        image: '/assets/img/products/mystery-box-clasica.jpg'
+      },
+      premium: {
+        id: 'MB-PREMIUM',
+        name: 'Mystery Box Premium',
+        price: 600,
+        image: '/assets/img/products/mystery-box-clasica.jpg'
+      }
+    };
+
+    /**
+     * Select a size for a given tier
+     */
+    function selectSize(tier, size, btn) {
+      selectedSizes[tier] = size;
+
+      // Update active state on size buttons
+      var container = document.getElementById('sizes-' + tier);
+      var buttons = container.querySelectorAll('.size-btn');
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].classList.remove('active');
+      }
+      btn.classList.add('active');
+
+      // Enable the add-to-cart button
+      var addBtn = document.getElementById('btn-' + tier);
+      addBtn.disabled = false;
+      addBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+      // Update hint text
+      var hint = document.getElementById('size-hint-' + tier);
+      hint.textContent = 'Talla ' + size + ' seleccionada';
+      hint.classList.remove('text-warm');
+      hint.classList.add('text-success');
+    }
+
+    /**
+     * Add mystery box to cart
+     */
+    function addMysteryBox(tier) {
+      var size = selectedSizes[tier];
+      if (!size) return;
+
+      var box = mysteryBoxes[tier];
+      addToCart(box.id, box.name, box.price, size, box.image);
+    }
+
+    /**
+     * FAQ accordion toggle
+     */
+    function toggleFaq(btn) {
+      var item = btn.parentElement;
+      var answer = item.querySelector('.faq-answer');
+      var icon = btn.querySelector('.faq-icon');
+      var isOpen = !answer.classList.contains('hidden');
+
+      // Close all other FAQs
+      var allItems = document.querySelectorAll('.faq-item');
+      for (var i = 0; i < allItems.length; i++) {
+        var otherAnswer = allItems[i].querySelector('.faq-answer');
+        var otherIcon = allItems[i].querySelector('.faq-icon');
+        if (allItems[i] !== item) {
+          otherAnswer.classList.add('hidden');
+          otherIcon.style.transform = 'rotate(0deg)';
+        }
+      }
+
+      // Toggle current
+      if (isOpen) {
+        answer.classList.add('hidden');
+        icon.style.transform = 'rotate(0deg)';
+      } else {
+        answer.classList.remove('hidden');
+        icon.style.transform = 'rotate(180deg)';
+      }
+    }
+  </script>
+
+</body>
+</html>
