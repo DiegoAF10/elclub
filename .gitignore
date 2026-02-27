@@ -13,3 +13,8 @@ desktop.ini
 
 # Node (if ever needed)
 node_modules/
+
+# ERP
+erp/elclub.db
+erp/photos/
+erp/__pycache__/

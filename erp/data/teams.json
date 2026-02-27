@@ -1,0 +1,1339 @@
+[
+  {
+    "name": "Manchester City",
+    "short_name": "Man City",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "A"
+  },
+  {
+    "name": "Arsenal",
+    "short_name": "Arsenal",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "A"
+  },
+  {
+    "name": "Liverpool",
+    "short_name": "Liverpool",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "A"
+  },
+  {
+    "name": "Chelsea",
+    "short_name": "Chelsea",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "A"
+  },
+  {
+    "name": "Manchester United",
+    "short_name": "Man United",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "A"
+  },
+  {
+    "name": "Tottenham Hotspur",
+    "short_name": "Tottenham",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "A"
+  },
+  {
+    "name": "Newcastle United",
+    "short_name": "Newcastle",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "B"
+  },
+  {
+    "name": "Aston Villa",
+    "short_name": "Aston Villa",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "B"
+  },
+  {
+    "name": "Brighton & Hove Albion",
+    "short_name": "Brighton",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "B"
+  },
+  {
+    "name": "West Ham United",
+    "short_name": "West Ham",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "B"
+  },
+  {
+    "name": "Crystal Palace",
+    "short_name": "Crystal Palace",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "B"
+  },
+  {
+    "name": "Wolverhampton Wanderers",
+    "short_name": "Wolves",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "B"
+  },
+  {
+    "name": "Fulham",
+    "short_name": "Fulham",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "B"
+  },
+  {
+    "name": "AFC Bournemouth",
+    "short_name": "Bournemouth",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "B"
+  },
+  {
+    "name": "Brentford",
+    "short_name": "Brentford",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "B"
+  },
+  {
+    "name": "Everton",
+    "short_name": "Everton",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "B"
+  },
+  {
+    "name": "Nottingham Forest",
+    "short_name": "Nottingham",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "B"
+  },
+  {
+    "name": "Leicester City",
+    "short_name": "Leicester",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "B"
+  },
+  {
+    "name": "Ipswich Town",
+    "short_name": "Ipswich",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "B"
+  },
+  {
+    "name": "Southampton",
+    "short_name": "Southampton",
+    "league": "Premier League",
+    "country": "Inglaterra",
+    "tier": "B"
+  },
+  {
+    "name": "FC Barcelona",
+    "short_name": "Barcelona",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "A"
+  },
+  {
+    "name": "Real Madrid",
+    "short_name": "Real Madrid",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "A"
+  },
+  {
+    "name": "Atlético de Madrid",
+    "short_name": "Atlético",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "A"
+  },
+  {
+    "name": "Athletic Club Bilbao",
+    "short_name": "Athletic",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "Real Sociedad",
+    "short_name": "Real Sociedad",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "Villarreal CF",
+    "short_name": "Villarreal",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "Real Betis",
+    "short_name": "Betis",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "Sevilla FC",
+    "short_name": "Sevilla",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "Valencia CF",
+    "short_name": "Valencia",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "RC Celta de Vigo",
+    "short_name": "Celta",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "CA Osasuna",
+    "short_name": "Osasuna",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "Getafe CF",
+    "short_name": "Getafe",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "Rayo Vallecano",
+    "short_name": "Rayo",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "RCD Mallorca",
+    "short_name": "Mallorca",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "Girona FC",
+    "short_name": "Girona",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "Deportivo Alavés",
+    "short_name": "Alavés",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "UD Las Palmas",
+    "short_name": "Las Palmas",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "Real Valladolid",
+    "short_name": "Valladolid",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "RCD Espanyol",
+    "short_name": "Espanyol",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "CD Leganés",
+    "short_name": "Leganés",
+    "league": "La Liga",
+    "country": "España",
+    "tier": "B"
+  },
+  {
+    "name": "Juventus",
+    "short_name": "Juventus",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "A"
+  },
+  {
+    "name": "Inter de Milán",
+    "short_name": "Inter",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "A"
+  },
+  {
+    "name": "AC Milan",
+    "short_name": "Milan",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "A"
+  },
+  {
+    "name": "SSC Napoli",
+    "short_name": "Napoli",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "A"
+  },
+  {
+    "name": "AS Roma",
+    "short_name": "Roma",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "SS Lazio",
+    "short_name": "Lazio",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "Atalanta",
+    "short_name": "Atalanta",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "ACF Fiorentina",
+    "short_name": "Fiorentina",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "Bologna FC",
+    "short_name": "Bologna",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "Torino FC",
+    "short_name": "Torino",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "Udinese",
+    "short_name": "Udinese",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "Genoa CFC",
+    "short_name": "Genoa",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "Cagliari",
+    "short_name": "Cagliari",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "Empoli",
+    "short_name": "Empoli",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "Parma Calcio",
+    "short_name": "Parma",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "Hellas Verona",
+    "short_name": "Verona",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "Como 1907",
+    "short_name": "Como",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "Venezia FC",
+    "short_name": "Venezia",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "US Lecce",
+    "short_name": "Lecce",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "AC Monza",
+    "short_name": "Monza",
+    "league": "Serie A",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "Bayern München",
+    "short_name": "Bayern",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "A"
+  },
+  {
+    "name": "Borussia Dortmund",
+    "short_name": "Dortmund",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "A"
+  },
+  {
+    "name": "RB Leipzig",
+    "short_name": "Leipzig",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "Bayer Leverkusen",
+    "short_name": "Leverkusen",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "Eintracht Frankfurt",
+    "short_name": "Frankfurt",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "VfL Wolfsburg",
+    "short_name": "Wolfsburg",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "SC Freiburg",
+    "short_name": "Freiburg",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "VfB Stuttgart",
+    "short_name": "Stuttgart",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "Union Berlin",
+    "short_name": "Union Berlin",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "Werder Bremen",
+    "short_name": "Bremen",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "TSG Hoffenheim",
+    "short_name": "Hoffenheim",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "FSV Mainz 05",
+    "short_name": "Mainz",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "FC Augsburg",
+    "short_name": "Augsburg",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "Borussia Mönchengladbach",
+    "short_name": "Gladbach",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "1. FC Köln",
+    "short_name": "Köln",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "1. FC Heidenheim",
+    "short_name": "Heidenheim",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "SV Darmstadt 98",
+    "short_name": "Darmstadt",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "VfL Bochum",
+    "short_name": "Bochum",
+    "league": "Bundesliga",
+    "country": "Alemania",
+    "tier": "B"
+  },
+  {
+    "name": "Paris Saint-Germain",
+    "short_name": "PSG",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "A"
+  },
+  {
+    "name": "Olympique de Marseille",
+    "short_name": "Marseille",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "AS Monaco",
+    "short_name": "Monaco",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "Olympique Lyonnais",
+    "short_name": "Lyon",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "LOSC Lille",
+    "short_name": "Lille",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "OGC Nice",
+    "short_name": "Nice",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "Stade Rennais",
+    "short_name": "Rennes",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "RC Lens",
+    "short_name": "Lens",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "RC Strasbourg",
+    "short_name": "Strasbourg",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "Toulouse FC",
+    "short_name": "Toulouse",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "Montpellier HSC",
+    "short_name": "Montpellier",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "FC Nantes",
+    "short_name": "Nantes",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "Stade de Reims",
+    "short_name": "Reims",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "Stade Brestois",
+    "short_name": "Brest",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "Le Havre AC",
+    "short_name": "Le Havre",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "FC Metz",
+    "short_name": "Metz",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "FC Lorient",
+    "short_name": "Lorient",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "Clermont Foot",
+    "short_name": "Clermont",
+    "league": "Ligue 1",
+    "country": "Francia",
+    "tier": "B"
+  },
+  {
+    "name": "Club América",
+    "short_name": "América",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "A"
+  },
+  {
+    "name": "CD Guadalajara (Chivas)",
+    "short_name": "Chivas",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "A"
+  },
+  {
+    "name": "Cruz Azul",
+    "short_name": "Cruz Azul",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "A"
+  },
+  {
+    "name": "Tigres UANL",
+    "short_name": "Tigres",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "A"
+  },
+  {
+    "name": "CF Monterrey",
+    "short_name": "Monterrey",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "A"
+  },
+  {
+    "name": "Pumas UNAM",
+    "short_name": "Pumas",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "B"
+  },
+  {
+    "name": "Santos Laguna",
+    "short_name": "Santos",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "B"
+  },
+  {
+    "name": "Club León",
+    "short_name": "León",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "B"
+  },
+  {
+    "name": "Deportivo Toluca",
+    "short_name": "Toluca",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "B"
+  },
+  {
+    "name": "CF Pachuca",
+    "short_name": "Pachuca",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "B"
+  },
+  {
+    "name": "Atlas FC",
+    "short_name": "Atlas",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "B"
+  },
+  {
+    "name": "Club Puebla",
+    "short_name": "Puebla",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "B"
+  },
+  {
+    "name": "Querétaro FC",
+    "short_name": "Querétaro",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "B"
+  },
+  {
+    "name": "Club Necaxa",
+    "short_name": "Necaxa",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "B"
+  },
+  {
+    "name": "Mazatlán FC",
+    "short_name": "Mazatlán",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "B"
+  },
+  {
+    "name": "Atlético de San Luis",
+    "short_name": "San Luis",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "B"
+  },
+  {
+    "name": "Club Tijuana",
+    "short_name": "Tijuana",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "B"
+  },
+  {
+    "name": "FC Juárez",
+    "short_name": "Juárez",
+    "league": "Liga MX",
+    "country": "México",
+    "tier": "B"
+  },
+  {
+    "name": "CSD Municipal",
+    "short_name": "Municipal",
+    "league": "Liga Nacional Guatemala",
+    "country": "Guatemala",
+    "tier": "B"
+  },
+  {
+    "name": "Comunicaciones FC",
+    "short_name": "Comunicaciones",
+    "league": "Liga Nacional Guatemala",
+    "country": "Guatemala",
+    "tier": "B"
+  },
+  {
+    "name": "Xelajú MC",
+    "short_name": "Xelajú",
+    "league": "Liga Nacional Guatemala",
+    "country": "Guatemala",
+    "tier": "B"
+  },
+  {
+    "name": "Antigua GFC",
+    "short_name": "Antigua",
+    "league": "Liga Nacional Guatemala",
+    "country": "Guatemala",
+    "tier": "C"
+  },
+  {
+    "name": "Cobán Imperial",
+    "short_name": "Cobán",
+    "league": "Liga Nacional Guatemala",
+    "country": "Guatemala",
+    "tier": "C"
+  },
+  {
+    "name": "Santa Lucía Cotzumalguapa",
+    "short_name": "Santa Lucía",
+    "league": "Liga Nacional Guatemala",
+    "country": "Guatemala",
+    "tier": "C"
+  },
+  {
+    "name": "Boca Juniors",
+    "short_name": "Boca",
+    "league": "Primera División Argentina",
+    "country": "Argentina",
+    "tier": "A"
+  },
+  {
+    "name": "River Plate",
+    "short_name": "River",
+    "league": "Primera División Argentina",
+    "country": "Argentina",
+    "tier": "A"
+  },
+  {
+    "name": "Racing Club",
+    "short_name": "Racing",
+    "league": "Primera División Argentina",
+    "country": "Argentina",
+    "tier": "B"
+  },
+  {
+    "name": "CA Independiente",
+    "short_name": "Independiente",
+    "league": "Primera División Argentina",
+    "country": "Argentina",
+    "tier": "B"
+  },
+  {
+    "name": "San Lorenzo",
+    "short_name": "San Lorenzo",
+    "league": "Primera División Argentina",
+    "country": "Argentina",
+    "tier": "B"
+  },
+  {
+    "name": "Vélez Sarsfield",
+    "short_name": "Vélez",
+    "league": "Primera División Argentina",
+    "country": "Argentina",
+    "tier": "B"
+  },
+  {
+    "name": "Estudiantes de La Plata",
+    "short_name": "Estudiantes",
+    "league": "Primera División Argentina",
+    "country": "Argentina",
+    "tier": "B"
+  },
+  {
+    "name": "Talleres de Córdoba",
+    "short_name": "Talleres",
+    "league": "Primera División Argentina",
+    "country": "Argentina",
+    "tier": "B"
+  },
+  {
+    "name": "CA Huracán",
+    "short_name": "Huracán",
+    "league": "Primera División Argentina",
+    "country": "Argentina",
+    "tier": "B"
+  },
+  {
+    "name": "Rosario Central",
+    "short_name": "Rosario Central",
+    "league": "Primera División Argentina",
+    "country": "Argentina",
+    "tier": "B"
+  },
+  {
+    "name": "Flamengo",
+    "short_name": "Flamengo",
+    "league": "Brasileirão",
+    "country": "Brasil",
+    "tier": "A"
+  },
+  {
+    "name": "SE Palmeiras",
+    "short_name": "Palmeiras",
+    "league": "Brasileirão",
+    "country": "Brasil",
+    "tier": "A"
+  },
+  {
+    "name": "SC Corinthians",
+    "short_name": "Corinthians",
+    "league": "Brasileirão",
+    "country": "Brasil",
+    "tier": "A"
+  },
+  {
+    "name": "São Paulo FC",
+    "short_name": "São Paulo",
+    "league": "Brasileirão",
+    "country": "Brasil",
+    "tier": "B"
+  },
+  {
+    "name": "Santos FC",
+    "short_name": "Santos",
+    "league": "Brasileirão",
+    "country": "Brasil",
+    "tier": "B"
+  },
+  {
+    "name": "Grêmio",
+    "short_name": "Grêmio",
+    "league": "Brasileirão",
+    "country": "Brasil",
+    "tier": "B"
+  },
+  {
+    "name": "SC Internacional",
+    "short_name": "Internacional",
+    "league": "Brasileirão",
+    "country": "Brasil",
+    "tier": "B"
+  },
+  {
+    "name": "Atlético Mineiro",
+    "short_name": "Atlético MG",
+    "league": "Brasileirão",
+    "country": "Brasil",
+    "tier": "B"
+  },
+  {
+    "name": "Botafogo",
+    "short_name": "Botafogo",
+    "league": "Brasileirão",
+    "country": "Brasil",
+    "tier": "B"
+  },
+  {
+    "name": "Fluminense",
+    "short_name": "Fluminense",
+    "league": "Brasileirão",
+    "country": "Brasil",
+    "tier": "B"
+  },
+  {
+    "name": "Millonarios FC",
+    "short_name": "Millonarios",
+    "league": "Liga BetPlay Colombia",
+    "country": "Colombia",
+    "tier": "B"
+  },
+  {
+    "name": "Atlético Nacional",
+    "short_name": "Nacional",
+    "league": "Liga BetPlay Colombia",
+    "country": "Colombia",
+    "tier": "B"
+  },
+  {
+    "name": "América de Cali",
+    "short_name": "América de Cali",
+    "league": "Liga BetPlay Colombia",
+    "country": "Colombia",
+    "tier": "B"
+  },
+  {
+    "name": "Junior de Barranquilla",
+    "short_name": "Junior",
+    "league": "Liga BetPlay Colombia",
+    "country": "Colombia",
+    "tier": "B"
+  },
+  {
+    "name": "Deportivo Cali",
+    "short_name": "Deportivo Cali",
+    "league": "Liga BetPlay Colombia",
+    "country": "Colombia",
+    "tier": "B"
+  },
+  {
+    "name": "Independiente Santa Fe",
+    "short_name": "Santa Fe",
+    "league": "Liga BetPlay Colombia",
+    "country": "Colombia",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Argentina",
+    "short_name": "Argentina",
+    "league": "Selecciones",
+    "country": "Argentina",
+    "tier": "A"
+  },
+  {
+    "name": "Selección de Brasil",
+    "short_name": "Brasil",
+    "league": "Selecciones",
+    "country": "Brasil",
+    "tier": "A"
+  },
+  {
+    "name": "Selección de Francia",
+    "short_name": "Francia",
+    "league": "Selecciones",
+    "country": "Francia",
+    "tier": "A"
+  },
+  {
+    "name": "Selección de Alemania",
+    "short_name": "Alemania",
+    "league": "Selecciones",
+    "country": "Alemania",
+    "tier": "A"
+  },
+  {
+    "name": "Selección de España",
+    "short_name": "España",
+    "league": "Selecciones",
+    "country": "España",
+    "tier": "A"
+  },
+  {
+    "name": "Selección de Inglaterra",
+    "short_name": "Inglaterra",
+    "league": "Selecciones",
+    "country": "Inglaterra",
+    "tier": "A"
+  },
+  {
+    "name": "Selección de México",
+    "short_name": "México",
+    "league": "Selecciones",
+    "country": "México",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Portugal",
+    "short_name": "Portugal",
+    "league": "Selecciones",
+    "country": "Portugal",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Países Bajos",
+    "short_name": "Países Bajos",
+    "league": "Selecciones",
+    "country": "Países Bajos",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Italia",
+    "short_name": "Italia",
+    "league": "Selecciones",
+    "country": "Italia",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Bélgica",
+    "short_name": "Bélgica",
+    "league": "Selecciones",
+    "country": "Bélgica",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Croacia",
+    "short_name": "Croacia",
+    "league": "Selecciones",
+    "country": "Croacia",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Uruguay",
+    "short_name": "Uruguay",
+    "league": "Selecciones",
+    "country": "Uruguay",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Colombia",
+    "short_name": "Colombia",
+    "league": "Selecciones",
+    "country": "Colombia",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Estados Unidos",
+    "short_name": "Estados Unidos",
+    "league": "Selecciones",
+    "country": "Estados Unidos",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Japón",
+    "short_name": "Japón",
+    "league": "Selecciones",
+    "country": "Japón",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Corea del Sur",
+    "short_name": "Corea del Sur",
+    "league": "Selecciones",
+    "country": "Corea del Sur",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Marruecos",
+    "short_name": "Marruecos",
+    "league": "Selecciones",
+    "country": "Marruecos",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Senegal",
+    "short_name": "Senegal",
+    "league": "Selecciones",
+    "country": "Senegal",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Ghana",
+    "short_name": "Ghana",
+    "league": "Selecciones",
+    "country": "Ghana",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Camerún",
+    "short_name": "Camerún",
+    "league": "Selecciones",
+    "country": "Camerún",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Nigeria",
+    "short_name": "Nigeria",
+    "league": "Selecciones",
+    "country": "Nigeria",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Australia",
+    "short_name": "Australia",
+    "league": "Selecciones",
+    "country": "Australia",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Canadá",
+    "short_name": "Canadá",
+    "league": "Selecciones",
+    "country": "Canadá",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Ecuador",
+    "short_name": "Ecuador",
+    "league": "Selecciones",
+    "country": "Ecuador",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Chile",
+    "short_name": "Chile",
+    "league": "Selecciones",
+    "country": "Chile",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Perú",
+    "short_name": "Perú",
+    "league": "Selecciones",
+    "country": "Perú",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Paraguay",
+    "short_name": "Paraguay",
+    "league": "Selecciones",
+    "country": "Paraguay",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Costa Rica",
+    "short_name": "Costa Rica",
+    "league": "Selecciones",
+    "country": "Costa Rica",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Panamá",
+    "short_name": "Panamá",
+    "league": "Selecciones",
+    "country": "Panamá",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Honduras",
+    "short_name": "Honduras",
+    "league": "Selecciones",
+    "country": "Honduras",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Guatemala",
+    "short_name": "Guatemala",
+    "league": "Selecciones",
+    "country": "Guatemala",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de El Salvador",
+    "short_name": "El Salvador",
+    "league": "Selecciones",
+    "country": "El Salvador",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Arabia Saudita",
+    "short_name": "Arabia Saudita",
+    "league": "Selecciones",
+    "country": "Arabia Saudita",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Qatar",
+    "short_name": "Qatar",
+    "league": "Selecciones",
+    "country": "Qatar",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Irán",
+    "short_name": "Irán",
+    "league": "Selecciones",
+    "country": "Irán",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Gales",
+    "short_name": "Gales",
+    "league": "Selecciones",
+    "country": "Gales",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Suiza",
+    "short_name": "Suiza",
+    "league": "Selecciones",
+    "country": "Suiza",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Dinamarca",
+    "short_name": "Dinamarca",
+    "league": "Selecciones",
+    "country": "Dinamarca",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Polonia",
+    "short_name": "Polonia",
+    "league": "Selecciones",
+    "country": "Polonia",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Serbia",
+    "short_name": "Serbia",
+    "league": "Selecciones",
+    "country": "Serbia",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Turquía",
+    "short_name": "Turquía",
+    "league": "Selecciones",
+    "country": "Turquía",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Ucrania",
+    "short_name": "Ucrania",
+    "league": "Selecciones",
+    "country": "Ucrania",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Suecia",
+    "short_name": "Suecia",
+    "league": "Selecciones",
+    "country": "Suecia",
+    "tier": "B"
+  },
+  {
+    "name": "Selección de Austria",
+    "short_name": "Austria",
+    "league": "Selecciones",
+    "country": "Austria",
+    "tier": "B"
+  }
+]
