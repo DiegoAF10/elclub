@@ -7,17 +7,17 @@
   <meta name="description" content="Explora nuestra coleccion de jerseys de futbol originales. Premier League, La Liga, Serie A, Bundesliga y mas. Envio a toda Guatemala.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <link rel="stylesheet" href="/assets/css/elclub.css">
 </head>
-<body class="bg-cream text-carbon">
+<body class="bg-midnight text-white">
 
   <!-- ── Nav ─────────────────────────────────────── -->
   <nav class="bg-carbon text-white">
     <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
       <a href="/" class="flex items-center gap-2">
-        <img src="/assets/img/brand/logo.png" alt="El Club" class="h-10 w-auto brightness-0 invert">
+        <img src="/assets/img/brand/logo.svg" alt="El Club" class="h-10 w-auto">
       </a>
       <div class="hidden md:flex items-center gap-8">
         <a href="/tienda.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-gold">Tienda</a>
@@ -45,7 +45,7 @@
   </section>
 
   <!-- ── Filter Bar ──────────────────────────────── -->
-  <section class="sticky top-0 z-40 bg-cream border-b border-sand-light shadow-sm">
+  <section class="sticky top-0 z-40 bg-midnight border-b border-chalk">
     <div class="max-w-6xl mx-auto px-4 py-4">
       <div class="flex flex-col sm:flex-row gap-3">
         <!-- Search -->
@@ -55,15 +55,15 @@
             type="text"
             id="filter-search"
             placeholder="Buscar jersey, equipo, liga..."
-            class="w-full pl-10 pr-4 py-2.5 border border-sand rounded-lg bg-white text-sm focus:outline-none focus:border-carbon transition-colors"
+            class="w-full pl-10 pr-4 py-2.5 border border-chalk rounded-lg bg-pitch text-sm text-white focus:outline-none focus:border-ice transition-colors"
           >
         </div>
         <!-- Liga -->
-        <select id="filter-league" class="px-4 py-2.5 border border-sand rounded-lg bg-white text-sm text-carbon focus:outline-none focus:border-carbon transition-colors cursor-pointer">
+        <select id="filter-league" class="px-4 py-2.5 border border-chalk rounded-lg bg-pitch text-sm text-white focus:outline-none focus:border-ice transition-colors cursor-pointer">
           <option value="">Todas las ligas</option>
         </select>
         <!-- Talla -->
-        <select id="filter-size" class="px-4 py-2.5 border border-sand rounded-lg bg-white text-sm text-carbon focus:outline-none focus:border-carbon transition-colors cursor-pointer">
+        <select id="filter-size" class="px-4 py-2.5 border border-chalk rounded-lg bg-pitch text-sm text-white focus:outline-none focus:border-ice transition-colors cursor-pointer">
           <option value="">Todas las tallas</option>
           <option value="S">S</option>
           <option value="M">M</option>
@@ -71,7 +71,7 @@
           <option value="XL">XL</option>
         </select>
         <!-- Sort -->
-        <select id="filter-sort" class="px-4 py-2.5 border border-sand rounded-lg bg-white text-sm text-carbon focus:outline-none focus:border-carbon transition-colors cursor-pointer">
+        <select id="filter-sort" class="px-4 py-2.5 border border-chalk rounded-lg bg-pitch text-sm text-white focus:outline-none focus:border-ice transition-colors cursor-pointer">
           <option value="">Ordenar por</option>
           <option value="price-asc">Precio menor</option>
           <option value="price-desc">Precio mayor</option>
@@ -107,7 +107,7 @@
     <div class="max-w-6xl mx-auto px-4">
       <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div>
-          <img src="/assets/img/brand/logo.png" alt="El Club" class="h-12 w-auto brightness-0 invert mb-4">
+          <img src="/assets/img/brand/logo.svg" alt="El Club" class="h-12 w-auto mb-4">
           <p class="text-sm text-gray-400">La unica experiencia futbolera en Guatemala donde el futbol no se compra, se revela.</p>
         </div>
         <div>
