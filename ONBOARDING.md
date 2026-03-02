@@ -20,16 +20,18 @@
 **Propietario:** Diego Arriaza Flores (una sola persona maneja todo)
 
 ### UVP (Propuesta de Valor Unica)
-"No vendemos camisetas. Entregamos historia."
+"La camiseta te elige a vos."
 
 ### Posicionamiento
-"La unica experiencia futbolera en Guatemala donde el futbol no se compra, se revela."
+"La unica experiencia futbolera en Guatemala donde no elegis — descubris."
 
 ### Taglines Aprobados
-- "La camiseta con historia"
-- "Solo para los que entienden"
-- "Tu club. Tu historia. Tu box."
-- "Cada caja que abris es un pedazo de historia que no sabias que necesitabas"
+- "La camiseta te elige a vos." (principal)
+- "No elegis. Descubris."
+- "Confia en la caja."
+- "Tu camiseta ya sabe quien sos."
+- "Cada box tiene un destino."
+- "Entras al Club o te quedas afuera."
 
 ---
 

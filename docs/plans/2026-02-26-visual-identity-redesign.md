@@ -1,7 +1,7 @@
 # El Club — Brand Bible v2.0 "Midnight Stadium"
 
 **Fecha:** 2026-02-26
-**Versión:** 2.2 (actualizado — accent color ice blue para kit visual)
+**Versión:** 2.3 (actualizado — nueva UVP "La camiseta te elige a vos")
 **Dirección creativa:** Streetwear Underground / Full Dark Mode / Monocromático
 **Concepto:** "Midnight Stadium" — como entrar a un estadio vacío a medianoche. Oscuridad total. Solo bordes y siluetas atrapan la luz. Algo se revela en la penumbra.
 
@@ -16,23 +16,24 @@
 - Nunca "el club" todo minúscula, nunca "EL CLUB MYSTERY BOX" (el anterior)
 
 ### Concepto
-Mystery boxes y camisetas de fútbol curadas. No es una tienda — es una experiencia. No vendemos camisetas — entregamos historia.
+Mystery boxes de camisetas de fútbol. No es una tienda — es un ritual. Acá no elegís tu camiseta. Tu camiseta te elige a vos. Cada box tiene un destino, y si llegaste hasta acá, puede ser el tuyo.
 
 ### Dirección creativa: Midnight Stadium
-La marca se siente como entrar a un estadio vacío a medianoche. Oscuridad dominante. Silencio tenso. Solo los bordes atrapan la luz de la luna. Blanco y negro. Sin color. La ausencia de color ES la declaración. Las camisetas de fútbol — llenas de color — son las que rompen el monocromo cuando aparecen. Esa tensión entre la oscuridad de la marca y el color del producto es el corazón visual de El Club.
+La marca se siente como entrar a un estadio vacío a medianoche. Oscuridad dominante. Silencio tenso. Solo los bordes atrapan la luz de la luna. Blanco y negro. Sin color. La ausencia de color ES la declaración. Las camisetas de fútbol — llenas de color — son las que rompen el monocromo cuando aparecen. Esa tensión entre la oscuridad de la marca y el color del producto es el corazón visual de El Club. El unboxing es el momento de revelación: del negro al color, de lo desconocido a lo que estaba destinado para vos.
 
 ### UVP (Propuesta de Valor Única)
-> "No vendemos camisetas. Entregamos historia."
+> "La camiseta te elige a vos."
 
 ### Posicionamiento
-> "La única experiencia futbolera en Guatemala donde el fútbol no se compra, se revela."
+> "La única experiencia futbolera en Guatemala donde no elegís — descubrís."
 
 ### Taglines aprobados
-- "Solo para los que entienden" ← principal
-- "La camiseta con historia"
-- "Tu club. Tu historia. Tu box."
-- "Cada caja que abrís es un pedazo de historia que no sabías que necesitabas"
-- "Entrás al Club o te quedás afuera" ← streetwear attitude
+- "La camiseta te elige a vos." ← principal, núcleo de toda la marca
+- "No elegís. Descubrís." ← secundario, para CTAs y headers
+- "Confiá en la caja." ← para mystery box, genera intriga
+- "Tu camiseta ya sabe quién sos." ← mística, para stories y reels
+- "Cada box tiene un destino." ← para carruseles y contenido
+- "Entrás al Club o te quedás afuera." ← streetwear attitude, se mantiene
 
 ---
 
@@ -223,9 +224,9 @@ Espacio libre alrededor del logo = altura del escudo × 0.5 en todos los lados.
 
 | Contexto | Estilo | Ejemplo |
 |----------|--------|---------|
-| Headlines | Cortos, impactantes, uppercase feeling | "NO VENDEMOS CAMISETAS. ENTREGAMOS HISTORIA." |
-| Descripciones | Directos, emocionales, 2-3 oraciones max | "Cada caja está curada para vos. No sabés qué viene. Esa es la magia." |
-| CTAs | Imperativo, urgente, personalizado | "Pedí tu box", "Revelá la camiseta", "Unite al Club" |
+| Headlines | Cortos, impactantes, uppercase feeling | "NO ELEGÍS TU CAMISETA. TE ELIGE A VOS." |
+| Descripciones | Directos, emocionales, 2-3 oraciones max | "Cada box tiene un destino. Si llegaste hasta acá, puede ser el tuyo." |
+| CTAs | Imperativo, urgente, personalizado | "Confiá en la caja", "Descubrí tu box", "Unite al Club" |
 | Social media | Casual, con picardía, voseo | "Mirá lo que le tocó a este crack" |
 | WhatsApp | Cercano, como un cuate | "¡Buena! ¿Querés la Clásica o la Premium?" |
 
@@ -235,7 +236,7 @@ Espacio libre alrededor del logo = altura del escudo × 0.5 en todos los lados.
 - NUNCA español neutro o español de España
 
 ### Palabras de marca (usar frecuentemente)
-`revelar` · `descubrir` · `pieza` · `historia` · `legendaria` · `mística` · `unbox` · `curada` · `edición` · `club`
+`elegir` · `destino` · `revelar` · `descubrir` · `confiá` · `pieza` · `mística` · `unbox` · `curada` · `club` · `ritual`
 
 ### Palabras PROHIBIDAS (nunca usar)
 `stock` · `envío inmediato` · `producto genérico` · `la mejor calidad` · `100% original` · `réplica` · `copia` · `barato` · `oferta` · `descuento` (usar "acceso" o "precio especial" en su lugar)
@@ -251,7 +252,7 @@ Espacio libre alrededor del logo = altura del escudo × 0.5 en todos los lados.
 **PAS (para stories/reels):**
 1. **Problem:** "¿Otra vez la misma camiseta genérica de la Sexta?"
 2. **Agitate:** "En Guatemala no hay dónde encontrar piezas que cuenten algo."
-3. **Solve:** "En El Club, cada box es una historia que no sabías que necesitabas."
+3. **Solve:** "En El Club, la camiseta te elige a vos. Confiá en la caja."
 
 ---
 
@@ -281,10 +282,10 @@ Espacio libre alrededor del logo = altura del escudo × 0.5 en todos los lados.
 - Fragmentos del logo como elementos decorativos flotantes
 - Nunca más de 1-2 elementos gráficos sobre una foto
 
-### El concepto "Del negro al color"
-La narrativa visual central: todo es monocromático (la marca, el packaging, el fondo) y la CAMISETA es lo que trae el color. El unboxing es literalmente pasar de B&W a color. Esto aplica en:
-- Fotos de producto (fondo B&W, camiseta a color)
-- Videos de unboxing (empezar en B&W, al abrir la caja aparece el color)
+### El concepto "Del negro al color" (La revelación del destino)
+La narrativa visual central: todo es monocromático (la marca, el packaging, el fondo) y la CAMISETA es lo que trae el color. El unboxing es literalmente pasar de B&W a color — el momento donde la camiseta que te eligió se revela. La oscuridad es la espera; el color es el destino cumplido. Esto aplica en:
+- Fotos de producto (fondo B&W, camiseta a color — "esto te estaba esperando")
+- Videos de unboxing (empezar en B&W, al abrir la caja aparece el color — la revelación)
 - Feed de Instagram (posts gráficos en B&W alternados con product shots a color)
 
 ---
@@ -349,7 +350,7 @@ Todos los botones: Space Grotesk 600, 14px, uppercase, tracking 0.05em, padding 
 
 ### Instagram Feed (@club.gt)
 - Grid estético: B&W gráficos alternados con product shots a color
-- Bio: "No vendemos camisetas. Entregamos historia. ⚽"
+- Bio: "La camiseta te elige a vos. ⚽ Mystery boxes curadas | Guatemala 🇬🇹"
 - Avatar: Escudo del logo (blanco sobre negro)
 - Highlights: Iconos minimalistas blancos sobre negro
 - Stories: Usar fragmentos del logo como elementos gráficos
@@ -395,7 +396,7 @@ Todos los botones: Space Grotesk 600, 14px, uppercase, tracking 0.05em, padding 
 
 ## 10. Lo que NO Cambia
 
-1. **UVP:** "No vendemos camisetas. Entregamos historia." — intocable
+1. **UVP:** "La camiseta te elige a vos." — intocable
 2. **Voseo guatemalteco** — siempre
 3. **Canal mix:** IG 40% / WA 35% / TikTok 15% / Web 10%
 4. **WhatsApp como canal de cierre** — todo flujo termina ahí
@@ -427,6 +428,6 @@ Todos los botones: Space Grotesk 600, 14px, uppercase, tracking 0.05em, padding 
 
 ---
 
-*Brand Bible v2.2 "Midnight Stadium" — El Club, Guatemala. Febrero 2026.*
-*Monocromático + ice blue. Escudo EC con slash y fragmentos. Streetwear underground.*
+*Brand Bible v2.3 "Midnight Stadium" — El Club, Guatemala. Marzo 2026.*
+*"La camiseta te elige a vos." Monocromático + ice blue. Escudo EC con slash y fragmentos.*
 *Dirección creativa definida por Diego Arriaza Flores.*

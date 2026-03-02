@@ -16,8 +16,8 @@ Relaunch El Club as the premier football jersey mystery box experience in Guatem
 
 **Now:** ~100 jerseys in stock (2023 season + retros), 4,100+ social media followers, proven demand, professional brand strategy documents already created, and World Cup 2026 starting in 107 days. Zero cash budget -- organic growth + reinvestment only.
 
-**UVP:** "No vendemos camisetas. Entregamos historia."
-**Positioning:** "La unica experiencia futbolera en Guatemala donde el futbol no se compra, se revela."
+**UVP:** "La camiseta te elige a vos."
+**Positioning:** "La unica experiencia futbolera en Guatemala donde no elegis — descubris."
 
 ---
 
@@ -25,7 +25,7 @@ Relaunch El Club as the premier football jersey mystery box experience in Guatem
 
 **Name:** El Club
 **Logo:** Shield with open box + football icon, "EL CLUB MYSTERY BOX" text
-**Taglines:** "La camiseta con historia" | "Solo para los que entienden" | "Tu club. Tu historia. Tu box."
+**Taglines:** "La camiseta te elige a vos." | "No elegis. Descubris." | "Confia en la caja." | "Cada box tiene un destino."
 
 **Colors:**
 - Primary: Negro carbon (black)
@@ -140,8 +140,8 @@ elclub.club/
 ### 5.1 Key Pages
 
 **Landing Page (index.html)**
-- Hero: "No vendemos camisetas. Entregamos historia."
-- Mystery Box CTA front and center ("Pedi tu box secreta ahora")
+- Hero: "No elegis tu camiseta. Te elige a vos."
+- Mystery Box CTA front and center ("Confia en la caja")
 - Featured products grid
 - Social proof: TikTok embeds, unboxing videos, customer photos
 - Instagram feed integration
@@ -174,7 +174,7 @@ elclub.club/
 **Nosotros (nosotros.html)**
 - Brand manifesto (from Propuesta de Valor doc):
   "El Club no es una tienda. Es un ritual."
-  "Cada caja que abrís es un pedazo de historia que no sabías que necesitabas."
+  "La camiseta te elige a vos."
 - Brand story
 - Logo + identity
 
