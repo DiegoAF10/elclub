@@ -6,8 +6,9 @@
 var CART_KEY = 'elclub_cart';
 var CART_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-// WhatsApp number for orders (Guatemala format)
-var WHATSAPP_NUMBER = '50212345678'; // TODO: Replace with Diego's actual number
+// WhatsApp number for orders (Guatemala format, 502 + 8 dígitos)
+// DIEGO: Cuando tengas tu número WA Business, cambiá solo los dígitos acá:
+var WHATSAPP_NUMBER = '502XXXXXXXX';
 
 // ── Read ──
 function getCart() {
