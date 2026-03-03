@@ -441,40 +441,43 @@
         var bw = maxX - minX, bh = maxY - minY;
         var cx = minX + bw / 2, cy = minY + bh / 2;
 
-        // Get container aspect ratio to fill without black bars
+        // Get container aspect ratio
         var containerW = svg.clientWidth || window.innerWidth;
         var containerH = svg.clientHeight || window.innerHeight;
         var containerAR = containerW / containerH;
 
-        // Mobile: tight zoom (1.2x pad). Desktop: wider context (2.5x pad).
-        var padFactor = window.innerWidth < 768 ? 1.2 : 2.5;
-        var vw = bw * (1 + padFactor * 2);
-        var vh = bh * (1 + padFactor * 2);
+        var vx, vy, vw, vh;
 
-        // Adjust viewBox to match container aspect ratio (no black bars)
-        var viewAR = vw / vh;
-        if (containerAR > viewAR) {
-          // Container is wider — expand width
-          vw = vh * containerAR;
+        if (window.innerWidth < 768) {
+          // MOBILE: hard zoom to Europe. Show just the region with jerseys.
+          // Start with a tight box around the countries + small padding
+          var pad = Math.max(bw, bh) * 0.4;
+          vw = bw + pad * 2;
+          vh = vw / containerAR; // match container AR exactly
+          vx = cx - vw / 2;
+          vy = cy - vh / 2;
         } else {
-          // Container is taller — expand height
-          vh = vw / containerAR;
+          // DESKTOP: generous context showing continents around Europe
+          var pad = Math.max(bw, bh) * 2;
+          vw = bw + pad * 2;
+          vh = bh + pad * 2;
+          // Fit to container AR
+          if (containerAR > vw / vh) {
+            vw = vh * containerAR;
+          } else {
+            vh = vw / containerAR;
+          }
+          vx = cx - vw / 2;
+          vy = cy - vh / 2;
         }
 
-        // Center on the jersey countries
-        var vx = cx - vw / 2;
-        var vy = cy - vh / 2;
-
-        // Clamp to original SVG bounds (0 0 960 500)
+        // Clamp to SVG bounds
         if (vx < 0) vx = 0;
         if (vy < 0) vy = 0;
-        if (vx + vw > 960) vx = 960 - vw;
-        if (vy + vh > 500) vy = 500 - vh;
-        if (vw > 960) { vw = 960; vx = 0; }
-        if (vh > 500) { vh = 500; vy = 0; }
+        if (vx + vw > 960) { vx = Math.max(0, 960 - vw); }
+        if (vy + vh > 500) { vy = Math.max(0, 500 - vh); }
 
         svg.setAttribute('viewBox', vx + ' ' + vy + ' ' + vw + ' ' + vh);
-        svg.setAttribute('preserveAspectRatio', 'xMidYMid slice');
       }
 
       function buildCountryMap() {
