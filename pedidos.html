@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es-GT">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pedidos — El Club</title>
+
+  <meta name="description" content="Completa tu pedido en El Club. Checkout seguro con Recurrente.">
+  <link rel="canonical" href="https://elclub.club/pedidos.html">
+  <link rel="icon" type="image/png" href="/assets/img/brand/favicon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="stylesheet" href="/assets/css/elclub.css">
+</head>
+<body class="bg-midnight text-white">
+
+  <!-- NAV -->
+  <header class="fixed top-0 left-0 right-0 z-40 bg-midnight/95 backdrop-blur-sm border-b border-chalk">
+    <nav class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex-shrink-0"><img src="/assets/img/brand/logo.svg" alt="El Club" class="h-10"></a>
+      <div class="hidden md:flex items-center gap-8">
+        <a href="/mystery-box.html" class="nav-link">Mystery Box</a>
+        <a href="/catalogo.html" class="nav-link">Catalogo</a>
+        <a href="/pedidos.html" class="nav-link active">Pedidos</a>
+      </div>
+      <div class="flex items-center gap-4">
+        <button onclick="toggleMobileMenu()" class="md:hidden text-white hover:text-ice transition-colors cursor-pointer" aria-label="Menu">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Mobile Menu -->
+  <div id="mobile-menu" class="mobile-menu">
+    <div class="flex flex-col h-full px-6 py-8">
+      <div class="flex justify-end mb-12">
+        <button onclick="closeMobileMenu()" class="text-white hover:text-ice transition-colors cursor-pointer" aria-label="Cerrar">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <nav class="flex flex-col gap-8">
+        <a href="/mystery-box.html" onclick="closeMobileMenu()" class="text-2xl">Mystery Box</a>
+        <a href="/catalogo.html" onclick="closeMobileMenu()" class="text-2xl">Catalogo</a>
+        <a href="/pedidos.html" onclick="closeMobileMenu()" class="text-2xl text-ice">Pedidos</a>
+      </nav>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <main class="pt-16 min-h-screen">
+    <div class="max-w-2xl mx-auto px-4 py-12">
+
+      <h1 class="font-display text-4xl md:text-5xl text-white mb-8">Pedidos</h1>
+
+      <!-- PROGRESS BAR -->
+      <div class="checkout-steps mb-12">
+        <div id="progress-step-1" class="checkout-step active">
+          <span class="checkout-step-dot">1</span>
+          <span class="hidden sm:inline">Resumen</span>
+        </div>
+        <div id="progress-line-1" class="checkout-line"></div>
+        <div id="progress-step-2" class="checkout-step">
+          <span class="checkout-step-dot">2</span>
+          <span class="hidden sm:inline">Envio</span>
+        </div>
+        <div id="progress-line-2" class="checkout-line"></div>
+        <div id="progress-step-3" class="checkout-step">
+          <span class="checkout-step-dot">3</span>
+          <span class="hidden sm:inline">Pago</span>
+        </div>
+      </div>
+
+      <!-- ── STEP 1: RESUMEN ── -->
+      <div id="step-1">
+
+        <!-- Empty -->
+        <div id="order-empty" class="hidden text-center py-16">
+          <svg class="w-20 h-20 mx-auto mb-6 text-chalk" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+          </svg>
+          <h2 class="text-xl font-bold text-white mb-2">Tu carrito esta vacio</h2>
+          <p class="text-smoke mb-6">Agrega algo antes de hacer un pedido.</p>
+          <div class="flex flex-col sm:flex-row gap-3 justify-center">
+            <a href="/mystery-box.html" class="btn-primary px-8 py-3">Ver Mystery Boxes</a>
+            <a href="/catalogo.html" class="btn-secondary px-8 py-3">Ver Catalogo</a>
+          </div>
+        </div>
+
+        <!-- Filled -->
+        <div id="order-filled" class="hidden">
+          <div id="order-items">
+            <!-- Rendered by JS -->
+          </div>
+
+          <div class="mt-6 bg-pitch rounded-lg p-6 border border-chalk">
+            <div class="flex justify-between mb-2">
+              <span class="text-smoke text-sm">Subtotal</span>
+              <span id="order-subtotal" class="text-white font-semibold">Q0</span>
+            </div>
+            <div class="flex justify-between mb-4">
+              <span class="text-smoke text-sm">Envio</span>
+              <span id="order-shipping" class="text-white font-semibold">Q25</span>
+            </div>
+            <div class="flex justify-between pt-4 border-t border-chalk">
+              <span class="font-bold text-lg uppercase tracking-wider">Total</span>
+              <span id="order-total" class="font-display text-2xl text-ice">Q0</span>
+            </div>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-3 mt-8">
+            <button onclick="goToStep(2)" class="btn-primary flex-1 py-4 cursor-pointer text-center">Continuar</button>
+            <a href="/catalogo.html" class="btn-ghost flex-1 py-4 text-center">Seguir comprando</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── STEP 2: ENVIO ── -->
+      <div id="step-2" class="hidden">
+
+        <h2 class="text-xl font-bold text-white mb-6">Datos de envio</h2>
+
+        <form id="shipping-form" class="space-y-5" onsubmit="event.preventDefault(); goToStep(3);">
+
+          <div>
+            <label for="shipping-name" class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Nombre completo</label>
+            <input id="shipping-name" type="text" required class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="Tu nombre" onblur="validateOnBlur('shipping-name')">
+            <p id="shipping-name-error" class="hidden text-red-400 text-xs mt-1">Ingresa tu nombre.</p>
+          </div>
+
+          <div>
+            <label for="shipping-phone" class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Telefono (WhatsApp)</label>
+            <div class="flex items-center gap-2">
+              <span class="text-smoke text-sm font-semibold">+502</span>
+              <input id="shipping-phone" type="tel" required class="flex-1 px-4 py-3 rounded-lg border border-chalk text-white" placeholder="1234 5678" maxlength="9" onblur="validateOnBlur('shipping-phone')">
+            </div>
+            <p id="shipping-phone-error" class="hidden text-red-400 text-xs mt-1">Ingresa un numero valido (8 digitos).</p>
+          </div>
+
+          <div>
+            <label for="shipping-address" class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Zona / Direccion de entrega</label>
+            <input id="shipping-address" type="text" required class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="Zona 10, Ciudad de Guatemala" onblur="validateOnBlur('shipping-address')">
+            <p id="shipping-address-error" class="hidden text-red-400 text-xs mt-1">Ingresa tu direccion de entrega.</p>
+          </div>
+
+          <div>
+            <label for="shipping-notes" class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Notas <span class="text-ash font-normal normal-case">(opcional)</span></label>
+            <textarea id="shipping-notes" rows="2" class="w-full px-4 py-3 rounded-lg border border-chalk text-white resize-none" placeholder="Indicaciones de entrega, referencia, etc."></textarea>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-3 pt-4">
+            <button type="submit" class="btn-primary flex-1 py-4 cursor-pointer">Continuar al pago</button>
+            <button type="button" onclick="goToStep(1)" class="btn-ghost flex-1 py-4 cursor-pointer">Volver</button>
+          </div>
+
+        </form>
+      </div>
+
+      <!-- ── STEP 3: PAGO ── -->
+      <div id="step-3" class="hidden">
+
+        <h2 class="text-xl font-bold text-white mb-6">Confirma y paga</h2>
+
+        <!-- Order summary -->
+        <div class="bg-pitch rounded-lg p-6 border border-chalk mb-6">
+          <div id="payment-summary">
+            <!-- Rendered by JS -->
+          </div>
+          <div class="flex justify-between pt-4 mt-4 border-t border-chalk">
+            <span class="font-bold text-lg uppercase tracking-wider">Total</span>
+            <span id="payment-total" class="font-display text-2xl text-ice">Q0</span>
+          </div>
+        </div>
+
+        <!-- Payment options -->
+        <div class="space-y-4">
+
+          <button onclick="payWithRecurrente()" class="btn-primary w-full py-4 cursor-pointer text-center flex items-center justify-center gap-3">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z"/></svg>
+            Pagar con tarjeta (Recurrente)
+          </button>
+
+          <div class="relative flex items-center gap-4 py-2">
+            <div class="flex-1 h-px bg-chalk"></div>
+            <span class="text-ash text-xs uppercase tracking-wider">o</span>
+            <div class="flex-1 h-px bg-chalk"></div>
+          </div>
+
+          <button onclick="payWithWhatsApp()" class="btn-whatsapp w-full justify-center py-4 cursor-pointer">
+            <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            Pagar por WhatsApp
+          </button>
+
+        </div>
+
+        <button onclick="goToStep(2)" class="btn-ghost w-full py-3 mt-4 cursor-pointer">Volver a datos de envio</button>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="border-t border-chalk py-8 px-4">
+    <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+      <a href="/"><img src="/assets/img/brand/logo.svg" alt="El Club" class="h-8"></a>
+      <p class="text-ash text-xs">El Club 2026. Pagos seguros con Recurrente.</p>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="/assets/js/cart.js"></script>
+  <script src="/assets/js/app.js"></script>
+  <script src="/assets/js/checkout.js"></script>
+
+</body>
+</html>

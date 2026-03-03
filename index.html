@@ -54,9 +54,9 @@
 <body class="bg-midnight text-white">
 
   <!-- ============================================================ -->
-  <!-- NAV                                                          -->
+  <!-- NAV (hidden in hero, appears sticky on scroll)               -->
   <!-- ============================================================ -->
-  <header id="site-header" class="fixed top-0 left-0 right-0 z-40 bg-carbon">
+  <header id="site-header" class="fixed top-0 left-0 right-0 z-40 bg-midnight/95 backdrop-blur-sm border-b border-chalk/0 nav-auto-hide" style="border-bottom-color: transparent;">
     <nav class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
 
       <!-- Logo -->
@@ -64,18 +64,17 @@
         <img src="/assets/img/brand/logo.svg" alt="El Club" class="h-10">
       </a>
 
-      <!-- Desktop Links -->
+      <!-- Desktop Links (4 items only) -->
       <div class="hidden md:flex items-center gap-8">
-        <a href="/tienda.html" class="text-sm font-semibold text-white uppercase tracking-wider hover:text-gold transition-colors">Tienda</a>
-        <a href="/mystery-box.html" class="text-sm font-semibold text-gold uppercase tracking-wider hover:text-sand transition-colors">Mystery Box</a>
-        <a href="/nosotros.html" class="text-sm font-semibold text-white uppercase tracking-wider hover:text-gold transition-colors">Nosotros</a>
+        <a href="/mystery-box.html" class="nav-link active">Mystery Box</a>
+        <a href="/catalogo.html" class="nav-link">Catalogo</a>
+        <a href="/pedidos.html" class="nav-link">Pedidos</a>
       </div>
 
       <!-- Right: Cart + Mobile Hamburger -->
       <div class="flex items-center gap-4">
-
         <!-- Cart Button -->
-        <button onclick="openCartDrawer()" class="relative text-white hover:text-gold transition-colors cursor-pointer" aria-label="Abrir carrito">
+        <button onclick="openCartDrawer()" class="relative text-white hover:text-ice transition-colors cursor-pointer" aria-label="Abrir carrito">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
           </svg>
@@ -83,7 +82,7 @@
         </button>
 
         <!-- Mobile Hamburger -->
-        <button onclick="toggleMobileMenu()" class="md:hidden text-white hover:text-gold transition-colors cursor-pointer" aria-label="Menu">
+        <button onclick="toggleMobileMenu()" class="md:hidden text-white hover:text-ice transition-colors cursor-pointer" aria-label="Menu">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
           </svg>
@@ -97,32 +96,25 @@
   <!-- ============================================================ -->
   <div id="mobile-menu" class="mobile-menu">
     <div class="flex flex-col h-full px-6 py-8">
-
-      <!-- Close Button -->
       <div class="flex justify-end mb-12">
-        <button onclick="closeMobileMenu()" class="text-white hover:text-gold transition-colors cursor-pointer" aria-label="Cerrar menu">
+        <button onclick="closeMobileMenu()" class="text-white hover:text-ice transition-colors cursor-pointer" aria-label="Cerrar menu">
           <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
           </svg>
         </button>
       </div>
-
-      <!-- Mobile Links -->
       <nav class="flex flex-col gap-8">
-        <a href="/tienda.html" onclick="closeMobileMenu()" class="text-2xl font-bold text-white uppercase tracking-wider hover:text-gold transition-colors">Tienda</a>
-        <a href="/mystery-box.html" onclick="closeMobileMenu()" class="text-2xl font-bold text-gold uppercase tracking-wider hover:text-sand transition-colors">Mystery Box</a>
-        <a href="/nosotros.html" onclick="closeMobileMenu()" class="text-2xl font-bold text-white uppercase tracking-wider hover:text-gold transition-colors">Nosotros</a>
-        <a href="/contacto.html" onclick="closeMobileMenu()" class="text-2xl font-bold text-white uppercase tracking-wider hover:text-gold transition-colors">Contacto</a>
+        <a href="/mystery-box.html" onclick="closeMobileMenu()" class="text-2xl">Mystery Box</a>
+        <a href="/catalogo.html" onclick="closeMobileMenu()" class="text-2xl">Catalogo</a>
+        <a href="/pedidos.html" onclick="closeMobileMenu()" class="text-2xl">Pedidos</a>
       </nav>
-
-      <!-- Mobile Social Links -->
       <div class="mt-auto flex items-center gap-6">
-        <a href="https://www.instagram.com/club.gt" target="_blank" rel="noopener" class="text-sand hover:text-gold transition-colors" aria-label="Instagram">
+        <a href="https://www.instagram.com/club.gt" target="_blank" rel="noopener" class="text-smoke hover:text-ice transition-colors" aria-label="Instagram">
           <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
             <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
           </svg>
         </a>
-        <a href="https://www.tiktok.com/@club.gtm" target="_blank" rel="noopener" class="text-sand hover:text-gold transition-colors" aria-label="TikTok">
+        <a href="https://www.tiktok.com/@club.gtm" target="_blank" rel="noopener" class="text-smoke hover:text-ice transition-colors" aria-label="TikTok">
           <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
             <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.15V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/>
           </svg>
@@ -132,243 +124,193 @@
   </div>
 
   <!-- ============================================================ -->
-  <!-- HERO                                                         -->
+  <!-- HERO — Fullscreen "La Entrada al Estadio"                    -->
   <!-- ============================================================ -->
-  <section class="relative min-h-screen flex items-center justify-center bg-carbon overflow-hidden">
+  <section id="hero" class="hero-smoke relative min-h-screen flex items-center justify-center bg-midnight">
 
-    <!-- Subtle gradient overlay -->
-    <div class="absolute inset-0 bg-gradient-to-b from-carbon-light/50 via-carbon to-carbon"></div>
+    <!-- Ambient gradient -->
+    <div class="absolute inset-0 bg-gradient-to-b from-pitch/30 via-midnight to-midnight"></div>
 
-    <!-- Decorative lines -->
-    <div class="absolute inset-0 opacity-5">
-      <div class="absolute top-1/4 left-0 right-0 h-px bg-sand"></div>
-      <div class="absolute top-2/4 left-0 right-0 h-px bg-sand"></div>
-      <div class="absolute top-3/4 left-0 right-0 h-px bg-sand"></div>
-    </div>
+    <!-- Subtle radial vignette -->
+    <div class="absolute inset-0" style="background: radial-gradient(ellipse 70% 60% at 50% 45%, transparent 0%, #0D0D0D 100%);"></div>
 
     <div class="relative z-10 max-w-4xl mx-auto px-6 text-center">
 
       <!-- Pretitle -->
-      <p class="text-gold text-xs font-bold uppercase tracking-[0.3em] mb-6 animate-fade-in-up">
+      <p class="text-ice text-xs font-bold uppercase tracking-[0.3em] mb-6 animate-fade-in-up">
         Mystery boxes de camisetas de futbol
       </p>
 
       <!-- Main headline -->
-      <h1 class="font-display text-4xl md:text-6xl lg:text-7xl font-extrabold text-white leading-tight mb-8" style="animation: fadeInUp 0.6s ease 0.15s forwards; opacity: 0;">
-        No elegis tu camiseta.<br>
-        <span class="text-gold">Te elige a vos.</span>
+      <h1 class="font-display text-5xl sm:text-6xl md:text-7xl lg:text-8xl text-white leading-[0.95] mb-8" style="animation: fadeInUp 0.6s ease 0.15s forwards; opacity: 0;">
+        La camiseta<br>
+        <span class="text-ice">te elige a vos.</span>
       </h1>
 
       <!-- Sub-copy -->
-      <p class="text-sand text-base md:text-lg max-w-xl mx-auto mb-10 leading-relaxed" style="animation: fadeInUp 0.6s ease 0.3s forwards; opacity: 0;">
-        Cada mystery box tiene un destino. Confia en la caja — lo que hay adentro ya sabe quien sos.
+      <p class="text-smoke text-base md:text-lg max-w-md mx-auto mb-12 leading-relaxed" style="animation: fadeInUp 0.6s ease 0.3s forwards; opacity: 0;">
+        No elegis. Descubris. Cada box tiene un destino.
       </p>
 
-      <!-- CTAs -->
-      <div class="flex flex-col sm:flex-row items-center justify-center gap-4" style="animation: fadeInUp 0.6s ease 0.45s forwards; opacity: 0;">
-        <a href="/mystery-box.html" class="btn-primary text-base px-10 py-4">
-          Confia en la caja
-        </a>
-        <a href="/tienda.html" class="btn-secondary text-base px-10 py-4 border-sand text-sand hover:bg-sand hover:text-white">
-          Ver tienda
+      <!-- Single CTA -->
+      <div style="animation: fadeInUp 0.6s ease 0.45s forwards; opacity: 0;">
+        <a href="#discover" class="btn-primary text-base px-12 py-4 animate-pulse-ice">
+          Entrar al Club
         </a>
       </div>
     </div>
 
     <!-- Scroll indicator -->
-    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-50">
-      <span class="text-sand text-[10px] uppercase tracking-[0.2em] font-semibold">Scroll</span>
-      <div class="w-px h-8 bg-sand/50 animate-pulse"></div>
+    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 opacity-40">
+      <div class="w-px h-12 bg-gradient-to-b from-transparent to-smoke/50"></div>
     </div>
   </section>
 
   <!-- ============================================================ -->
-  <!-- FEATURED PRODUCTS                                            -->
+  <!-- BIFURCATION — Mystery Box / Catalogo                         -->
   <!-- ============================================================ -->
-  <section class="py-16 md:py-24 px-4">
-    <div class="max-w-6xl mx-auto">
+  <section id="discover" class="py-20 md:py-28 px-4 bg-midnight">
+    <div class="max-w-5xl mx-auto">
 
       <div class="text-center mb-12 reveal">
-        <p class="text-gold text-xs font-bold uppercase tracking-[0.25em] mb-3">El Club presenta</p>
-        <h2 class="font-display text-3xl md:text-4xl font-extrabold text-white">Lo que esta esperandote</h2>
+        <p class="text-smoke text-sm uppercase tracking-[0.15em] mb-2">Elegí tu camino</p>
+        <h2 class="font-display text-3xl md:text-4xl text-white">Cada box tiene un destino.</h2>
       </div>
 
-      <!-- Product Grid (populated by app.js) -->
-      <div id="featured-products" class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 reveal">
-        <!-- Rendered by JavaScript -->
-      </div>
+      <div class="grid md:grid-cols-2 gap-6 reveal">
 
-      <div class="text-center mt-10 reveal">
-        <a href="/tienda.html" class="btn-secondary">Ver toda la tienda</a>
+        <!-- Mystery Box Card -->
+        <a href="/mystery-box.html" class="bifurcation-card rounded-lg block no-underline group" style="min-height: 380px;">
+          <div class="absolute inset-0 bg-pitch">
+            <img src="/assets/img/products/mystery-box-clasica.jpg" alt="Mystery Box" class="w-full h-full object-cover opacity-40 group-hover:opacity-50 transition-opacity duration-500" loading="lazy">
+          </div>
+          <div class="relative z-10 flex flex-col justify-end h-full p-8">
+            <span class="text-ice text-xs font-bold uppercase tracking-[0.2em] mb-2">La experiencia</span>
+            <h3 class="font-display text-3xl md:text-4xl text-white mb-2">Mystery Box</h3>
+            <p class="text-smoke text-sm mb-4 max-w-xs">Confia en la caja. Lo que hay adentro ya sabe quien sos.</p>
+            <span class="text-ice text-sm font-semibold uppercase tracking-wider group-hover:translate-x-1 transition-transform inline-flex items-center gap-2">
+              Desde Q400
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
+            </span>
+          </div>
+        </a>
+
+        <!-- Catalogo Card -->
+        <a href="/catalogo.html" class="bifurcation-card rounded-lg block no-underline group" style="min-height: 380px;">
+          <div class="absolute inset-0 bg-pitch">
+            <img src="/assets/img/products/placeholder.svg" alt="Catalogo" class="w-full h-full object-cover opacity-30 group-hover:opacity-40 transition-opacity duration-500" loading="lazy">
+          </div>
+          <div class="relative z-10 flex flex-col justify-end h-full p-8">
+            <span class="text-ice text-xs font-bold uppercase tracking-[0.2em] mb-2">La vitrina</span>
+            <h3 class="font-display text-3xl md:text-4xl text-white mb-2">Catalogo</h3>
+            <p class="text-smoke text-sm mb-4 max-w-xs">Elegi tu pieza. Cada camiseta tiene una historia que contar.</p>
+            <span class="text-ice text-sm font-semibold uppercase tracking-wider group-hover:translate-x-1 transition-transform inline-flex items-center gap-2">
+              <span id="catalog-count">Ver piezas</span>
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/></svg>
+            </span>
+          </div>
+        </a>
+
       </div>
     </div>
   </section>
 
   <!-- ============================================================ -->
-  <!-- MYSTERY BOX SECTION                                          -->
+  <!-- FEATURED JERSEY — Editorial style                            -->
   <!-- ============================================================ -->
-  <section class="bg-carbon py-16 md:py-24 px-4">
+  <section id="featured-jersey" class="py-20 md:py-28 px-4 bg-pitch hidden">
     <div class="max-w-6xl mx-auto">
-      <div class="grid md:grid-cols-2 gap-10 md:gap-16 items-center">
+      <div class="grid md:grid-cols-5 gap-8 md:gap-12 items-center">
 
-        <!-- Left: Copy -->
-        <div class="reveal">
-          <p class="text-gold text-xs font-bold uppercase tracking-[0.25em] mb-4">La experiencia</p>
-          <h2 class="font-display text-3xl md:text-4xl font-extrabold text-white leading-tight mb-6">
-            Abri tu box.<br>
-            <span class="text-gold">Revela tu historia.</span>
-          </h2>
-          <p class="text-sand leading-relaxed mb-4">
-            La Mystery Box no es un producto. Es un ritual. Cada caja esta curada con camisetas
-            de futbol que cuentan algo — una final mitica, un campeonato irrepetible, una epoca dorada.
-          </p>
-          <p class="text-sand leading-relaxed mb-4">
-            No sabes que te va a tocar. Y esa es la magia. Cada unboxing es una conexion
-            directa con el juego que te mueve.
-          </p>
-
-          <!-- Tiers -->
-          <div class="flex flex-col sm:flex-row gap-4 mt-8 mb-8">
-            <div class="flex-1 border border-sand/20 rounded-lg p-4">
-              <p class="text-gold font-bold text-sm uppercase tracking-wider mb-1">Clasica</p>
-              <p class="text-white text-2xl font-extrabold">Q400</p>
-              <p class="text-sand/70 text-xs mt-1">2 camisetas curadas</p>
-            </div>
-            <div class="flex-1 border border-gold/40 rounded-lg p-4 relative overflow-hidden">
-              <span class="absolute top-2 right-2 badge-new text-[9px] rounded-full">Popular</span>
-              <p class="text-gold font-bold text-sm uppercase tracking-wider mb-1">Premium</p>
-              <p class="text-white text-2xl font-extrabold">Q600</p>
-              <p class="text-sand/70 text-xs mt-1">3 camisetas + bonus</p>
-            </div>
-          </div>
-
-          <a href="/mystery-box.html" class="btn-primary">
-            Pedi tu box secreta ahora
-          </a>
-        </div>
-
-        <!-- Right: Image -->
-        <div class="reveal order-first md:order-last">
-          <div class="relative">
-            <div class="aspect-square bg-carbon-light rounded-lg overflow-hidden border border-sand/10">
-              <img
-                src="/assets/img/products/mystery-box-clasica.jpg"
-                alt="Mystery Box de El Club — camisetas de futbol curadas"
-                class="w-full h-full object-cover hover:scale-105 transition-transform duration-700"
-                loading="lazy"
-              >
-            </div>
-            <!-- Decorative badge -->
-            <div class="absolute -bottom-4 -left-4 bg-gold text-carbon text-xs font-bold uppercase tracking-wider px-4 py-2 rounded">
-              Edicion limitada
+        <!-- Image (3 cols) -->
+        <div class="md:col-span-3 reveal">
+          <div class="relative aspect-square rounded-lg overflow-hidden bg-midnight border border-chalk">
+            <img id="featured-img" src="" alt="" class="w-full h-full object-cover">
+            <div class="absolute top-4 left-4">
+              <span class="badge-new">Destacada</span>
             </div>
           </div>
         </div>
+
+        <!-- Copy (2 cols) -->
+        <div class="md:col-span-2 reveal">
+          <p class="text-ice text-xs font-bold uppercase tracking-[0.2em] mb-4">Pieza destacada</p>
+          <h2 id="featured-name" class="font-display text-3xl md:text-4xl text-white mb-2"></h2>
+          <p id="featured-meta" class="text-smoke text-sm uppercase tracking-wider mb-6"></p>
+          <p id="featured-desc" class="text-smoke text-base leading-relaxed mb-8"></p>
+          <div class="flex items-center gap-6">
+            <span id="featured-price" class="text-ice text-3xl font-bold"></span>
+            <a id="featured-link" href="#" class="btn-primary px-8 py-3">Ver pieza</a>
+          </div>
+        </div>
+
       </div>
     </div>
   </section>
 
   <!-- ============================================================ -->
-  <!-- HOW IT WORKS                                                 -->
+  <!-- HOW IT WORKS — 3 steps                                       -->
   <!-- ============================================================ -->
-  <section class="py-16 md:py-24 px-4 bg-sand-light">
+  <section class="py-20 md:py-28 px-4 bg-midnight">
     <div class="max-w-4xl mx-auto text-center">
 
-      <div class="mb-12 reveal">
-        <p class="text-gold text-xs font-bold uppercase tracking-[0.25em] mb-3">El ritual</p>
-        <h2 class="font-display text-3xl md:text-4xl font-extrabold text-white">Como funciona</h2>
+      <div class="mb-16 reveal">
+        <p class="text-ice text-xs font-bold uppercase tracking-[0.25em] mb-3">El ritual</p>
+        <h2 class="font-display text-3xl md:text-4xl text-white">Como funciona</h2>
       </div>
 
-      <div class="grid md:grid-cols-3 gap-8 reveal">
+      <div class="grid md:grid-cols-3 gap-12 reveal">
+
         <!-- Step 1 -->
         <div class="text-center">
-          <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-carbon flex items-center justify-center">
-            <span class="text-gold font-extrabold text-lg">1</span>
+          <div class="w-16 h-16 mx-auto mb-5 rounded-full border-2 border-chalk flex items-center justify-center">
+            <svg class="w-7 h-7 text-ice" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5m8.25 3v6.75m0 0l-3-3m3 3l3-3M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/>
+            </svg>
           </div>
           <h3 class="font-bold text-lg mb-2 text-white">Elegis tu box</h3>
-          <p class="text-warm text-sm leading-relaxed">Clasica o Premium. Nos decis tu talla y nosotros hacemos el resto.</p>
+          <p class="text-smoke text-sm leading-relaxed">Clasica o Premium. Nos decis tu talla y nosotros hacemos el resto.</p>
         </div>
 
         <!-- Step 2 -->
         <div class="text-center">
-          <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-carbon flex items-center justify-center">
-            <span class="text-gold font-extrabold text-lg">2</span>
+          <div class="w-16 h-16 mx-auto mb-5 rounded-full border-2 border-chalk flex items-center justify-center">
+            <svg class="w-7 h-7 text-ice" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"/>
+            </svg>
           </div>
           <h3 class="font-bold text-lg mb-2 text-white">Curamos tu box</h3>
-          <p class="text-warm text-sm leading-relaxed">El Club selecciona camisetas con historia. Cada pieza tiene algo que contar.</p>
+          <p class="text-smoke text-sm leading-relaxed">Seleccionamos camisetas con historia. Cada pieza tiene algo que contar.</p>
         </div>
 
         <!-- Step 3 -->
         <div class="text-center">
-          <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-carbon flex items-center justify-center">
-            <span class="text-gold font-extrabold text-lg">3</span>
+          <div class="w-16 h-16 mx-auto mb-5 rounded-full border-2 border-chalk flex items-center justify-center">
+            <svg class="w-7 h-7 text-ice" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 11.25v8.25a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-8.25M12 4.875A2.625 2.625 0 109.375 7.5H12m0-2.625V7.5m0-2.625A2.625 2.625 0 1114.625 7.5H12m0 0V21m-8.625-9.75h18c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125h-18c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/>
+            </svg>
           </div>
           <h3 class="font-bold text-lg mb-2 text-white">Revelas la historia</h3>
-          <p class="text-warm text-sm leading-relaxed">Abris tu box y descubris piezas que no sabias que necesitabas.</p>
+          <p class="text-smoke text-sm leading-relaxed">Abris tu box y descubris piezas que no sabias que necesitabas.</p>
         </div>
+
       </div>
     </div>
   </section>
 
   <!-- ============================================================ -->
-  <!-- SOCIAL PROOF                                                 -->
+  <!-- FINAL CTA                                                    -->
   <!-- ============================================================ -->
-  <section class="py-16 md:py-24 px-4">
-    <div class="max-w-4xl mx-auto">
-
-      <div class="text-center mb-12 reveal">
-        <p class="text-gold text-xs font-bold uppercase tracking-[0.25em] mb-3">La comunidad</p>
-        <h2 class="font-display text-3xl md:text-4xl font-extrabold text-white">Lo que dicen de nosotros</h2>
-      </div>
-
-      <!-- TikTok Embed Placeholder -->
-      <div class="grid md:grid-cols-2 gap-6 reveal">
-        <div class="bg-sand-light rounded-lg aspect-[9/16] max-h-[500px] flex items-center justify-center border border-sand">
-          <!-- TODO: Replace with actual TikTok embed -->
-          <div class="text-center px-6">
-            <svg class="w-12 h-12 mx-auto mb-4 text-warm" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.15V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/>
-            </svg>
-            <p class="text-warm text-sm font-semibold">Unboxing en TikTok</p>
-            <p class="text-warm/60 text-xs mt-1">@club.gtm</p>
-          </div>
-        </div>
-        <div class="bg-sand-light rounded-lg aspect-[9/16] max-h-[500px] flex items-center justify-center border border-sand">
-          <!-- TODO: Replace with actual TikTok embed -->
-          <div class="text-center px-6">
-            <svg class="w-12 h-12 mx-auto mb-4 text-warm" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.15V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/>
-            </svg>
-            <p class="text-warm text-sm font-semibold">Unboxing en TikTok</p>
-            <p class="text-warm/60 text-xs mt-1">@club.gtm</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="text-center mt-8 reveal">
-        <a href="https://www.tiktok.com/@club.gtm" target="_blank" rel="noopener" class="btn-secondary inline-flex items-center gap-2">
-          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.15V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/>
-          </svg>
-          Seguinos en TikTok
-        </a>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================================================ -->
-  <!-- FINAL CTA BANNER                                             -->
-  <!-- ============================================================ -->
-  <section class="bg-carbon py-16 md:py-20 px-4">
+  <section class="py-20 md:py-28 px-4 bg-pitch">
     <div class="max-w-3xl mx-auto text-center reveal">
-      <h2 class="text-3xl md:text-4xl font-extrabold text-white leading-tight mb-4">
-        Tu camiseta esta<br>
-        <span class="text-gold">esperandote.</span>
+      <h2 class="font-display text-4xl md:text-5xl text-white leading-tight mb-4">
+        Tu camiseta ya sabe<br>
+        <span class="text-ice">quien sos.</span>
       </h2>
-      <p class="text-sand text-base md:text-lg mb-8 max-w-lg mx-auto leading-relaxed">
+      <p class="text-smoke text-base md:text-lg mb-10 max-w-lg mx-auto leading-relaxed">
         Cada box tiene un destino. Si llegaste hasta aca, puede ser el tuyo.
       </p>
-      <a href="/mystery-box.html" class="btn-primary text-base px-10 py-4">
+      <a href="/mystery-box.html" class="btn-primary text-base px-12 py-4">
         Descubri tu box
       </a>
     </div>
@@ -377,7 +319,7 @@
   <!-- ============================================================ -->
   <!-- FOOTER                                                       -->
   <!-- ============================================================ -->
-  <footer class="bg-carbon border-t border-sand/10 pt-12 pb-8 px-4">
+  <footer class="border-t border-chalk pt-12 pb-8 px-4">
     <div class="max-w-6xl mx-auto">
 
       <div class="grid md:grid-cols-3 gap-10 mb-10">
@@ -387,8 +329,8 @@
           <a href="/" class="inline-block mb-4">
             <img src="/assets/img/brand/logo.svg" alt="El Club" class="h-12">
           </a>
-          <p class="text-sand/70 text-sm leading-relaxed max-w-xs">
-            La camiseta te elige a vos. Mystery boxes curadas por El Club.
+          <p class="text-smoke text-sm leading-relaxed max-w-xs">
+            La camiseta te elige a vos. Mystery boxes curadas con historia del futbol mundial.
           </p>
         </div>
 
@@ -396,10 +338,9 @@
         <div>
           <p class="text-white font-bold text-sm uppercase tracking-wider mb-4">Navegacion</p>
           <nav class="flex flex-col gap-3">
-            <a href="/tienda.html" class="text-sand/70 text-sm hover:text-gold transition-colors">Tienda</a>
-            <a href="/mystery-box.html" class="text-sand/70 text-sm hover:text-gold transition-colors">Mystery Box</a>
-            <a href="/nosotros.html" class="text-sand/70 text-sm hover:text-gold transition-colors">Nosotros</a>
-            <a href="/contacto.html" class="text-sand/70 text-sm hover:text-gold transition-colors">Contacto</a>
+            <a href="/mystery-box.html" class="text-smoke text-sm hover:text-ice transition-colors">Mystery Box</a>
+            <a href="/catalogo.html" class="text-smoke text-sm hover:text-ice transition-colors">Catalogo</a>
+            <a href="/pedidos.html" class="text-smoke text-sm hover:text-ice transition-colors">Pedidos</a>
           </nav>
         </div>
 
@@ -407,40 +348,29 @@
         <div>
           <p class="text-white font-bold text-sm uppercase tracking-wider mb-4">Seguinos</p>
           <div class="flex items-center gap-4 mb-6">
-            <!-- Instagram -->
-            <a href="https://www.instagram.com/club.gt" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-sand/20 flex items-center justify-center text-sand hover:text-gold hover:border-gold transition-colors" aria-label="Instagram">
+            <a href="https://www.instagram.com/club.gt" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-chalk flex items-center justify-center text-smoke hover:text-ice hover:border-ice transition-colors" aria-label="Instagram">
               <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
               </svg>
             </a>
-            <!-- TikTok -->
-            <a href="https://www.tiktok.com/@club.gtm" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-sand/20 flex items-center justify-center text-sand hover:text-gold hover:border-gold transition-colors" aria-label="TikTok">
+            <a href="https://www.tiktok.com/@club.gtm" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-chalk flex items-center justify-center text-smoke hover:text-ice hover:border-ice transition-colors" aria-label="TikTok">
               <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.15V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/>
               </svg>
             </a>
-            <!-- WhatsApp -->
-            <a href="https://wa.me/50212345678" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-sand/20 flex items-center justify-center text-sand hover:text-gold hover:border-gold transition-colors" aria-label="WhatsApp">
+            <a href="https://wa.me/502XXXXXXXX" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-chalk flex items-center justify-center text-smoke hover:text-ice hover:border-ice transition-colors" aria-label="WhatsApp">
               <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
               </svg>
             </a>
           </div>
-
-          <!-- WhatsApp CTA -->
-          <a href="https://wa.me/50212345678?text=Hola%21%20Quiero%20saber%20mas%20sobre%20las%20Mystery%20Boxes%20de%20El%20Club." target="_blank" rel="noopener" class="btn-whatsapp text-xs py-3 px-5">
-            <svg class="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-            </svg>
-            Escribinos por WhatsApp
-          </a>
         </div>
       </div>
 
       <!-- Bottom bar -->
-      <div class="border-t border-sand/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <p class="text-sand/40 text-xs">El Club 2026. Todos los derechos reservados.</p>
-        <p class="text-sand/40 text-xs">Guatemala</p>
+      <div class="border-t border-chalk pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <p class="text-ash text-xs">El Club 2026. Todos los derechos reservados.</p>
+        <p class="text-ash text-xs">Guatemala</p>
       </div>
     </div>
   </footer>
@@ -448,14 +378,13 @@
   <!-- ============================================================ -->
   <!-- CART OVERLAY + DRAWER                                        -->
   <!-- ============================================================ -->
-  <div id="cart-overlay" class="cart-overlay"></div>
+  <div id="cart-overlay" class="cart-overlay" onclick="closeCartDrawer()"></div>
 
   <div id="cart-drawer" class="cart-drawer">
-
     <!-- Drawer Header -->
-    <div class="flex items-center justify-between px-5 py-4 border-b border-sand-light">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-chalk">
       <h2 class="font-bold text-lg uppercase tracking-wider">Tu carrito</h2>
-      <button onclick="closeCartDrawer()" class="text-warm hover:text-white transition-colors cursor-pointer" aria-label="Cerrar carrito">
+      <button onclick="closeCartDrawer()" class="text-ash hover:text-white transition-colors cursor-pointer" aria-label="Cerrar carrito">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
           <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
         </svg>
@@ -464,33 +393,28 @@
 
     <!-- Empty State -->
     <div id="cart-empty" class="flex-1 flex flex-col items-center justify-center px-5 text-center">
-      <svg class="w-16 h-16 text-sand mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1">
+      <svg class="w-16 h-16 text-chalk mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1">
         <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
       </svg>
-      <p class="text-warm font-semibold mb-1">Tu carrito esta vacio</p>
-      <p class="text-warm/60 text-sm mb-6">Agrega algo increible para empezar.</p>
-      <a href="/tienda.html" onclick="closeCartDrawer()" class="btn-primary text-sm">Ver tienda</a>
+      <p class="text-smoke font-semibold mb-1">Tu carrito esta vacio</p>
+      <p class="text-ash text-sm mb-6">Agrega algo increible para empezar.</p>
+      <a href="/catalogo.html" onclick="closeCartDrawer()" class="btn-primary text-sm">Ver catalogo</a>
     </div>
 
     <!-- Filled State -->
     <div id="cart-filled" class="hidden flex-1 flex flex-col">
-      <!-- Items -->
-      <div id="cart-items" class="flex-1 overflow-y-auto px-5">
-        <!-- Rendered by cart.js -->
-      </div>
-
-      <!-- Footer -->
-      <div class="border-t border-sand-light px-5 py-4">
+      <div id="cart-items" class="flex-1 overflow-y-auto px-5"></div>
+      <div class="border-t border-chalk px-5 py-4">
         <div class="flex items-center justify-between mb-4">
           <span class="font-bold text-sm uppercase tracking-wider">Total</span>
-          <span id="cart-total" class="font-extrabold text-xl">Q0</span>
+          <span id="cart-total" class="font-extrabold text-xl text-ice">Q0</span>
         </div>
-        <p class="text-warm/60 text-xs mb-4">Envio coordinado por WhatsApp despues de tu pedido.</p>
-        <button onclick="checkoutWhatsApp()" class="btn-whatsapp w-full justify-center text-sm py-3.5">
-          <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-          </svg>
-          Pedir por WhatsApp
+        <p class="text-ash text-xs mb-4">Envio Q25 — se calcula en el checkout.</p>
+        <a href="/pedidos.html" onclick="closeCartDrawer()" class="btn-primary w-full text-center text-sm py-3.5 block">
+          Ir a pedidos
+        </a>
+        <button onclick="closeCartDrawer()" class="btn-ghost w-full text-sm py-2 mt-2 cursor-pointer">
+          Seguir comprando
         </button>
       </div>
     </div>
@@ -500,7 +424,7 @@
   <!-- WHATSAPP FLOATING BUTTON                                     -->
   <!-- ============================================================ -->
   <a
-    href="https://wa.me/50212345678?text=Hola%21%20Quiero%20saber%20mas%20sobre%20El%20Club."
+    href="https://wa.me/502XXXXXXXX?text=Hola%21%20Quiero%20saber%20mas%20sobre%20El%20Club."
     target="_blank"
     rel="noopener"
     class="whatsapp-float"
@@ -517,20 +441,68 @@
   <script src="/assets/js/cart.js"></script>
   <script src="/assets/js/app.js"></script>
 
-  <!-- Page-specific: Load featured products -->
   <script>
+    // ── Nav auto-show on scroll past hero ──
+    (function() {
+      var header = document.getElementById('site-header');
+      var hero = document.getElementById('hero');
+      if (!header || !hero) return;
+
+      var shown = false;
+      function checkScroll() {
+        var heroBottom = hero.offsetHeight - 100;
+        var shouldShow = window.scrollY > heroBottom;
+        if (shouldShow && !shown) {
+          header.classList.add('nav-visible');
+          header.style.borderBottomColor = '#2A2A2A';
+          shown = true;
+        } else if (!shouldShow && shown) {
+          header.classList.remove('nav-visible');
+          header.style.borderBottomColor = 'transparent';
+          shown = false;
+        }
+      }
+
+      window.addEventListener('scroll', checkScroll, { passive: true });
+      checkScroll();
+    })();
+
+    // ── Featured jersey from products.json ──
     document.addEventListener('DOMContentLoaded', function() {
       loadProducts(function(products) {
-        var featured = products.filter(function(p) { return p.featured; });
-        // If fewer than 4 featured, pad with remaining products
-        if (featured.length < 4) {
-          for (var i = 0; i < products.length && featured.length < 4; i++) {
-            if (!products[i].featured) featured.push(products[i]);
+        // Count available jerseys for catalog card
+        var jerseys = products.filter(function(p) { return p.type === 'jersey' && p.stock > 0; });
+        var countEl = document.getElementById('catalog-count');
+        if (countEl && jerseys.length > 0) {
+          countEl.textContent = jerseys.length + ' piezas disponibles';
+        }
+
+        // Find featured jersey
+        var featured = null;
+        for (var i = 0; i < products.length; i++) {
+          if (products[i].type === 'jersey' && products[i].featured && products[i].stock > 0) {
+            featured = products[i];
+            break;
           }
         }
-        // Limit to 4
-        featured = featured.slice(0, 4);
-        renderProductGrid('featured-products', featured);
+        if (!featured) return;
+
+        var section = document.getElementById('featured-jersey');
+        if (section) section.classList.remove('hidden');
+
+        var img = document.getElementById('featured-img');
+        var name = document.getElementById('featured-name');
+        var meta = document.getElementById('featured-meta');
+        var desc = document.getElementById('featured-desc');
+        var price = document.getElementById('featured-price');
+        var link = document.getElementById('featured-link');
+
+        if (img) { img.src = featured.image; img.alt = featured.name; }
+        if (name) name.textContent = featured.name;
+        if (meta) meta.textContent = (featured.team || '') + (featured.season ? ' — ' + featured.season : '') + (featured.league ? ' | ' + featured.league : '');
+        if (desc) desc.textContent = featured.description || '';
+        if (price) price.textContent = 'Q' + featured.price;
+        if (link) link.href = '/producto.html?id=' + featured.id;
       });
     });
   </script>
