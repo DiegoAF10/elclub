@@ -6,7 +6,7 @@ Worker de Cloudflare para crear checkout sessions de Recurrente.
 
 - Node.js 18+
 - Cuenta de Cloudflare (gratis)
-- API keys de Recurrente (mismas de VENTUS)
+- API keys de Recurrente (cuenta SEPARADA de VENTUS — keys propias de El Club)
 
 ## Setup
 
@@ -19,12 +19,12 @@ npm install -g wrangler
 # Login a Cloudflare
 npx wrangler login
 
-# Configurar secrets (usar las mismas keys de Recurrente que VENTUS)
+# Configurar secrets (keys de la cuenta Recurrente de El Club, NO las de VENTUS)
 npx wrangler secret put RECURRENTE_PUBLIC_KEY
-# → Pegar: pk_live_xxxxx
+# → Pegar: pk_live_xxxxx (de app.recurrente.com → Desarrolladores → API)
 
 npx wrangler secret put RECURRENTE_SECRET_KEY
-# → Pegar: sk_live_xxxxx
+# → Pegar: sk_live_xxxxx (de app.recurrente.com → Desarrolladores → API)
 
 # Deploy
 npx wrangler deploy
@@ -45,6 +45,6 @@ npx wrangler dev
 
 ## Notas
 
-- Las API keys de Recurrente son las mismas que usa VENTUS (cuenta compartida)
+- El Club tiene su propia cuenta de Recurrente (SEPARADA de VENTUS). Keys en app.recurrente.com → Desarrolladores → API
 - El Worker solo crea checkout sessions — no maneja webhooks (Diego monitorea en dashboard de Recurrente)
 - CORS configurado para elclub.club + localhost (desarrollo)
