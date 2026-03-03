@@ -71,6 +71,37 @@
     ]
   },
   {
+    "id": "JRS-SEVILLA-202324-H",
+    "type": "jersey",
+    "name": "Sevilla Local 2023/24 — Sergio Ramos",
+    "description": "Camiseta del Sevilla FC temporada 2023/24. Con nombre y numero de Sergio Ramos (#4). Parches de La Liga.",
+    "price": 200,
+    "image": "/assets/img/products/JRS-008-JRS-008-01.png",
+    "images": [
+      "/assets/img/products/JRS-008-JRS-008-01.png",
+      "/assets/img/products/JRS-008-JRS-008-02.png",
+      "/assets/img/products/JRS-008-JRS-008-03.png",
+      "/assets/img/products/JRS-008-JRS-008-04.png",
+      "/assets/img/products/JRS-008-JRS-008-05.png"
+    ],
+    "league": "La Liga",
+    "team": "Sevilla",
+    "season": "2023/24",
+    "variant": "Local",
+    "player_name": "Sergio Ramos",
+    "player_number": 4,
+    "patches": "La Liga",
+    "sizes": [
+      "XL"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "la-liga",
+      "sevilla"
+    ]
+  },
+  {
     "id": "JRS-PSG-202324-H",
     "type": "jersey",
     "name": "PSG Local 2023/24 — Mbappé",
