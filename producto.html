@@ -78,11 +78,13 @@
     <div id="product-content" class="hidden">
       <div class="grid md:grid-cols-2 gap-8 md:gap-12">
 
-        <!-- Left: Product Image -->
+        <!-- Left: Product Images -->
         <div>
           <div class="aspect-square bg-sand-light rounded-lg overflow-hidden">
             <img id="product-image" src="" alt="" class="w-full h-full object-cover" loading="eager">
           </div>
+          <!-- Thumbnail Gallery -->
+          <div id="product-thumbnails" class="hidden mt-3 flex gap-2 overflow-x-auto pb-2"></div>
         </div>
 
         <!-- Right: Product Info -->
@@ -393,6 +395,35 @@
         }
       }
 
+      // ── Switch main image ──
+      window.switchImage = function(src, thumbEl) {
+        document.getElementById('product-image').src = src;
+        var thumbs = document.querySelectorAll('.thumb-btn');
+        for (var t = 0; t < thumbs.length; t++) {
+          thumbs[t].classList.remove('border-ice');
+          thumbs[t].classList.add('opacity-50');
+        }
+        thumbEl.classList.add('border-ice');
+        thumbEl.classList.remove('opacity-50');
+      };
+
+      // ── Render thumbnail gallery ──
+      function renderThumbnails(product) {
+        var container = document.getElementById('product-thumbnails');
+        var images = product.images || [product.image];
+        if (images.length <= 1) return;
+
+        container.classList.remove('hidden');
+        var html = '';
+        for (var i = 0; i < images.length; i++) {
+          var active = i === 0 ? 'border-ice' : 'opacity-50';
+          html += '<button type="button" class="thumb-btn flex-shrink-0 w-16 h-16 md:w-20 md:h-20 rounded-md overflow-hidden cursor-pointer border-2 border-chalk p-0 bg-transparent ' + active + '" onclick="switchImage(\'' + images[i] + '\', this)">' +
+            '<img src="' + images[i] + '" alt="Foto ' + (i + 1) + '" class="w-full h-full object-cover">' +
+          '</button>';
+        }
+        container.innerHTML = html;
+      }
+
       // ── Populate product detail ──
       function populateProduct(product) {
         currentProduct = product;
@@ -405,10 +436,14 @@
         document.getElementById('breadcrumb-league').textContent = leagueLabel;
         document.getElementById('breadcrumb-name').textContent = product.name;
 
-        // Image
+        // Image (first from images array, fallback to image)
         var img = document.getElementById('product-image');
-        img.src = product.image;
+        var images = product.images || [product.image];
+        img.src = images[0];
         img.alt = product.name;
+
+        // Thumbnail gallery
+        renderThumbnails(product);
 
         // League
         document.getElementById('product-league').textContent = leagueLabel;

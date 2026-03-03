@@ -7,6 +7,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import json
 import os
+import shutil
 from datetime import datetime, date
 from collections import defaultdict
 from db import (
@@ -152,6 +153,106 @@ def save_photo_file(jersey_id, photo_file, seq_num):
     return f"{jersey_id}/{filename}"
 
 
+def _swap_photo_order(conn, jersey_id, photo_a, photo_b):
+    """Swap the order of two photos: update DB photo_type and rename files on disk."""
+    pos_a = photo_a["photo_type"]
+    pos_b = photo_b["photo_type"]
+    file_a = os.path.join(PHOTOS_DIR, photo_a["filename"])
+    file_b = os.path.join(PHOTOS_DIR, photo_b["filename"])
+
+    # Rename files via temp to avoid collision
+    # photo_a: JRS-001/JRS-001-01.png → gets position 02
+    # photo_b: JRS-001/JRS-001-02.png → gets position 01
+    ext_a = photo_a["filename"].rsplit(".", 1)[-1]
+    ext_b = photo_b["filename"].rsplit(".", 1)[-1]
+    new_name_a = f"{jersey_id}/{jersey_id}-{int(pos_b):02d}.{ext_a}"
+    new_name_b = f"{jersey_id}/{jersey_id}-{int(pos_a):02d}.{ext_b}"
+    new_path_a = os.path.join(PHOTOS_DIR, new_name_a)
+    new_path_b = os.path.join(PHOTOS_DIR, new_name_b)
+
+    # Use temp file to avoid overwrite
+    tmp_path = file_a + ".tmp"
+    if os.path.exists(file_a):
+        os.rename(file_a, tmp_path)
+    if os.path.exists(file_b):
+        os.rename(file_b, new_path_b)
+    if os.path.exists(tmp_path):
+        os.rename(tmp_path, new_path_a)
+
+    # Update DB
+    conn.execute(
+        "UPDATE photos SET photo_type = ?, filename = ? WHERE photo_id = ?",
+        (pos_b, new_name_a, photo_a["photo_id"]),
+    )
+    conn.execute(
+        "UPDATE photos SET photo_type = ?, filename = ? WHERE photo_id = ?",
+        (pos_a, new_name_b, photo_b["photo_id"]),
+    )
+    conn.commit()
+
+
+def render_photo_grid_with_reorder(conn, jersey_id, key_prefix=""):
+    """Display photos in a grid with reorder arrows and delete buttons.
+
+    Used in both page_photos() and page_inventory().
+    Returns the list of photos (for caller to check if empty).
+    """
+    photos = conn.execute(
+        "SELECT * FROM photos WHERE jersey_id = ? ORDER BY photo_type",
+        (jersey_id,),
+    ).fetchall()
+
+    if not photos:
+        st.caption("Sin fotos todavía.")
+        return photos
+
+    total = len(photos)
+    st.markdown(f"**Fotos ({total}/7):**")
+    cols_count = min(total, 4)
+    pcols = st.columns(cols_count)
+
+    for i, photo in enumerate(photos):
+        col = pcols[i % cols_count]
+        fpath = os.path.join(PHOTOS_DIR, photo["filename"])
+
+        if not os.path.exists(fpath):
+            col.warning(f"{photo['filename']}: no encontrado")
+            continue
+
+        # Badge: HERO for first photo, position number for rest
+        badge = "⭐ HERO" if i == 0 else f"#{i + 1}"
+        col.image(fpath, caption=f"{badge} — {jersey_id}-{photo['photo_type']}")
+
+        # Arrow buttons row
+        btn_cols = col.columns(3)
+
+        # Move up (not for first photo)
+        if i > 0:
+            if btn_cols[0].button("⬆️", key=f"{key_prefix}up_{photo['photo_id']}"):
+                _swap_photo_order(conn, jersey_id, photos[i - 1], photos[i])
+                st.rerun()
+        else:
+            btn_cols[0].write("")
+
+        # Delete
+        if btn_cols[1].button("🗑️", key=f"{key_prefix}del_{photo['photo_id']}"):
+            if os.path.exists(fpath):
+                os.remove(fpath)
+            conn.execute("DELETE FROM photos WHERE photo_id = ?", (photo["photo_id"],))
+            conn.commit()
+            st.rerun()
+
+        # Move down (not for last photo)
+        if i < total - 1:
+            if btn_cols[2].button("⬇️", key=f"{key_prefix}down_{photo['photo_id']}"):
+                _swap_photo_order(conn, jersey_id, photos[i], photos[i + 1])
+                st.rerun()
+        else:
+            btn_cols[2].write("")
+
+    return photos
+
+
 # ═══════════════════════════════════════
 # PAGE: DASHBOARD
 # ═══════════════════════════════════════
@@ -279,8 +380,10 @@ def page_dashboard():
 
 
 def _sync_to_website(conn):
-    """Generate products.json from database."""
+    """Generate products.json from database and copy photos to website assets."""
     products_path = os.path.join(BASE_DIR, "..", "content", "products.json")
+    website_photos_dir = os.path.join(BASE_DIR, "..", "assets", "img", "products")
+    os.makedirs(website_photos_dir, exist_ok=True)
 
     jerseys = conn.execute(
         """SELECT j.jersey_id, j.season, j.variant, j.size, j.price,
@@ -299,6 +402,7 @@ def _sync_to_website(conn):
                j["season"], j["variant"])
         grouped[key].append(j)
 
+    copied_photos = 0
     products = []
     for (team, short, league, season, variant), items in grouped.items():
         sizes = sorted(
@@ -308,13 +412,29 @@ def _sync_to_website(conn):
         stock = len(items)
         price = items[0]["price"] or 200
 
-        # Photo
-        first_id = items[0]["jersey_id"]
-        photo = conn.execute(
-            "SELECT filename FROM photos WHERE jersey_id = ? ORDER BY photo_type LIMIT 1",
-            (first_id,),
-        ).fetchone()
-        image = f"/erp/photos/{photo['filename']}" if photo else "/assets/img/products/placeholder.svg"
+        # Collect ALL photos from all jerseys in this group, ordered by photo_type
+        all_photos = []
+        for item in items:
+            photos = conn.execute(
+                "SELECT filename FROM photos WHERE jersey_id = ? ORDER BY photo_type",
+                (item["jersey_id"],),
+            ).fetchall()
+            for p in photos:
+                all_photos.append(p["filename"])
+
+        # Copy photos to website assets and build image paths
+        images = []
+        for photo_filename in all_photos:
+            src = os.path.join(PHOTOS_DIR, photo_filename)
+            if os.path.exists(src):
+                # Flatten into /assets/img/products/ with original filename
+                dest_name = photo_filename.replace("/", "-")
+                dest = os.path.join(website_photos_dir, dest_name)
+                shutil.copy2(src, dest)
+                images.append(f"/assets/img/products/{dest_name}")
+                copied_photos += 1
+
+        image = images[0] if images else "/assets/img/products/placeholder.svg"
 
         display = short or team
         variant_es = VARIANT_MAP.get(variant, variant)
@@ -335,6 +455,7 @@ def _sync_to_website(conn):
             "description": f"Camiseta del {team} temporada {season}.",
             "price": price,
             "image": image,
+            "images": images if images else ["/assets/img/products/placeholder.svg"],
             "league": league,
             "team": display,
             "season": season,
@@ -359,13 +480,14 @@ def _sync_to_website(conn):
 
     st.info(
         f"**Actual en sitio:** {len(current_jerseys)} jerseys + {len(mystery_boxes)} mystery boxes\n\n"
-        f"**Nuevo desde ERP:** {len(products)} jerseys + {len(mystery_boxes)} mystery boxes (sin cambio)"
+        f"**Nuevo desde ERP:** {len(products)} jerseys + {len(mystery_boxes)} mystery boxes (sin cambio)\n\n"
+        f"**Fotos copiadas:** {copied_photos} → `assets/img/products/`"
     )
 
     if st.button("✅ Confirmar y escribir", key="confirm_sync"):
         with open(products_path, "w", encoding="utf-8") as f:
             json.dump(final, f, ensure_ascii=False, indent=2)
-        st.success(f"✅ `products.json` actualizado — {len(final)} productos totales")
+        st.success(f"✅ `products.json` actualizado — {len(final)} productos totales, {copied_photos} fotos copiadas")
 
 
 # ═══════════════════════════════════════
@@ -627,11 +749,6 @@ def page_inventory():
             (selected_id,),
         ).fetchone()
 
-        photos = conn.execute(
-            "SELECT * FROM photos WHERE jersey_id = ? ORDER BY photo_type",
-            (selected_id,),
-        ).fetchall()
-
         dc1, dc2 = st.columns([1, 2])
 
         with dc1:
@@ -674,7 +791,6 @@ def page_inventory():
                     # Delete photos from disk
                     jersey_photo_dir = os.path.join(PHOTOS_DIR, selected_id)
                     if os.path.exists(jersey_photo_dir):
-                        import shutil
                         shutil.rmtree(jersey_photo_dir)
                     conn.execute("DELETE FROM photos WHERE jersey_id = ?", (selected_id,))
                     conn.execute("DELETE FROM jerseys WHERE jersey_id = ?", (selected_id,))
@@ -682,14 +798,8 @@ def page_inventory():
                     st.rerun()
 
         with dc2:
-            if photos:
-                cols_count = min(len(photos), 4)
-                pcols = st.columns(cols_count)
-                for i, photo in enumerate(photos):
-                    fpath = os.path.join(PHOTOS_DIR, photo["filename"])
-                    if os.path.exists(fpath):
-                        pcols[i % cols_count].image(fpath, caption=f"Foto {photo['photo_type']}")
-            else:
+            inv_photos = render_photo_grid_with_reorder(conn, selected_id, key_prefix="inv_")
+            if not inv_photos:
                 st.info("📸 Sin fotos. Usá **Agregar Fotos** para subir.")
 
     conn.close()
@@ -746,38 +856,10 @@ def page_photos():
     selected = st.selectbox("Seleccionar camiseta", list(options.keys()))
     jersey_id = options[selected]
 
-    # Current photos
-    existing = conn.execute(
-        "SELECT * FROM photos WHERE jersey_id = ? ORDER BY photo_type",
-        (jersey_id,),
-    ).fetchall()
-
+    # Current photos with reorder
+    existing = render_photo_grid_with_reorder(conn, jersey_id, key_prefix="photos_")
     total_photos = len(existing)
     remaining = 7 - total_photos
-
-    if existing:
-        st.markdown(f"**Fotos actuales ({total_photos}/7):**")
-        cols_count = min(total_photos, 4)
-        pcols = st.columns(cols_count)
-        for i, photo in enumerate(existing):
-            fpath = os.path.join(PHOTOS_DIR, photo["filename"])
-            col = pcols[i % cols_count]
-            if os.path.exists(fpath):
-                col.image(fpath, caption=f"{jersey_id}-{photo['photo_type']}")
-                if col.button("🗑️", key=f"del_photo_{photo['photo_id']}"):
-                    # Delete from disk and DB
-                    if os.path.exists(fpath):
-                        os.remove(fpath)
-                    conn.execute(
-                        "DELETE FROM photos WHERE photo_id = ?",
-                        (photo["photo_id"],),
-                    )
-                    conn.commit()
-                    st.rerun()
-            else:
-                col.warning(f"{photo['filename']}: no encontrado")
-    else:
-        st.caption("Sin fotos todavía.")
 
     # Upload form
     if remaining > 0:
