@@ -111,7 +111,7 @@ function renderStep1() {
 
 // ── Step 2: Shipping Form ──
 function validateShippingForm() {
-  var fields = ['shipping-name', 'shipping-phone', 'shipping-address'];
+  var fields = ['shipping-name', 'shipping-email', 'shipping-phone', 'shipping-address'];
   var valid = true;
 
   for (var i = 0; i < fields.length; i++) {
@@ -125,6 +125,8 @@ function validateShippingForm() {
     if (!val) {
       hasError = true;
     } else if (fields[i] === 'shipping-phone' && !/^\d{8}$/.test(val.replace(/\s/g, ''))) {
+      hasError = true;
+    } else if (fields[i] === 'shipping-email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
       hasError = true;
     }
 
@@ -145,6 +147,7 @@ function validateShippingForm() {
 function saveShippingData() {
   var data = {
     name: document.getElementById('shipping-name').value.trim(),
+    email: (document.getElementById('shipping-email') || {}).value ? document.getElementById('shipping-email').value.trim() : '',
     phone: document.getElementById('shipping-phone').value.trim(),
     address: document.getElementById('shipping-address').value.trim(),
     notes: (document.getElementById('shipping-notes') || {}).value || ''
@@ -158,10 +161,12 @@ function loadShippingData() {
     if (!raw) return;
     var data = JSON.parse(raw);
     var nameEl = document.getElementById('shipping-name');
+    var emailEl = document.getElementById('shipping-email');
     var phoneEl = document.getElementById('shipping-phone');
     var addressEl = document.getElementById('shipping-address');
     var notesEl = document.getElementById('shipping-notes');
     if (nameEl && data.name) nameEl.value = data.name;
+    if (emailEl && data.email) emailEl.value = data.email;
     if (phoneEl && data.phone) phoneEl.value = data.phone;
     if (addressEl && data.address) addressEl.value = data.address;
     if (notesEl && data.notes) notesEl.value = data.notes;
@@ -213,8 +218,11 @@ function payWithCard() {
   var totals = getCartTotals();
   if (totals.count === 0) return;
 
-  // Build Recurrente items
+  var shipping = JSON.parse(localStorage.getItem(SHIPPING_KEY) || '{}');
+
+  // Build Recurrente items + product IDs for stock tracking
   var items = [];
+  var productIds = [];
   for (var i = 0; i < totals.items.length; i++) {
     var item = totals.items[i];
     items.push({
@@ -223,6 +231,7 @@ function payWithCard() {
       currency: 'GTQ',
       quantity: item.quantity
     });
+    productIds.push(item.id);
   }
 
   // Add shipping as separate line item
@@ -246,7 +255,17 @@ function payWithCard() {
   fetch(ELCLUB_API_URL + '/api/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ items: items })
+    body: JSON.stringify({
+      items: items,
+      product_ids: productIds,
+      customer: {
+        name: shipping.name || '',
+        email: shipping.email || '',
+        phone: shipping.phone || '',
+        address: shipping.address || '',
+        notes: shipping.notes || ''
+      }
+    })
   })
   .then(function(res) { return res.json(); })
   .then(function(data) {

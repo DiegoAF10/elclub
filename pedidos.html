@@ -135,7 +135,13 @@
           </div>
 
           <div>
-            <label for="shipping-phone" class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Telefono (WhatsApp)</label>
+            <label for="shipping-email" class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Email</label>
+            <input id="shipping-email" type="email" required class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="tu@email.com" onblur="validateOnBlur('shipping-email')">
+            <p id="shipping-email-error" class="hidden text-red-400 text-xs mt-1">Ingresá un email válido.</p>
+          </div>
+
+          <div>
+            <label for="shipping-phone" class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Teléfono (WhatsApp)</label>
             <div class="flex items-center gap-2">
               <span class="text-smoke text-sm font-semibold">+502</span>
               <input id="shipping-phone" type="tel" required class="flex-1 px-4 py-3 rounded-lg border border-chalk text-white" placeholder="1234 5678" maxlength="9" onblur="validateOnBlur('shipping-phone')">

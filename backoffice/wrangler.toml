@@ -4,7 +4,18 @@ compatibility_date = "2024-01-01"
 
 [vars]
 ENVIRONMENT = "production"
+GITHUB_REPO = "DiegoAF10/elclub"
+GITHUB_BRANCH = "main"
+DIEGO_EMAIL = ""
+
+# KV namespace for pending checkouts and order data
+[[kv_namespaces]]
+binding = "DATA"
+id = "31f2ab80818d4eb9911351b08e1ff00f"
 
 # Secrets (set via `npx wrangler secret put <NAME>`):
-# RECURRENTE_PUBLIC_KEY - pk_live_... from Recurrente dashboard
-# RECURRENTE_SECRET_KEY - sk_live_... from Recurrente dashboard
+# RECURRENTE_PUBLIC_KEY  - pk_live_... from Recurrente dashboard
+# RECURRENTE_SECRET_KEY  - sk_live_... from Recurrente dashboard
+# RESEND_API_KEY         - re_... from resend.com dashboard
+# GITHUB_TOKEN           - GitHub PAT with repo contents:write scope
+# WEBHOOK_SECRET         - Svix signing secret (whsec_...) from Recurrente webhooks
