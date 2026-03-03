@@ -394,7 +394,7 @@ def _do_sync(conn):
 
     jerseys = conn.execute(
         """SELECT j.jersey_id, j.season, j.variant, j.size, j.price,
-                  j.player_name, j.player_number, j.patches, j.tier, j.notes,
+                  j.player_name, j.player_number, j.patches, j.tier, j.notes, j.story,
                   t.name as team_name, t.short_name, t.league
            FROM jerseys j
            JOIN teams t ON j.team_id = t.team_id
@@ -451,34 +451,35 @@ def _do_sync(conn):
         player_name = None
         player_number = None
         patches = None
-        tier = items[0]["tier"]
-        notes = None
+        story = None
         for item in items:
             if item["player_name"] and not player_name:
                 player_name = item["player_name"]
                 player_number = item["player_number"]
             if item["patches"] and not patches:
                 patches = item["patches"]
-            if item["notes"] and not notes:
-                notes = item["notes"]
+            if item["story"] and not story:
+                story = item["story"]
 
         name_suffix = f" — {player_name}" if player_name else ""
 
-        # Build rich description
-        desc_parts = [f"Camiseta del {team} temporada {season}. Version {variant_es.lower()}."]
-        if player_name:
-            num = f" (#{player_number})" if player_number else ""
-            desc_parts.append(f"Con nombre y numero de {player_name}{num}.")
-        if patches:
-            desc_parts.append(f"Parches de {patches}.")
-        if notes:
-            desc_parts.append(notes + ".")
+        # Use story if available, otherwise auto-generate
+        if story:
+            description = story
+        else:
+            desc_parts = [f"Camiseta del {team} temporada {season}."]
+            if player_name:
+                num = f" (#{player_number})" if player_number else ""
+                desc_parts.append(f"Con nombre y numero de {player_name}{num}.")
+            if patches:
+                desc_parts.append(f"Parches de {patches}.")
+            description = " ".join(desc_parts)
 
         products.append({
             "id": product_id,
             "type": "jersey",
             "name": f"{display} {variant_es} {season}{name_suffix}",
-            "description": " ".join(desc_parts),
+            "description": description,
             "price": price,
             "image": image,
             "images": images if images else ["/assets/img/products/placeholder.svg"],
@@ -489,7 +490,6 @@ def _do_sync(conn):
             "player_name": player_name,
             "player_number": player_number,
             "patches": patches,
-            "tier": tier,
             "sizes": sizes,
             "stock": stock,
             "featured": stock >= 2,
@@ -989,8 +989,15 @@ def page_inventory():
                         "Parches", value=jersey["patches"] or "",
                         key=f"epatches_{selected_id}",
                     )
+                    edit_story = st.text_area(
+                        "Historia (se muestra en la página)",
+                        value=jersey["story"] or "",
+                        key=f"estory_{selected_id}", height=100,
+                        placeholder="La historia detrás de esta camiseta...",
+                    )
                     edit_notes = st.text_area(
-                        "Notas", value=jersey["notes"] or "",
+                        "Notas internas",
+                        value=jersey["notes"] or "",
                         key=f"enotes_{selected_id}", height=68,
                     )
 
@@ -1006,6 +1013,7 @@ def page_inventory():
                             player_name=edit_player.strip() or None,
                             player_number=int(edit_number) if edit_number else None,
                             patches=edit_patches.strip() or None,
+                            story=edit_story.strip() or None,
                             notes=edit_notes.strip() or None,
                         )
                         st.success(f"✅ {selected_id} actualizado")

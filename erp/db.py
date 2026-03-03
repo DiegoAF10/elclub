@@ -87,6 +87,12 @@ def migrate_db(conn):
         conn.execute("ALTER TABLE jerseys ADD COLUMN published INTEGER DEFAULT 0")
         conn.commit()
 
+    # Add story column to jerseys
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(jerseys)").fetchall()]
+    if "story" not in cols:
+        conn.execute("ALTER TABLE jerseys ADD COLUMN story TEXT")
+        conn.commit()
+
     # Remove CHECK constraint on photos.photo_type (was limited to front/back/detail)
     table_info = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='photos'"
@@ -128,7 +134,7 @@ def update_jersey(conn, jersey_id, **fields):
     allowed = {
         "team_id", "season", "variant", "size", "tier",
         "player_name", "player_number", "patches", "price", "notes", "status",
-        "published",
+        "published", "story",
     }
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
