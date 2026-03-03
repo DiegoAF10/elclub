@@ -24,22 +24,24 @@
     /* ── Map ──────────────────────────────────── */
     .map-container {
       width: 100%;
-      max-width: 1200px;
       margin: 0 auto;
       position: relative;
-      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .map-container svg {
       width: 100%;
-      height: auto;
-      min-height: 50vh;
-      max-height: 70vh;
+      height: calc(100vh - 160px);
+      min-height: 300px;
     }
 
-    @media (min-width: 768px) {
-      .map-container { padding: 0; }
-      .map-container svg { min-height: 55vh; }
+    @media (max-width: 767px) {
+      .map-container svg {
+        height: calc(100vh - 140px);
+        min-height: 250px;
+      }
     }
 
     /* Background countries */
@@ -270,15 +272,15 @@
   </nav>
 
   <!-- ── Page Header ─────────────────────────────── -->
-  <section class="bg-carbon text-white py-10">
+  <section class="bg-carbon text-white py-4 md:py-6">
     <div class="max-w-6xl mx-auto px-4 text-center">
-      <h1 class="text-3xl md:text-4xl font-extrabold uppercase tracking-wider mb-3" style="font-family:'Oswald',system-ui,sans-serif;">Mapa Mundi</h1>
-      <p class="text-smoke text-sm md:text-base tracking-wide">Explorá por país</p>
+      <h1 class="text-2xl md:text-3xl font-extrabold uppercase tracking-wider mb-1" style="font-family:'Oswald',system-ui,sans-serif;">Mapa Mundi</h1>
+      <p class="text-smoke text-xs md:text-sm tracking-wide">Hacé click en un país iluminado para ver jerseys</p>
     </div>
   </section>
 
-  <!-- ── Map + Cards ───────────────────────────────── -->
-  <main class="max-w-6xl mx-auto px-4 py-8">
+  <!-- ── Map ───────────────────────────────────────── -->
+  <main class="w-full overflow-hidden" style="background: #0a0a0a;">
 
     <!-- SVG Map -->
     <div class="map-container" id="map-container">
@@ -413,9 +415,50 @@
             buildCountryMap();
             colorizeMap();
             bindMapEvents();
+            autoZoomToJerseys();
             checkHash();
           });
         });
+
+      // ── Auto-zoom: fit viewBox to countries with jerseys ──
+      function autoZoomToJerseys() {
+        var svg = document.querySelector('.map-container svg');
+        if (!svg) return;
+
+        var paths = svg.querySelectorAll('.map-countries path.has-jerseys');
+        if (paths.length === 0) return;
+
+        // Compute bounding box of all countries with jerseys
+        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (var i = 0; i < paths.length; i++) {
+          var bbox = paths[i].getBBox();
+          if (bbox.x < minX) minX = bbox.x;
+          if (bbox.y < minY) minY = bbox.y;
+          if (bbox.x + bbox.width > maxX) maxX = bbox.x + bbox.width;
+          if (bbox.y + bbox.height > maxY) maxY = bbox.y + bbox.height;
+        }
+
+        // Add generous padding (% of bbox size)
+        var bw = maxX - minX, bh = maxY - minY;
+        var padX = bw * 0.6, padY = bh * 0.8;
+        var vx = Math.max(0, minX - padX);
+        var vy = Math.max(0, minY - padY);
+        var vw = bw + padX * 2;
+        var vh = bh + padY * 2;
+
+        // On mobile: zoom right in. On desktop: show more context.
+        if (window.innerWidth < 768) {
+          svg.setAttribute('viewBox', vx + ' ' + vy + ' ' + vw + ' ' + vh);
+        } else {
+          // Desktop: add more context, show surrounding continents
+          var dpadX = bw * 1.5, dpadY = bh * 1.5;
+          var dvx = Math.max(0, minX - dpadX);
+          var dvy = Math.max(0, minY - dpadY);
+          var dvw = bw + dpadX * 2;
+          var dvh = bh + dpadY * 2;
+          svg.setAttribute('viewBox', dvx + ' ' + dvy + ' ' + dvw + ' ' + dvh);
+        }
+      }
 
       function buildCountryMap() {
         countryMap = {};
