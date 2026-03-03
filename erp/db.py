@@ -81,6 +81,12 @@ def migrate_db(conn):
     conn.execute("DROP VIEW IF EXISTS v_photo_coverage")
     conn.commit()
 
+    # Add published column to jerseys
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(jerseys)").fetchall()]
+    if "published" not in cols:
+        conn.execute("ALTER TABLE jerseys ADD COLUMN published INTEGER DEFAULT 0")
+        conn.commit()
+
     # Remove CHECK constraint on photos.photo_type (was limited to front/back/detail)
     table_info = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='photos'"
@@ -115,6 +121,22 @@ def migrate_db(conn):
         LEFT JOIN photos p ON j.jersey_id = p.jersey_id
         GROUP BY j.jersey_id;
     """)
+
+
+def update_jersey(conn, jersey_id, **fields):
+    """Update jersey fields. Only updates provided keys."""
+    allowed = {
+        "team_id", "season", "variant", "size", "tier",
+        "player_name", "player_number", "patches", "price", "notes", "status",
+        "published",
+    }
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [jersey_id]
+    conn.execute(f"UPDATE jerseys SET {set_clause} WHERE jersey_id = ?", values)
+    conn.commit()
 
 
 def get_teams(conn):

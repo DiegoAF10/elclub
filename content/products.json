@@ -6,10 +6,18 @@
     "description": "2 camisas de futbol curadas por El Club. No sabes que vas a recibir — esa es la magia.",
     "price": 400,
     "image": "/assets/img/products/mystery-box-clasica.jpg",
-    "sizes": ["S", "M", "L", "XL"],
+    "sizes": [
+      "S",
+      "M",
+      "L",
+      "XL"
+    ],
     "stock": 10,
     "featured": true,
-    "tags": ["mystery-box", "destacado"]
+    "tags": [
+      "mystery-box",
+      "destacado"
+    ]
   },
   {
     "id": "MB-PREMIUM",
@@ -18,99 +26,201 @@
     "description": "3 camisas de futbol + un item bonus. La experiencia completa de El Club.",
     "price": 600,
     "image": "/assets/img/products/mystery-box-clasica.jpg",
-    "sizes": ["S", "M", "L", "XL"],
+    "sizes": [
+      "S",
+      "M",
+      "L",
+      "XL"
+    ],
     "stock": 5,
     "featured": true,
-    "tags": ["mystery-box", "premium", "destacado"]
+    "tags": [
+      "mystery-box",
+      "premium",
+      "destacado"
+    ]
   },
   {
-    "id": "JRS-001",
+    "id": "JRS-BARCELONA-200506-H",
     "type": "jersey",
-    "name": "Barcelona Local 23/24",
-    "description": "Camiseta del FC Barcelona temporada 2023/24.",
+    "name": "Barcelona Local 2005/06 — Ronaldinho",
+    "description": "Camiseta del FC Barcelona temporada 2005/06.",
     "price": 200,
-    "image": "/assets/img/products/placeholder.svg",
+    "image": "/assets/img/products/JRS-004-JRS-004-01.png",
+    "images": [
+      "/assets/img/products/JRS-004-JRS-004-01.png",
+      "/assets/img/products/JRS-004-JRS-004-02.png",
+      "/assets/img/products/JRS-004-JRS-004-03.png",
+      "/assets/img/products/JRS-004-JRS-004-04.png"
+    ],
     "league": "La Liga",
     "team": "Barcelona",
-    "season": "2023/24",
-    "sizes": ["M", "L"],
-    "stock": 2,
-    "featured": false,
-    "tags": ["la-liga", "barcelona"]
-  },
-  {
-    "id": "JRS-002",
-    "type": "jersey",
-    "name": "Real Madrid Local 23/24",
-    "description": "Camiseta del Real Madrid temporada 2023/24.",
-    "price": 200,
-    "image": "/assets/img/products/placeholder.svg",
-    "league": "La Liga",
-    "team": "Real Madrid",
-    "season": "2023/24",
-    "sizes": ["S", "M", "L"],
-    "stock": 3,
-    "featured": true,
-    "tags": ["la-liga", "real-madrid"]
-  },
-  {
-    "id": "JRS-003",
-    "type": "jersey",
-    "name": "Manchester City Local 23/24",
-    "description": "Camiseta del Manchester City temporada 2023/24.",
-    "price": 200,
-    "image": "/assets/img/products/placeholder.svg",
-    "league": "Premier League",
-    "team": "Manchester City",
-    "season": "2023/24",
-    "sizes": ["L", "XL"],
-    "stock": 2,
-    "featured": false,
-    "tags": ["premier-league", "manchester-city"]
-  },
-  {
-    "id": "JRS-004",
-    "type": "jersey",
-    "name": "Liverpool Local 23/24",
-    "description": "Camiseta del Liverpool temporada 2023/24.",
-    "price": 200,
-    "image": "/assets/img/products/placeholder.svg",
-    "league": "Premier League",
-    "team": "Liverpool",
-    "season": "2023/24",
-    "sizes": ["M"],
+    "season": "2005/06",
+    "sizes": [
+      "L"
+    ],
     "stock": 1,
     "featured": false,
-    "tags": ["premier-league", "liverpool"]
+    "tags": [
+      "la-liga",
+      "barcelona"
+    ]
   },
   {
-    "id": "JRS-005",
+    "id": "JRS-PSG-202324-H",
     "type": "jersey",
-    "name": "Inter Milan Local 23/24",
-    "description": "Camiseta del Inter de Milan temporada 2023/24.",
+    "name": "PSG Local 2023/24 — Mbappé",
+    "description": "Camiseta del Paris Saint-Germain temporada 2023/24.",
     "price": 200,
-    "image": "/assets/img/products/placeholder.svg",
-    "league": "Serie A",
-    "team": "Inter Milan",
+    "image": "/assets/img/products/JRS-003-JRS-003-01.png",
+    "images": [
+      "/assets/img/products/JRS-003-JRS-003-01.png",
+      "/assets/img/products/JRS-003-JRS-003-02.png",
+      "/assets/img/products/JRS-003-JRS-003-03.png",
+      "/assets/img/products/JRS-003-JRS-003-04.png"
+    ],
+    "league": "Ligue 1",
+    "team": "PSG",
     "season": "2023/24",
-    "sizes": ["S", "M", "L"],
-    "stock": 2,
+    "sizes": [
+      "S"
+    ],
+    "stock": 1,
     "featured": false,
-    "tags": ["serie-a", "inter-milan"]
+    "tags": [
+      "ligue-1",
+      "psg"
+    ]
   },
   {
-    "id": "JRS-006",
+    "id": "JRS-MANCITY-202324-H",
     "type": "jersey",
-    "name": "Argentina Retro",
-    "description": "Camiseta retro de la seleccion argentina. Una pieza legendaria.",
-    "price": 250,
-    "image": "/assets/img/products/placeholder.svg",
+    "name": "Man City Local 2023/24 — J. Alvarez",
+    "description": "Camiseta del Manchester City temporada 2023/24.",
+    "price": 200,
+    "image": "/assets/img/products/JRS-006-JRS-006-01.png",
+    "images": [
+      "/assets/img/products/JRS-006-JRS-006-01.png",
+      "/assets/img/products/JRS-006-JRS-006-02.png",
+      "/assets/img/products/JRS-006-JRS-006-03.png",
+      "/assets/img/products/JRS-006-JRS-006-04.png"
+    ],
+    "league": "Premier League",
+    "team": "Man City",
+    "season": "2023/24",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "premier-league",
+      "man-city"
+    ]
+  },
+  {
+    "id": "JRS-NEWCASTLE-202324-H",
+    "type": "jersey",
+    "name": "Newcastle Local 2023/24",
+    "description": "Camiseta del Newcastle United temporada 2023/24.",
+    "price": 200,
+    "image": "/assets/img/products/JRS-005-JRS-005-01.png",
+    "images": [
+      "/assets/img/products/JRS-005-JRS-005-01.png",
+      "/assets/img/products/JRS-005-JRS-005-02.png",
+      "/assets/img/products/JRS-005-JRS-005-03.png",
+      "/assets/img/products/JRS-005-JRS-005-04.png"
+    ],
+    "league": "Premier League",
+    "team": "Newcastle",
+    "season": "2023/24",
+    "sizes": [
+      "S"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "premier-league",
+      "newcastle"
+    ]
+  },
+  {
+    "id": "JRS-FRANCIA-200506-A",
+    "type": "jersey",
+    "name": "Francia Visita 2005/06 — Zidane",
+    "description": "Camiseta del Selección de Francia temporada 2005/06.",
+    "price": 200,
+    "image": "/assets/img/products/JRS-002-JRS-002-01.png",
+    "images": [
+      "/assets/img/products/JRS-002-JRS-002-01.png",
+      "/assets/img/products/JRS-002-JRS-002-02.png",
+      "/assets/img/products/JRS-002-JRS-002-03.png",
+      "/assets/img/products/JRS-002-JRS-002-04.png"
+    ],
     "league": "Selecciones",
-    "team": "Argentina",
-    "season": "Retro",
-    "sizes": ["M", "L", "XL"],
-    "stock": 3,
-    "featured": true,
-    "tags": ["selecciones", "argentina", "retro"]
+    "team": "Francia",
+    "season": "2005/06",
+    "sizes": [
+      "XL"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "selecciones",
+      "francia"
+    ]
+  },
+  {
+    "id": "JRS-INTER-201011-H",
+    "type": "jersey",
+    "name": "Inter Local 2010/11 — J. Zanetti",
+    "description": "Camiseta del Inter de Milán temporada 2010/11.",
+    "price": 200,
+    "image": "/assets/img/products/JRS-001-JRS-001-01.png",
+    "images": [
+      "/assets/img/products/JRS-001-JRS-001-01.png",
+      "/assets/img/products/JRS-001-JRS-001-02.png",
+      "/assets/img/products/JRS-001-JRS-001-03.png",
+      "/assets/img/products/JRS-001-JRS-001-04.png",
+      "/assets/img/products/JRS-001-JRS-001-05.png"
+    ],
+    "league": "Serie A",
+    "team": "Inter",
+    "season": "2010/11",
+    "sizes": [
+      "L"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "serie-a",
+      "inter"
+    ]
+  },
+  {
+    "id": "JRS-NAPOLI-202324-H",
+    "type": "jersey",
+    "name": "Napoli Local 2023/24",
+    "description": "Camiseta del SSC Napoli temporada 2023/24.",
+    "price": 200,
+    "image": "/assets/img/products/JRS-007-JRS-007-01.png",
+    "images": [
+      "/assets/img/products/JRS-007-JRS-007-01.png",
+      "/assets/img/products/JRS-007-JRS-007-02.png",
+      "/assets/img/products/JRS-007-JRS-007-03.png",
+      "/assets/img/products/JRS-007-JRS-007-04.png"
+    ],
+    "league": "Serie A",
+    "team": "Napoli",
+    "season": "2023/24",
+    "sizes": [
+      "L"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "serie-a",
+      "napoli"
+    ]
   }
 ]

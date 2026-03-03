@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS jerseys (
     cost            REAL DEFAULT 100,
     price           REAL,
     status          TEXT DEFAULT 'available' CHECK(status IN ('available', 'reserved', 'sold')),
+    published       INTEGER DEFAULT 0 CHECK(published IN (0, 1)),
     notes           TEXT,
     created_at      TEXT DEFAULT (datetime('now', 'localtime'))
 );

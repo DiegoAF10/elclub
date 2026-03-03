@@ -8,11 +8,13 @@ import plotly.graph_objects as go
 import json
 import os
 import shutil
+import subprocess
 from datetime import datetime, date
 from collections import defaultdict
 from db import (
     get_conn, init_db, migrate_db, count_jerseys, count_teams,
     insert_jersey, insert_photo, next_jersey_id, next_photo_seq,
+    update_jersey, get_team_by_id,
     PHOTOS_DIR, BASE_DIR,
 )
 
@@ -266,12 +268,17 @@ def page_dashboard():
     reserved = count_jerseys(conn, "reserved")
     sold = count_jerseys(conn, "sold")
 
+    published = conn.execute(
+        "SELECT COUNT(*) FROM jerseys WHERE status = 'available' AND published = 1"
+    ).fetchone()[0]
+
     # Top metrics
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("Total Camisetas", total)
     c2.metric("Disponibles", available)
-    c3.metric("Reservadas", reserved)
-    c4.metric("Vendidas", sold)
+    c3.metric("Publicadas", published)
+    c4.metric("Reservadas", reserved)
+    c5.metric("Vendidas", sold)
 
     if total == 0:
         st.info("📝 No hay camisetas registradas. Andá a **Registrar Camiseta** para empezar el inventario.")
@@ -379,8 +386,8 @@ def page_dashboard():
     conn.close()
 
 
-def _sync_to_website(conn):
-    """Generate products.json from database and copy photos to website assets."""
+def _do_sync(conn):
+    """Generate products.json from published jerseys and copy photos. Returns (products_count, photos_count)."""
     products_path = os.path.join(BASE_DIR, "..", "content", "products.json")
     website_photos_dir = os.path.join(BASE_DIR, "..", "assets", "img", "products")
     os.makedirs(website_photos_dir, exist_ok=True)
@@ -391,7 +398,7 @@ def _sync_to_website(conn):
                   t.name as team_name, t.short_name, t.league
            FROM jerseys j
            JOIN teams t ON j.team_id = t.team_id
-           WHERE j.status = 'available'
+           WHERE j.status = 'available' AND j.published = 1
            ORDER BY t.league, t.name, j.size"""
     ).fetchall()
 
@@ -427,7 +434,6 @@ def _sync_to_website(conn):
         for photo_filename in all_photos:
             src = os.path.join(PHOTOS_DIR, photo_filename)
             if os.path.exists(src):
-                # Flatten into /assets/img/products/ with original filename
                 dest_name = photo_filename.replace("/", "-")
                 dest = os.path.join(website_photos_dir, dest_name)
                 shutil.copy2(src, dest)
@@ -475,19 +481,60 @@ def _sync_to_website(conn):
             current = json.load(f)
 
     mystery_boxes = [p for p in current if p.get("type") == "mystery-box"]
-    current_jerseys = [p for p in current if p.get("type") == "jersey"]
     final = mystery_boxes + products
+
+    with open(products_path, "w", encoding="utf-8") as f:
+        json.dump(final, f, ensure_ascii=False, indent=2)
+
+    # Auto-deploy to GitHub Pages
+    repo_dir = os.path.join(BASE_DIR, "..")
+    try:
+        subprocess.run(
+            ["git", "add", "content/products.json", "assets/img/products/"],
+            cwd=repo_dir, capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", f"Sync: {len(products)} jerseys publicados"],
+            cwd=repo_dir, capture_output=True,
+        )
+        subprocess.run(
+            ["git", "push"],
+            cwd=repo_dir, capture_output=True, timeout=30,
+        )
+    except Exception:
+        pass  # silently continue — products.json is updated locally either way
+
+    return len(products), copied_photos
+
+
+def _sync_to_website(conn):
+    """Dashboard sync with preview UI — shows diff before writing."""
+    products_path = os.path.join(BASE_DIR, "..", "content", "products.json")
+
+    # Current state
+    current = []
+    if os.path.exists(products_path):
+        with open(products_path, "r", encoding="utf-8") as f:
+            current = json.load(f)
+    mystery_boxes = [p for p in current if p.get("type") == "mystery-box"]
+    current_jerseys = [p for p in current if p.get("type") == "jersey"]
+
+    # Count what will be synced
+    published_count = conn.execute(
+        "SELECT COUNT(*) FROM jerseys WHERE status = 'available' AND published = 1"
+    ).fetchone()[0]
 
     st.info(
         f"**Actual en sitio:** {len(current_jerseys)} jerseys + {len(mystery_boxes)} mystery boxes\n\n"
-        f"**Nuevo desde ERP:** {len(products)} jerseys + {len(mystery_boxes)} mystery boxes (sin cambio)\n\n"
-        f"**Fotos copiadas:** {copied_photos} → `assets/img/products/`"
+        f"**Publicadas en ERP:** {published_count} jerseys → se sincronizarán"
     )
 
     if st.button("✅ Confirmar y escribir", key="confirm_sync"):
-        with open(products_path, "w", encoding="utf-8") as f:
-            json.dump(final, f, ensure_ascii=False, indent=2)
-        st.success(f"✅ `products.json` actualizado — {len(final)} productos totales, {copied_photos} fotos copiadas")
+        products_count, photos_count = _do_sync(conn)
+        st.success(
+            f"✅ `products.json` actualizado — {products_count} jerseys + {len(mystery_boxes)} mystery boxes, "
+            f"{photos_count} fotos copiadas"
+        )
 
 
 # ═══════════════════════════════════════
@@ -521,6 +568,8 @@ def page_register():
         st.session_state.reg_count = 0
     if "last_saved" not in st.session_state:
         st.session_state.last_saved = None
+    if "last_saved_ids" not in st.session_state:
+        st.session_state.last_saved_ids = []
 
     # The form
     with st.form("jersey_form", clear_on_submit=True):
@@ -548,10 +597,15 @@ def page_register():
                 "Tipo *", list(VARIANT_MAP.values()), horizontal=True,
             )
 
-        # Row 2: Size + Tier
+        # Row 2: Size(s) + Tier
         r2c1, r2c2 = st.columns(2)
         with r2c1:
-            size = st.radio("Talla *", SIZES, horizontal=True)
+            sizes_selected = st.multiselect(
+                "Talla(s) *  — seleccioná todas las que tengas",
+                SIZES,
+                default=[],
+                placeholder="S, M, L, XL...",
+            )
         with r2c2:
             tier = st.selectbox("Tier", ["A", "B", "C"], index=default_tier_idx)
 
@@ -592,43 +646,70 @@ def page_register():
     if submitted:
         if not selected_label:
             st.error("⚠️ Seleccioná un equipo.")
+        elif not sizes_selected:
+            st.error("⚠️ Seleccioná al menos una talla.")
         else:
             team = team_options[selected_label]
             variant_key = VARIANT_REVERSE[variant_es]
-
-            jersey_id = insert_jersey(
-                conn,
-                team_id=team["team_id"],
-                season=season,
-                variant=variant_key,
-                size=size,
-                tier=tier,
-                player_name=player_name.strip() if player_name else None,
-                player_number=int(player_number) if player_number else None,
-                patches=patches.strip() if patches else None,
-                notes=notes.strip() if notes else None,
-            )
-
-            # Save photos (sequential: 01, 02, 03...)
-            if photos_uploaded:
-                for idx, pfile in enumerate(photos_uploaded[:7]):
-                    seq = idx + 1
-                    rel_path = save_photo_file(jersey_id, pfile, seq)
-                    insert_photo(conn, jersey_id, f"{seq:02d}", rel_path)
-
-            st.session_state.reg_count += 1
             display = team.get("short_name") or team["name"]
+
+            created_ids = []
+            for sz in sorted(sizes_selected, key=lambda s: SIZE_ORDER.get(s, 99)):
+                jersey_id = insert_jersey(
+                    conn,
+                    team_id=team["team_id"],
+                    season=season,
+                    variant=variant_key,
+                    size=sz,
+                    tier=tier,
+                    player_name=player_name.strip() if player_name else None,
+                    player_number=int(player_number) if player_number else None,
+                    patches=patches.strip() if patches else None,
+                    notes=notes.strip() if notes else None,
+                )
+                created_ids.append((jersey_id, sz))
+
+                # Save photos only to first jersey (avoid duplicates)
+                if photos_uploaded and len(created_ids) == 1:
+                    for idx, pfile in enumerate(photos_uploaded[:7]):
+                        seq = idx + 1
+                        rel_path = save_photo_file(jersey_id, pfile, seq)
+                        insert_photo(conn, jersey_id, f"{seq:02d}", rel_path)
+
+            st.session_state.reg_count += len(created_ids)
+            sizes_str = ", ".join(sz for _, sz in created_ids)
+            ids_str = ", ".join(jid for jid, _ in created_ids)
             st.session_state.last_saved = (
-                f"{jersey_id} — {display} {variant_es} {season} ({size})"
+                f"{ids_str} — {display} {variant_es} {season} ({sizes_str})"
             )
+            st.session_state.last_saved_ids = [jid for jid, _ in created_ids]
             st.rerun()
 
-    # Confirmation
+    # Confirmation + publish button
     if st.session_state.last_saved:
         st.success(
             f"✅ **{st.session_state.last_saved}**  ·  "
             f"Camiseta #{st.session_state.reg_count} de la sesión"
         )
+
+        saved_ids = st.session_state.get("last_saved_ids", [])
+        if saved_ids:
+            # Check if already published
+            already = conn.execute(
+                f"SELECT COUNT(*) FROM jerseys WHERE jersey_id IN ({','.join('?' * len(saved_ids))}) AND published = 1",
+                saved_ids,
+            ).fetchone()[0]
+            if already == len(saved_ids):
+                st.caption("🟢 Ya publicada en la página")
+            elif st.button("🚀 Publicar en la página", key="publish_after_save"):
+                conn.execute(
+                    f"UPDATE jerseys SET published = 1 WHERE jersey_id IN ({','.join('?' * len(saved_ids))})",
+                    saved_ids,
+                )
+                conn.commit()
+                _do_sync(conn)
+                st.success("✅ Publicada — products.json actualizado")
+                st.rerun()
 
     # Quick stats
     total = count_jerseys(conn)
@@ -667,6 +748,7 @@ def page_inventory():
                j.season as temporada, j.variant as tipo, j.size as talla,
                j.player_name as jugador, j.player_number as numero,
                j.patches as parches, j.tier, j.status,
+               j.published,
                j.created_at,
                COUNT(p.photo_id) as fotos
         FROM jerseys j
@@ -702,6 +784,7 @@ def page_inventory():
         mc2.metric("Con Fotos", int((df["fotos"] > 0).sum()))
         mc3.metric("Sin Fotos", int((df["fotos"] == 0).sum()))
         df["tipo"] = df["tipo"].map(VARIANT_MAP)
+        df["web"] = df["published"].apply(lambda x: "🟢" if x == 1 else "⚫")
 
     # Table
     if df.empty:
@@ -723,7 +806,9 @@ def page_inventory():
                 "parches": st.column_config.TextColumn("Parches", width=100),
                 "tier": st.column_config.TextColumn("Tier", width=50),
                 "status": st.column_config.TextColumn("Status", width=80),
+                "web": st.column_config.TextColumn("🌐", width=40),
                 "fotos": st.column_config.NumberColumn("📸", width=40),
+                "published": None,  # hide raw value
                 "created_at": None,  # hide
             },
         )
@@ -777,12 +862,129 @@ def page_inventory():
             )
             if new_status != jersey["status"]:
                 if st.button(f"Actualizar a {new_status}", key=f"btn_{selected_id}"):
-                    conn.execute(
-                        "UPDATE jerseys SET status = ? WHERE jersey_id = ?",
-                        (new_status, selected_id),
-                    )
+                    # Auto-unpublish when sold or reserved
+                    if new_status in ("sold", "reserved") and jersey["published"]:
+                        conn.execute(
+                            "UPDATE jerseys SET status = ?, published = 0 WHERE jersey_id = ?",
+                            (new_status, selected_id),
+                        )
+                    else:
+                        conn.execute(
+                            "UPDATE jerseys SET status = ? WHERE jersey_id = ?",
+                            (new_status, selected_id),
+                        )
                     conn.commit()
+                    if new_status in ("sold", "reserved") and jersey["published"]:
+                        _do_sync(conn)
                     st.rerun()
+
+            # Publish / Unpublish
+            if jersey["published"]:
+                st.caption("🟢 Publicada en la página")
+                if st.button("📴 Despublicar", key=f"unpub_{selected_id}"):
+                    update_jersey(conn, selected_id, published=0)
+                    _do_sync(conn)
+                    st.rerun()
+            else:
+                if jersey["status"] == "available":
+                    if st.button("🚀 Publicar", key=f"pub_{selected_id}"):
+                        update_jersey(conn, selected_id, published=1)
+                        _do_sync(conn)
+                        st.rerun()
+                else:
+                    st.caption("⚫ No disponible para publicar")
+
+            # Edit jersey
+            with st.expander("✏️ Editar camiseta"):
+                # Load teams for dropdown
+                edit_teams_raw = conn.execute(
+                    "SELECT team_id, name, short_name, league, tier FROM teams ORDER BY league, name"
+                ).fetchall()
+                edit_team_options = {}
+                edit_current_idx = 0
+                for idx_t, t in enumerate(edit_teams_raw):
+                    label = f"{t['league']} — {t['name']}"
+                    edit_team_options[label] = dict(t)
+                    if t["team_id"] == jersey["team_id"]:
+                        edit_current_idx = idx_t
+
+                edit_team_labels = list(edit_team_options.keys())
+
+                with st.form(f"edit_form_{selected_id}"):
+                    edit_team = st.selectbox(
+                        "Equipo", edit_team_labels,
+                        index=edit_current_idx,
+                        key=f"eteam_{selected_id}",
+                    )
+
+                    ec1, ec2 = st.columns(2)
+                    with ec1:
+                        edit_season = st.selectbox(
+                            "Temporada", SEASONS,
+                            index=SEASONS.index(jersey["season"]) if jersey["season"] in SEASONS else 0,
+                            key=f"eseason_{selected_id}",
+                        )
+                    with ec2:
+                        variant_vals = list(VARIANT_MAP.values())
+                        cur_variant_es = VARIANT_MAP.get(jersey["variant"], "Local")
+                        edit_variant = st.radio(
+                            "Tipo", variant_vals, horizontal=True,
+                            index=variant_vals.index(cur_variant_es),
+                            key=f"evariant_{selected_id}",
+                        )
+
+                    ec3, ec4 = st.columns(2)
+                    with ec3:
+                        edit_size = st.radio(
+                            "Talla", SIZES, horizontal=True,
+                            index=SIZES.index(jersey["size"]) if jersey["size"] in SIZES else 0,
+                            key=f"esize_{selected_id}",
+                        )
+                    with ec4:
+                        edit_tier = st.selectbox(
+                            "Tier", ["A", "B", "C"],
+                            index=["A", "B", "C"].index(jersey["tier"]),
+                            key=f"etier_{selected_id}",
+                        )
+
+                    ec5, ec6 = st.columns(2)
+                    with ec5:
+                        edit_player = st.text_input(
+                            "Jugador", value=jersey["player_name"] or "",
+                            key=f"eplayer_{selected_id}",
+                        )
+                    with ec6:
+                        edit_number = st.number_input(
+                            "Número", min_value=0, max_value=99,
+                            value=jersey["player_number"] if jersey["player_number"] else 0,
+                            key=f"enum_{selected_id}",
+                        )
+
+                    edit_patches = st.text_input(
+                        "Parches", value=jersey["patches"] or "",
+                        key=f"epatches_{selected_id}",
+                    )
+                    edit_notes = st.text_area(
+                        "Notas", value=jersey["notes"] or "",
+                        key=f"enotes_{selected_id}", height=68,
+                    )
+
+                    if st.form_submit_button("💾 Guardar cambios", type="primary", use_container_width=True):
+                        edit_team_data = edit_team_options[edit_team]
+                        update_jersey(
+                            conn, selected_id,
+                            team_id=edit_team_data["team_id"],
+                            season=edit_season,
+                            variant=VARIANT_REVERSE[edit_variant],
+                            size=edit_size,
+                            tier=edit_tier,
+                            player_name=edit_player.strip() or None,
+                            player_number=int(edit_number) if edit_number else None,
+                            patches=edit_patches.strip() or None,
+                            notes=edit_notes.strip() or None,
+                        )
+                        st.success(f"✅ {selected_id} actualizado")
+                        st.rerun()
 
             # Delete jersey
             with st.expander("⚠️ Eliminar camiseta"):
