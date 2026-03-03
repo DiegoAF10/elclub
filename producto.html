@@ -90,14 +90,32 @@
         <!-- Right: Product Info -->
         <div class="flex flex-col">
 
-          <!-- League Badge -->
-          <p id="product-league" class="text-warm text-xs font-bold uppercase tracking-[0.2em] mb-2"></p>
+          <!-- League + Tier Badges -->
+          <div class="flex items-center gap-2 mb-2">
+            <p id="product-league" class="text-warm text-xs font-bold uppercase tracking-[0.2em]"></p>
+            <span id="product-tier" class="hidden text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded"></span>
+          </div>
 
           <!-- Product Name -->
           <h1 id="product-name" class="text-2xl md:text-3xl font-extrabold text-white leading-tight mb-2"></h1>
 
           <!-- Season / Team -->
           <p id="product-meta" class="text-sm text-warm mb-4"></p>
+
+          <!-- Player + Patches Info -->
+          <div id="product-details" class="hidden mb-4 flex flex-wrap gap-2">
+            <span id="detail-player" class="hidden inline-flex items-center gap-1.5 text-xs font-semibold bg-sand-light text-white rounded-full px-3 py-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+              <span id="detail-player-text"></span>
+            </span>
+            <span id="detail-patches" class="hidden inline-flex items-center gap-1.5 text-xs font-semibold bg-sand-light text-white rounded-full px-3 py-1">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
+              <span id="detail-patches-text"></span>
+            </span>
+            <span id="detail-variant" class="hidden inline-flex items-center gap-1.5 text-xs font-semibold bg-sand-light text-white rounded-full px-3 py-1">
+              <span id="detail-variant-text"></span>
+            </span>
+          </div>
 
           <!-- Price -->
           <p id="product-price" class="text-2xl md:text-3xl font-extrabold text-white mb-4"></p>
@@ -448,6 +466,20 @@
         // League
         document.getElementById('product-league').textContent = leagueLabel;
 
+        // Tier badge
+        if (product.tier) {
+          var tierEl = document.getElementById('product-tier');
+          var tierLabels = { 'A': 'Premium', 'B': 'Clasica', 'C': 'Basica' };
+          var tierColors = {
+            'A': 'background: linear-gradient(135deg, #c9a96e, #e8d5a3); color: #111;',
+            'B': 'background: #2A2A2A; color: #999;',
+            'C': 'background: #1C1C1C; color: #666;'
+          };
+          tierEl.textContent = tierLabels[product.tier] || product.tier;
+          tierEl.setAttribute('style', tierColors[product.tier] || '');
+          tierEl.classList.remove('hidden');
+        }
+
         // Name
         document.getElementById('product-name').textContent = product.name;
 
@@ -456,6 +488,29 @@
         if (product.team) metaParts.push(product.team);
         if (product.season) metaParts.push('Temporada ' + product.season);
         document.getElementById('product-meta').textContent = metaParts.join(' — ');
+
+        // Player, patches, variant details
+        var hasDetails = false;
+        if (product.player_name) {
+          var playerText = product.player_name;
+          if (product.player_number) playerText += ' #' + product.player_number;
+          document.getElementById('detail-player-text').textContent = playerText;
+          document.getElementById('detail-player').classList.remove('hidden');
+          hasDetails = true;
+        }
+        if (product.patches) {
+          document.getElementById('detail-patches-text').textContent = product.patches;
+          document.getElementById('detail-patches').classList.remove('hidden');
+          hasDetails = true;
+        }
+        if (product.variant) {
+          document.getElementById('detail-variant-text').textContent = product.variant;
+          document.getElementById('detail-variant').classList.remove('hidden');
+          hasDetails = true;
+        }
+        if (hasDetails) {
+          document.getElementById('product-details').classList.remove('hidden');
+        }
 
         // Price
         document.getElementById('product-price').textContent = 'Q' + product.price;

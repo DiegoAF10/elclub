@@ -394,7 +394,7 @@ def _do_sync(conn):
 
     jerseys = conn.execute(
         """SELECT j.jersey_id, j.season, j.variant, j.size, j.price,
-                  j.player_name, j.player_number,
+                  j.player_name, j.player_number, j.patches, j.tier, j.notes,
                   t.name as team_name, t.short_name, t.league
            FROM jerseys j
            JOIN teams t ON j.team_id = t.team_id
@@ -447,24 +447,49 @@ def _do_sync(conn):
         safe_name = display.upper().replace(" ", "").replace(".", "")[:12]
         product_id = f"JRS-{safe_name}-{season.replace('/', '')}-{variant[0].upper()}"
 
-        # Player info
-        player = ""
+        # Player info (from first jersey that has it)
+        player_name = None
+        player_number = None
+        patches = None
+        tier = items[0]["tier"]
+        notes = None
         for item in items:
-            if item["player_name"]:
-                player = f" — {item['player_name']}"
-                break
+            if item["player_name"] and not player_name:
+                player_name = item["player_name"]
+                player_number = item["player_number"]
+            if item["patches"] and not patches:
+                patches = item["patches"]
+            if item["notes"] and not notes:
+                notes = item["notes"]
+
+        name_suffix = f" — {player_name}" if player_name else ""
+
+        # Build rich description
+        desc_parts = [f"Camiseta del {team} temporada {season}. Version {variant_es.lower()}."]
+        if player_name:
+            num = f" (#{player_number})" if player_number else ""
+            desc_parts.append(f"Con nombre y numero de {player_name}{num}.")
+        if patches:
+            desc_parts.append(f"Parches de {patches}.")
+        if notes:
+            desc_parts.append(notes + ".")
 
         products.append({
             "id": product_id,
             "type": "jersey",
-            "name": f"{display} {variant_es} {season}{player}",
-            "description": f"Camiseta del {team} temporada {season}.",
+            "name": f"{display} {variant_es} {season}{name_suffix}",
+            "description": " ".join(desc_parts),
             "price": price,
             "image": image,
             "images": images if images else ["/assets/img/products/placeholder.svg"],
             "league": league,
             "team": display,
             "season": season,
+            "variant": variant_es,
+            "player_name": player_name,
+            "player_number": player_number,
+            "patches": patches,
+            "tier": tier,
             "sizes": sizes,
             "stock": stock,
             "featured": stock >= 2,
