@@ -1,0 +1,10 @@
+{
+  "name": "elclub-backoffice",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "setup-secrets": "echo 'Run: npx wrangler secret put RECURRENTE_PUBLIC_KEY && npx wrangler secret put RECURRENTE_SECRET_KEY'"
+  }
+}

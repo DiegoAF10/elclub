@@ -1,0 +1,10 @@
+name = "elclub-backoffice"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+ENVIRONMENT = "production"
+
+# Secrets (set via `npx wrangler secret put <NAME>`):
+# RECURRENTE_PUBLIC_KEY - pk_live_... from Recurrente dashboard
+# RECURRENTE_SECRET_KEY - sk_live_... from Recurrente dashboard

@@ -1,17 +1,25 @@
 /**
  * El Club — Checkout Wizard
  * 3-step checkout: Resumen → Envío → Pago
+ *
+ * Payment options:
+ *   1. Tarjeta (Recurrente) — calls Worker API → redirects to Recurrente checkout
+ *   2. Contra entrega — sends WhatsApp with order + payment method
  */
 
+// ── Config ──
 var SHIPPING_COST = 25;
 var SHIPPING_KEY = 'elclub_shipping';
 var currentStep = 1;
+
+// Worker URL — set this after deploying the Cloudflare Worker
+// Leave empty to fall back to WhatsApp for all payments
+var ELCLUB_API_URL = '';
 
 // ── Step Navigation ──
 function goToStep(step) {
   if (step < 1 || step > 3) return;
 
-  // Validate before advancing
   if (step === 2 && currentStep === 1) {
     var totals = getCartTotals();
     if (totals.count === 0) return;
@@ -23,16 +31,13 @@ function goToStep(step) {
 
   currentStep = step;
 
-  // Show/hide step panels
   for (var i = 1; i <= 3; i++) {
     var panel = document.getElementById('step-' + i);
     if (panel) panel.classList.toggle('hidden', i !== step);
   }
 
-  // Update progress bar
   updateProgressBar();
 
-  // Render step content
   if (step === 1) renderStep1();
   if (step === 3) renderStep3();
 
@@ -182,7 +187,7 @@ function renderStep3() {
     '</div>';
   }
   html += '<div class="flex justify-between text-sm border-t border-chalk pt-2 mt-2">' +
-    '<span class="text-smoke">Envio</span><span class="text-white font-semibold">Q' + SHIPPING_COST + '</span></div>';
+    '<span class="text-smoke">Envío</span><span class="text-white font-semibold">Q' + SHIPPING_COST + '</span></div>';
   html += '</div>';
 
   html += '<div class="mt-4 pt-4 border-t border-chalk">' +
@@ -198,43 +203,123 @@ function renderStep3() {
   if (totalEl) totalEl.textContent = 'Q' + grandTotal;
 }
 
-function payWithRecurrente() {
-  // Send order details via WhatsApp as backup
-  sendOrderWhatsApp();
-  // TODO: Open Recurrente payment link
-  // For now, show confirmation that Diego will send the link
-  alert('Diego te enviara el link de pago por WhatsApp. Revisa tu telefono.');
+// ── Payment: Tarjeta (Recurrente) ──
+function payWithCard() {
+  if (!ELCLUB_API_URL) {
+    // Worker not deployed yet — fall back to WhatsApp + Diego sends link
+    sendOrderWhatsApp('tarjeta');
+    return;
+  }
+
+  var totals = getCartTotals();
+  if (totals.count === 0) return;
+
+  // Build Recurrente items
+  var items = [];
+  for (var i = 0; i < totals.items.length; i++) {
+    var item = totals.items[i];
+    items.push({
+      name: item.name + ' (Talla ' + item.size + ')',
+      amount_in_cents: item.price * 100,
+      currency: 'GTQ',
+      quantity: item.quantity
+    });
+  }
+
+  // Add shipping as separate line item
+  if (SHIPPING_COST > 0) {
+    items.push({
+      name: 'Envío',
+      amount_in_cents: SHIPPING_COST * 100,
+      currency: 'GTQ',
+      quantity: 1
+    });
+  }
+
+  // Show loading state
+  var btn = document.getElementById('btn-pay-card');
+  var btnText = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Conectando...';
+  }
+
+  fetch(ELCLUB_API_URL + '/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items: items })
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (data.checkout_url) {
+      // Also send WhatsApp notification to Diego
+      sendOrderWhatsApp('tarjeta', true);
+      // Redirect to Recurrente checkout
+      window.location.href = data.checkout_url;
+    } else {
+      throw new Error(data.error || 'Error al crear el checkout');
+    }
+  })
+  .catch(function(err) {
+    console.error('Checkout error:', err);
+    // Restore button
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = btnText;
+    }
+    // Fall back to WhatsApp
+    if (confirm('No se pudo conectar con el procesador de pago.\n\n¿Querés continuar por WhatsApp? Diego te enviará el link de pago.')) {
+      sendOrderWhatsApp('tarjeta');
+    }
+  });
 }
 
-function payWithWhatsApp() {
-  sendOrderWhatsApp();
+// ── Payment: Contra Entrega ──
+function payContraEntrega() {
+  sendOrderWhatsApp('contra_entrega');
 }
 
-function sendOrderWhatsApp() {
+// ── WhatsApp Order Message ──
+function sendOrderWhatsApp(paymentMethod, silent) {
   var totals = getCartTotals();
   var shipping = JSON.parse(localStorage.getItem(SHIPPING_KEY) || '{}');
   if (totals.count === 0) return;
 
-  var msg = 'Hola! Quiero hacer un pedido en El Club:\n\n';
+  var method = paymentMethod === 'tarjeta' ? '💳 TARJETA' : '🤝 CONTRA ENTREGA';
+
+  var msg = '¡Hola! Quiero hacer un pedido en El Club:\n\n';
   for (var i = 0; i < totals.items.length; i++) {
     var item = totals.items[i];
-    msg += '- ' + item.name + ' (Talla ' + item.size + ') x' + item.quantity + ' — Q' + (item.price * item.quantity) + '\n';
+    msg += '⚽ ' + item.name + ' (Talla ' + item.size + ') x' + item.quantity + ' — Q' + (item.price * item.quantity) + '\n';
   }
-  msg += '\nSubtotal: Q' + totals.total;
-  msg += '\nEnvio: Q' + SHIPPING_COST;
-  msg += '\nTotal: Q' + (totals.total + SHIPPING_COST);
-  msg += '\n\nDatos de envio:';
-  msg += '\nNombre: ' + (shipping.name || 'No indicado');
-  msg += '\nTelefono: ' + (shipping.phone || 'No indicado');
-  msg += '\nDireccion: ' + (shipping.address || 'No indicado');
-  if (shipping.notes) msg += '\nNotas: ' + shipping.notes;
-  msg += '\n\nEspero confirmacion para proceder con el pago.';
+  msg += '\n💰 Subtotal: Q' + totals.total;
+  msg += '\n🚚 Envío: Q' + SHIPPING_COST;
+  msg += '\n✅ Total: Q' + (totals.total + SHIPPING_COST);
+  msg += '\n\n📦 Datos de envío:';
+  msg += '\n👤 ' + (shipping.name || 'No indicado');
+  msg += '\n📱 ' + (shipping.phone || 'No indicado');
+  msg += '\n📍 ' + (shipping.address || 'No indicado');
+  if (shipping.notes) msg += '\n📝 ' + shipping.notes;
+  msg += '\n\n' + method;
+
+  if (paymentMethod === 'tarjeta') {
+    msg += '\n(Esperando link de pago de Recurrente)';
+  } else {
+    msg += '\n(Pago al momento de la entrega)';
+  }
 
   var url = 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(msg);
-  window.open(url, '_blank');
+
+  if (silent) {
+    // Open in background (for card payments where we also redirect to Recurrente)
+    var w = window.open(url, '_blank');
+    if (w) setTimeout(function() { w.close(); }, 1000);
+  } else {
+    window.open(url, '_blank');
+  }
 }
 
-// Inline validation on blur
+// ── Inline validation on blur ──
 function validateOnBlur(inputId) {
   var input = document.getElementById(inputId);
   var error = document.getElementById(inputId + '-error');
