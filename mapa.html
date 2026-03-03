@@ -107,133 +107,6 @@
       opacity: 1;
     }
 
-    /* ── Fullscreen Overlay ─────────────────── */
-    .overlay-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0);
-      backdrop-filter: blur(0px);
-      -webkit-backdrop-filter: blur(0px);
-      z-index: 100;
-      pointer-events: none;
-      transition: background 0.4s ease, backdrop-filter 0.4s ease, -webkit-backdrop-filter 0.4s ease;
-    }
-
-    .overlay-backdrop.active {
-      background: rgba(0, 0, 0, 0.85);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      pointer-events: auto;
-    }
-
-    .overlay-panel {
-      position: fixed;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      max-height: 85vh;
-      background: #111;
-      border-top: 1px solid rgba(77, 168, 255, 0.3);
-      border-radius: 20px 20px 0 0;
-      z-index: 101;
-      transform: translateY(100%);
-      transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
-      overflow-y: auto;
-      overscroll-behavior: contain;
-    }
-
-    .overlay-panel.active {
-      transform: translateY(0);
-    }
-
-    .overlay-handle {
-      width: 40px;
-      height: 4px;
-      background: rgba(255,255,255,0.2);
-      border-radius: 2px;
-      margin: 12px auto 0;
-    }
-
-    .overlay-header {
-      position: sticky;
-      top: 0;
-      background: linear-gradient(180deg, #111 80%, transparent);
-      padding: 20px 24px 16px;
-      z-index: 2;
-    }
-
-    .overlay-close {
-      position: absolute;
-      top: 16px;
-      right: 20px;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.12);
-      color: white;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s ease;
-    }
-
-    .overlay-close:hover {
-      background: rgba(255,255,255,0.15);
-      border-color: rgba(77, 168, 255, 0.4);
-    }
-
-    .overlay-grid {
-      padding: 0 24px 40px;
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-    }
-
-    @media (min-width: 640px) {
-      .overlay-grid { grid-template-columns: repeat(3, 1fr); }
-    }
-
-    @media (min-width: 768px) {
-      .overlay-grid { grid-template-columns: repeat(4, 1fr); max-width: 900px; margin: 0 auto; }
-    }
-
-    /* ── Country Cards ───────────────────────── */
-    .country-card {
-      background: #1C1C1C;
-      border: 1px solid #2A2A2A;
-      border-radius: 8px;
-      overflow: hidden;
-      transition: all 0.3s ease;
-      cursor: pointer;
-      text-decoration: none;
-      display: block;
-    }
-
-    .country-card:hover {
-      border-color: #4DA8FF;
-      transform: translateY(-4px);
-      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(77, 168, 255, 0.2);
-    }
-
-    .country-card img {
-      width: 100%;
-      aspect-ratio: 1 / 1;
-      object-fit: cover;
-      background-color: #1C1C1C;
-    }
-
-    @keyframes cardShootIn {
-      0% { opacity: 0; transform: translateY(60px) scale(0.85); }
-      60% { opacity: 1; transform: translateY(-8px) scale(1.02); }
-      100% { opacity: 1; transform: translateY(0) scale(1); }
-    }
-
-    .card-shoot {
-      animation: cardShootIn 0.6s cubic-bezier(0.22, 1.2, 0.36, 1) forwards;
-      opacity: 0;
-    }
   </style>
 </head>
 <body class="bg-midnight text-white">
@@ -602,7 +475,7 @@
             if (p.player_number) playerDisplay += ' #' + p.player_number;
           }
 
-          html += '<a href="/producto.html?id=' + p.id + '" class="country-card card-shoot" style="animation-delay:' + (i * 0.08 + 0.15) + 's">' +
+          html += '<a href="/producto.html?id=' + p.id + '" class="overlay-card card-shoot" style="animation-delay:' + (i * 0.08 + 0.15) + 's">' +
             '<div class="relative overflow-hidden">' +
               '<img src="' + imgSrc + '" alt="' + p.name + '" loading="lazy">' +
               (p.stock <= 3 && p.stock > 0 ? '<span class="badge-urgency absolute top-2 left-2 text-xs">Última</span>' : '') +
