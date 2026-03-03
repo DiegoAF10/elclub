@@ -402,7 +402,7 @@ def _do_sync(conn):
         """SELECT j.jersey_id, j.season, j.variant, j.size, j.price,
                   j.player_name, j.player_number, j.patches, j.tier, j.notes,
                   j.story, j.position,
-                  t.name as team_name, t.short_name, t.league
+                  t.name as team_name, t.short_name, t.league, t.country
            FROM jerseys j
            JOIN teams t ON j.team_id = t.team_id
            WHERE j.status = 'available' AND j.published = 1
@@ -413,12 +413,12 @@ def _do_sync(conn):
     grouped = defaultdict(list)
     for j in jerseys:
         key = (j["team_name"], j["short_name"], j["league"],
-               j["season"], j["variant"])
+               j["season"], j["variant"], j["country"])
         grouped[key].append(j)
 
     copied_photos = 0
     products = []
-    for (team, short, league, season, variant), items in grouped.items():
+    for (team, short, league, season, variant, country), items in grouped.items():
         sizes = sorted(
             set(i["size"] for i in items),
             key=lambda s: SIZE_ORDER.get(s, 99),
@@ -501,6 +501,7 @@ def _do_sync(conn):
             "player_number": player_number,
             "patches": patches,
             "position": position,
+            "country": country,
             "sizes": sizes,
             "stock": stock,
             "featured": stock >= 2,

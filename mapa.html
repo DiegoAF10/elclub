@@ -1,15 +1,134 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es-GT">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tienda | El Club — Jerseys de Futbol en Guatemala</title>
-  <meta name="description" content="Explora nuestra coleccion de jerseys de futbol originales. Premier League, La Liga, Serie A, Bundesliga y mas. Envio a toda Guatemala.">
+  <title>Mapa | El Club — Jerseys por País</title>
+  <meta name="description" content="Explorá jerseys de fútbol por país. Hacé click en cualquier país para ver las camisetas disponibles de esa selección o liga.">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/assets/img/brand/favicon.png">
+
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS v4 Browser -->
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <!-- Custom Design System -->
   <link rel="stylesheet" href="/assets/css/elclub.css">
+
+  <style>
+    /* ── Map ──────────────────────────────────── */
+    .map-container {
+      width: 100%;
+      max-width: 960px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    .map-container svg {
+      width: 100%;
+      height: auto;
+    }
+
+    /* Background countries */
+    .map-bg path {
+      fill: #1C1C1C;
+      stroke: #2A2A2A;
+      stroke-width: 0.5;
+      transition: none;
+    }
+
+    /* Team countries — no jerseys (grayed out, not clickable) */
+    .map-countries path {
+      fill: #1C1C1C;
+      stroke: #2A2A2A;
+      stroke-width: 0.5;
+      transition: fill 0.3s ease, stroke 0.3s ease, filter 0.3s ease;
+    }
+
+    /* Team countries — has jerseys */
+    .map-countries path.has-jerseys {
+      fill: #2A3A4A;
+      stroke: rgba(77, 168, 255, 0.3);
+      cursor: pointer;
+    }
+
+    .map-countries path.has-jerseys:hover {
+      fill: #3A4A5A;
+      stroke: rgba(77, 168, 255, 0.6);
+      filter: drop-shadow(0 0 8px rgba(77, 168, 255, 0.3));
+    }
+
+    .map-countries path.has-jerseys.active {
+      fill: rgba(77, 168, 255, 0.2);
+      stroke: #4DA8FF;
+      stroke-width: 1.5;
+      filter: drop-shadow(0 0 12px rgba(77, 168, 255, 0.4));
+    }
+
+    /* ── Tooltip ─────────────────────────────── */
+    .map-tooltip {
+      position: fixed;
+      background: #111;
+      border: 1px solid rgba(77, 168, 255, 0.4);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-family: 'Oswald', system-ui, sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #4DA8FF;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 50;
+      white-space: nowrap;
+    }
+
+    .map-tooltip.visible {
+      opacity: 1;
+    }
+
+    /* ── Country Cards ───────────────────────── */
+    .country-card {
+      background: #1C1C1C;
+      border: 1px solid #2A2A2A;
+      border-radius: 8px;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      text-decoration: none;
+      display: block;
+    }
+
+    .country-card:hover {
+      border-color: #4DA8FF;
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(77, 168, 255, 0.2);
+    }
+
+    .country-card img {
+      width: 100%;
+      aspect-ratio: 740 / 920;
+      object-fit: cover;
+      background-color: #1C1C1C;
+    }
+
+    @keyframes cardFadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card-enter {
+      animation: cardFadeInUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      opacity: 0;
+    }
+  </style>
 </head>
 <body class="bg-midnight text-white">
 
@@ -20,9 +139,9 @@
         <img src="/assets/img/brand/logo.svg" alt="El Club" class="h-10 w-auto">
       </a>
       <div class="hidden md:flex items-center gap-8">
-        <a href="/tienda.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-gold">Tienda</a>
+        <a href="/tienda.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-white">Tienda</a>
         <a href="/formacion.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-white">Formación</a>
-        <a href="/mapa.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-white">Mapa</a>
+        <a href="/mapa.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-gold">Mapa</a>
         <a href="/mystery-box.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-white">Mystery Box</a>
         <a href="/nosotros.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-white">Nosotros</a>
       </div>
@@ -39,69 +158,35 @@
   </nav>
 
   <!-- ── Page Header ─────────────────────────────── -->
-  <section class="bg-carbon text-white py-12">
+  <section class="bg-carbon text-white py-10">
     <div class="max-w-6xl mx-auto px-4 text-center">
-      <h1 class="text-3xl md:text-4xl font-extrabold uppercase tracking-wider mb-3">Tienda</h1>
-      <p class="text-sand text-sm md:text-base tracking-wide">Encontra tu pieza legendaria</p>
+      <h1 class="text-3xl md:text-4xl font-extrabold uppercase tracking-wider mb-3" style="font-family:'Oswald',system-ui,sans-serif;">Mapa Mundi</h1>
+      <p class="text-smoke text-sm md:text-base tracking-wide">Explorá por país</p>
     </div>
   </section>
 
-  <!-- ── Filter Bar ──────────────────────────────── -->
-  <section class="sticky top-0 z-40 bg-midnight border-b border-chalk">
-    <div class="max-w-6xl mx-auto px-4 py-4">
-      <div class="flex flex-col sm:flex-row gap-3">
-        <!-- Search -->
-        <div class="flex-1 relative">
-          <svg class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-warm pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-          <input
-            type="text"
-            id="filter-search"
-            placeholder="Buscar jersey, equipo, liga..."
-            class="w-full pl-10 pr-4 py-2.5 border border-chalk rounded-lg bg-pitch text-sm text-white focus:outline-none focus:border-ice transition-colors"
-          >
-        </div>
-        <!-- Liga -->
-        <select id="filter-league" class="px-4 py-2.5 border border-chalk rounded-lg bg-pitch text-sm text-white focus:outline-none focus:border-ice transition-colors cursor-pointer">
-          <option value="">Todas las ligas</option>
-        </select>
-        <!-- Talla -->
-        <select id="filter-size" class="px-4 py-2.5 border border-chalk rounded-lg bg-pitch text-sm text-white focus:outline-none focus:border-ice transition-colors cursor-pointer">
-          <option value="">Todas las tallas</option>
-          <option value="S">S</option>
-          <option value="M">M</option>
-          <option value="L">L</option>
-          <option value="XL">XL</option>
-        </select>
-        <!-- Sort -->
-        <select id="filter-sort" class="px-4 py-2.5 border border-chalk rounded-lg bg-pitch text-sm text-white focus:outline-none focus:border-ice transition-colors cursor-pointer">
-          <option value="">Ordenar por</option>
-          <option value="price-asc">Precio menor</option>
-          <option value="price-desc">Precio mayor</option>
-        </select>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── Product Grid ────────────────────────────── -->
+  <!-- ── Map + Cards ───────────────────────────────── -->
   <main class="max-w-6xl mx-auto px-4 py-8">
-    <!-- Results count -->
-    <p id="results-count" class="text-sm text-warm mb-6"></p>
 
-    <!-- Grid -->
-    <div id="product-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-      <!-- Loading skeleton -->
-      <div class="text-center col-span-full py-12">
-        <p class="text-warm text-sm">Cargando productos...</p>
+    <!-- SVG Map -->
+    <div class="map-container" id="map-container">
+      <!-- SVG loaded inline -->
+    </div>
+
+    <!-- Tooltip -->
+    <div class="map-tooltip" id="map-tooltip"></div>
+
+    <!-- Country jerseys section -->
+    <div id="country-section" class="hidden mt-10">
+      <div class="text-center mb-6">
+        <h2 id="country-title" class="text-2xl font-bold uppercase tracking-wider" style="font-family:'Oswald',system-ui,sans-serif;"></h2>
+        <p id="country-count" class="text-smoke text-sm mt-1"></p>
+      </div>
+      <div id="country-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+        <!-- Populated by JS -->
       </div>
     </div>
 
-    <!-- Empty state (hidden by default, shown by JS) -->
-    <div id="empty-state" class="hidden text-center py-16">
-      <svg class="w-16 h-16 mx-auto text-sand mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-      <h3 class="text-lg font-bold mb-2">No encontramos resultados</h3>
-      <p class="text-warm text-sm mb-6">Intenta con otra busqueda o cambia los filtros.</p>
-      <button onclick="clearFilters()" class="btn-secondary">Limpiar filtros</button>
-    </div>
   </main>
 
   <!-- ── Footer ──────────────────────────────────── -->
@@ -113,7 +198,7 @@
           <p class="text-sm text-gray-400">La camiseta te elige a vos. Mystery boxes curadas por El Club.</p>
         </div>
         <div>
-          <h4 class="font-bold text-sm uppercase tracking-wider mb-4">Navegacion</h4>
+          <h4 class="font-bold text-sm uppercase tracking-wider mb-4">Navegación</h4>
           <div class="flex flex-col gap-2">
             <a href="/tienda.html" class="text-sm text-gray-400 hover:text-gold transition-colors no-underline">Tienda</a>
             <a href="/formacion.html" class="text-sm text-gray-400 hover:text-gold transition-colors no-underline">Formación</a>
@@ -150,7 +235,7 @@
     </div>
     <div id="cart-empty" class="flex-1 flex items-center justify-center p-8">
       <div class="text-center">
-        <p class="text-warm mb-4">Tu carrito esta vacio</p>
+        <p class="text-warm mb-4">Tu carrito está vacío</p>
         <a href="/tienda.html" class="btn-primary" onclick="closeCartDrawer()">Ver tienda</a>
       </div>
     </div>
@@ -179,7 +264,7 @@
     <div class="flex flex-col items-center gap-8 mt-12">
       <a href="/tienda.html" class="text-2xl font-bold uppercase tracking-wider text-white no-underline hover:text-gold transition-colors">Tienda</a>
       <a href="/formacion.html" class="text-2xl font-bold uppercase tracking-wider text-white no-underline hover:text-gold transition-colors">Formación</a>
-      <a href="/mapa.html" class="text-2xl font-bold uppercase tracking-wider text-white no-underline hover:text-gold transition-colors">Mapa</a>
+      <a href="/mapa.html" class="text-2xl font-bold uppercase tracking-wider text-gold no-underline hover:text-gold transition-colors">Mapa</a>
       <a href="/mystery-box.html" class="text-2xl font-bold uppercase tracking-wider text-white no-underline hover:text-gold transition-colors">Mystery Box</a>
       <a href="/nosotros.html" class="text-2xl font-bold uppercase tracking-wider text-white no-underline hover:text-gold transition-colors">Nosotros</a>
       <a href="/contacto.html" class="text-2xl font-bold uppercase tracking-wider text-white no-underline hover:text-gold transition-colors">Contacto</a>
@@ -197,112 +282,173 @@
   <script>
     (function() {
       var allProducts = [];
+      var countryMap = {}; // country → [products]
+      var activeCountry = null;
+      var tooltip = document.getElementById('map-tooltip');
 
-      // ── Get current filter values ──
-      function getFilters() {
-        return {
-          search: document.getElementById('filter-search').value.trim(),
-          league: document.getElementById('filter-league').value,
-          size: document.getElementById('filter-size').value
-        };
-      }
+      // ── Load SVG map ──
+      fetch('/assets/img/world-map.svg')
+        .then(function(r) { return r.text(); })
+        .then(function(svgText) {
+          document.getElementById('map-container').innerHTML = svgText;
 
-      // ── Get current sort value ──
-      function getSortValue() {
-        return document.getElementById('filter-sort').value;
-      }
+          // Load products and init map
+          loadProducts(function(products) {
+            allProducts = products;
+            buildCountryMap();
+            colorizeMap();
+            bindMapEvents();
+            checkHash();
+          });
+        });
 
-      // ── Sort products ──
-      function sortProducts(products, sortVal) {
-        if (!sortVal) return products;
-        var sorted = products.slice();
-        if (sortVal === 'price-asc') {
-          sorted.sort(function(a, b) { return a.price - b.price; });
-        } else if (sortVal === 'price-desc') {
-          sorted.sort(function(a, b) { return b.price - a.price; });
+      function buildCountryMap() {
+        countryMap = {};
+        for (var i = 0; i < allProducts.length; i++) {
+          var p = allProducts[i];
+          if (p.type !== 'jersey' || !p.country) continue;
+          if (!countryMap[p.country]) countryMap[p.country] = [];
+          countryMap[p.country].push(p);
         }
-        return sorted;
       }
 
-      // ── Apply filters, sort, and render ──
-      function applyFiltersAndRender() {
-        var filters = getFilters();
-        var sortVal = getSortValue();
-
-        var filtered = filterProducts(allProducts, filters);
-        var sorted = sortProducts(filtered, sortVal);
-
-        var grid = document.getElementById('product-grid');
-        var emptyState = document.getElementById('empty-state');
-        var resultsCount = document.getElementById('results-count');
-
-        if (sorted.length === 0) {
-          grid.innerHTML = '';
-          emptyState.classList.remove('hidden');
-          resultsCount.textContent = '';
-        } else {
-          emptyState.classList.add('hidden');
-          renderProductGrid('product-grid', sorted);
-          // Show results count only when filters are active
-          var hasFilters = filters.search || filters.league || filters.size;
-          if (hasFilters) {
-            resultsCount.textContent = sorted.length + (sorted.length === 1 ? ' producto encontrado' : ' productos encontrados');
-          } else {
-            resultsCount.textContent = sorted.length + ' productos';
+      function colorizeMap() {
+        var paths = document.querySelectorAll('.map-countries path[data-country]');
+        for (var i = 0; i < paths.length; i++) {
+          var country = paths[i].getAttribute('data-country');
+          if (countryMap[country] && countryMap[country].length > 0) {
+            paths[i].classList.add('has-jerseys');
           }
         }
       }
 
-      // ── Clear all filters ──
-      window.clearFilters = function() {
-        document.getElementById('filter-search').value = '';
-        document.getElementById('filter-league').value = '';
-        document.getElementById('filter-size').value = '';
-        document.getElementById('filter-sort').value = '';
-        applyFiltersAndRender();
-      };
+      function bindMapEvents() {
+        var paths = document.querySelectorAll('.map-countries path.has-jerseys');
+        for (var i = 0; i < paths.length; i++) {
+          paths[i].addEventListener('click', function() {
+            var country = this.getAttribute('data-country');
+            selectCountry(country);
+          });
 
-      // ── Populate league dropdown ──
-      function populateLeagueFilter(products) {
-        var select = document.getElementById('filter-league');
-        var leagues = getFilterOptions(products, 'league');
-        for (var i = 0; i < leagues.length; i++) {
-          var opt = document.createElement('option');
-          opt.value = leagues[i];
-          opt.textContent = leagues[i];
-          select.appendChild(opt);
+          paths[i].addEventListener('mouseenter', function(e) {
+            var country = this.getAttribute('data-country');
+            var count = countryMap[country] ? countryMap[country].length : 0;
+            tooltip.textContent = country + ' — ' + count + ' pieza' + (count !== 1 ? 's' : '');
+            tooltip.classList.add('visible');
+          });
+
+          paths[i].addEventListener('mousemove', function(e) {
+            tooltip.style.left = (e.clientX + 12) + 'px';
+            tooltip.style.top = (e.clientY - 30) + 'px';
+          });
+
+          paths[i].addEventListener('mouseleave', function() {
+            tooltip.classList.remove('visible');
+          });
         }
       }
 
-      // ── Bind filter events ──
-      function bindFilterEvents() {
-        var searchInput = document.getElementById('filter-search');
-        var leagueSelect = document.getElementById('filter-league');
-        var sizeSelect = document.getElementById('filter-size');
-        var sortSelect = document.getElementById('filter-sort');
+      function selectCountry(country) {
+        // Toggle if same country
+        if (activeCountry === country) {
+          activeCountry = null;
+          clearSelection();
+          window.history.replaceState(null, '', window.location.pathname);
+          return;
+        }
 
-        var debounceTimer;
-        searchInput.addEventListener('input', function() {
-          clearTimeout(debounceTimer);
-          debounceTimer = setTimeout(applyFiltersAndRender, 300);
-        });
+        activeCountry = country;
+        window.history.replaceState(null, '', '#' + encodeURIComponent(country.toLowerCase()));
 
-        leagueSelect.addEventListener('change', applyFiltersAndRender);
-        sizeSelect.addEventListener('change', applyFiltersAndRender);
-        sortSelect.addEventListener('change', applyFiltersAndRender);
+        // Update active state on map
+        var paths = document.querySelectorAll('.map-countries path.has-jerseys');
+        for (var i = 0; i < paths.length; i++) {
+          paths[i].classList.remove('active');
+        }
+        var activePaths = document.querySelectorAll('.map-countries path[data-country="' + country + '"]');
+        for (var j = 0; j < activePaths.length; j++) {
+          activePaths[j].classList.add('active');
+        }
+
+        // Render jerseys
+        var jerseys = countryMap[country] || [];
+        renderCountryCards(jerseys, country);
+
+        // Scroll to cards on mobile
+        if (window.innerWidth < 768) {
+          setTimeout(function() {
+            var section = document.getElementById('country-section');
+            if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 100);
+        }
       }
 
-      // ── Init on DOMContentLoaded ──
-      document.addEventListener('DOMContentLoaded', function() {
-        loadProducts(function(products) {
-          allProducts = products;
-          populateLeagueFilter(products);
-          bindFilterEvents();
-          applyFiltersAndRender();
-        });
+      function clearSelection() {
+        var paths = document.querySelectorAll('.map-countries path.has-jerseys');
+        for (var i = 0; i < paths.length; i++) {
+          paths[i].classList.remove('active');
+        }
+        document.getElementById('country-section').classList.add('hidden');
+      }
+
+      function renderCountryCards(jerseys, country) {
+        var section = document.getElementById('country-section');
+        var title = document.getElementById('country-title');
+        var count = document.getElementById('country-count');
+        var grid = document.getElementById('country-grid');
+
+        section.classList.remove('hidden');
+        title.textContent = country;
+        count.textContent = jerseys.length + ' pieza' + (jerseys.length !== 1 ? 's' : '');
+
+        var html = '';
+        for (var i = 0; i < jerseys.length; i++) {
+          var p = jerseys[i];
+
+          // Use last image (portrait)
+          var imgs = p.images || [p.image];
+          var imgSrc = imgs[imgs.length - 1] || '/assets/img/products/placeholder.svg';
+
+          var playerDisplay = '';
+          if (p.player_name) {
+            playerDisplay = p.player_name;
+            if (p.player_number) playerDisplay += ' #' + p.player_number;
+          }
+
+          html += '<a href="/producto.html?id=' + p.id + '" class="country-card card-enter" style="animation-delay:' + (i * 0.1) + 's">' +
+            '<div class="relative overflow-hidden">' +
+              '<img src="' + imgSrc + '" alt="' + p.name + '" loading="lazy">' +
+              (p.stock <= 3 && p.stock > 0 ? '<span class="badge-urgency absolute top-2 left-2 text-xs">Última</span>' : '') +
+            '</div>' +
+            '<div class="p-3">' +
+              '<p class="text-xs text-smoke uppercase tracking-wider font-semibold mb-1">' + (p.team || '') + ' — ' + (p.season || '') + '</p>' +
+              (playerDisplay ? '<p class="font-bold text-sm text-white mb-1">' + playerDisplay + '</p>' : '') +
+              '<span class="text-ice text-base font-bold">Q' + p.price + '</span>' +
+            '</div>' +
+          '</a>';
+        }
+
+        grid.innerHTML = html;
+      }
+
+      function checkHash() {
+        var hash = decodeURIComponent(window.location.hash.replace('#', ''));
+        if (!hash) return;
+
+        // Find matching country (case-insensitive)
+        var countries = Object.keys(countryMap);
+        for (var i = 0; i < countries.length; i++) {
+          if (countries[i].toLowerCase() === hash.toLowerCase()) {
+            selectCountry(countries[i]);
+            return;
+          }
+        }
+      }
+
+      window.addEventListener('hashchange', function() {
+        checkHash();
       });
     })();
   </script>
-
 </body>
 </html>

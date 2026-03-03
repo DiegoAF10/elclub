@@ -25,13 +25,22 @@
     .pitch-container {
       position: relative;
       width: 100%;
-      max-width: 420px;
+      max-width: 560px;
+      height: 80vh;
+      max-height: 800px;
       margin: 0 auto;
-      aspect-ratio: 68 / 105;
       background: linear-gradient(180deg, #0f1f0f 0%, #142814 50%, #0f1f0f 100%);
       border: 2px solid rgba(255,255,255,0.15);
       border-radius: 4px;
       overflow: hidden;
+    }
+
+    @media (max-width: 640px) {
+      .pitch-container {
+        max-width: 100%;
+        height: 70vh;
+        max-height: 600px;
+      }
     }
 
     /* Grass stripes */
@@ -68,37 +77,47 @@
       justify-content: center;
       cursor: pointer;
       z-index: 2;
-      transition: background-color 0.3s ease;
+      transition: background 0.4s ease;
     }
 
     .pitch-zone:hover {
-      background-color: rgba(77, 168, 255, 0.08);
+      background: radial-gradient(circle at 50% 50%, rgba(77, 168, 255, 0.12) 0%, transparent 70%);
     }
 
     .pitch-zone.active {
-      background-color: rgba(77, 168, 255, 0.15);
+      background: radial-gradient(circle at 50% 50%, rgba(77, 168, 255, 0.2) 0%, rgba(77, 168, 255, 0.05) 60%, transparent 80%);
     }
 
     .pitch-zone-label {
       font-family: 'Oswald', system-ui, sans-serif;
       font-weight: 700;
-      font-size: 13px;
+      font-size: 14px;
       text-transform: uppercase;
       letter-spacing: 0.12em;
       color: rgba(240, 240, 240, 0.35);
-      transition: all 0.3s ease;
+      transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
       pointer-events: none;
       user-select: none;
     }
 
+    @media (min-width: 640px) {
+      .pitch-zone-label { font-size: 16px; }
+    }
+
     .pitch-zone:hover .pitch-zone-label {
-      color: rgba(240, 240, 240, 0.6);
+      color: rgba(240, 240, 240, 0.65);
+      transform: scale(1.05);
     }
 
     .pitch-zone.active .pitch-zone-label {
       color: #4DA8FF;
-      font-size: 15px;
-      text-shadow: 0 0 20px rgba(77, 168, 255, 0.4);
+      font-size: 17px;
+      transform: scale(1.15);
+      text-shadow: 0 0 24px rgba(77, 168, 255, 0.5), 0 0 48px rgba(77, 168, 255, 0.2);
+    }
+
+    @media (min-width: 640px) {
+      .pitch-zone.active .pitch-zone-label { font-size: 19px; }
     }
 
     /* Zone positions: DEL top → POR bottom */
@@ -122,13 +141,37 @@
       border-radius: 50%;
       background: rgba(240, 240, 240, 0.15);
       transform: translate(-50%, -50%);
-      transition: all 0.3s ease;
+      transition: all 0.4s ease;
+      animation: dotFloat 3s ease-in-out infinite;
     }
 
-    .pitch-zone.active ~ .pitch-dots .pitch-dot.dot-active,
+    /* Stagger floating animation per dot */
+    .pitch-dot:nth-child(1) { animation-delay: 0s; }
+    .pitch-dot:nth-child(2) { animation-delay: 0.3s; }
+    .pitch-dot:nth-child(3) { animation-delay: 0.6s; }
+    .pitch-dot:nth-child(4) { animation-delay: 0.9s; }
+    .pitch-dot:nth-child(5) { animation-delay: 1.2s; }
+    .pitch-dot:nth-child(6) { animation-delay: 0.15s; }
+    .pitch-dot:nth-child(7) { animation-delay: 0.45s; }
+    .pitch-dot:nth-child(8) { animation-delay: 0.75s; }
+    .pitch-dot:nth-child(9) { animation-delay: 1.05s; }
+    .pitch-dot:nth-child(10) { animation-delay: 0.5s; }
+    .pitch-dot:nth-child(11) { animation-delay: 0.8s; }
+
+    @keyframes dotFloat {
+      0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+      50% { transform: translate(-50%, -50%) translateY(-2px); }
+    }
+
     .pitch-dot.dot-glow {
       background: #4DA8FF;
-      box-shadow: 0 0 12px rgba(77, 168, 255, 0.6);
+      box-shadow: 0 0 12px rgba(77, 168, 255, 0.6), 0 0 24px rgba(77, 168, 255, 0.3);
+      animation: dotFloat 3s ease-in-out infinite, dotPulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes dotPulse {
+      0%, 100% { box-shadow: 0 0 12px rgba(77, 168, 255, 0.6), 0 0 24px rgba(77, 168, 255, 0.3); }
+      50% { box-shadow: 0 0 18px rgba(77, 168, 255, 0.8), 0 0 36px rgba(77, 168, 255, 0.4); }
     }
 
     /* ── Player Card ─────────────────────────── */
@@ -156,6 +199,32 @@
       background-color: #1C1C1C;
     }
 
+    /* ── Card animations ─────────────────────── */
+    @keyframes cardFadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .card-enter {
+      animation: cardFadeInUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      opacity: 0;
+    }
+
+    @keyframes cardFadeOut {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(-10px); }
+    }
+
+    .card-exit {
+      animation: cardFadeOut 0.25s ease-out forwards;
+    }
+
     /* ── Scroll indicator ────────────────────── */
     @keyframes bounceDown {
       0%, 100% { transform: translateY(0); }
@@ -177,6 +246,7 @@
       <div class="hidden md:flex items-center gap-8">
         <a href="/tienda.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-white">Tienda</a>
         <a href="/formacion.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-gold">Formación</a>
+        <a href="/mapa.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-white">Mapa</a>
         <a href="/mystery-box.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-white">Mystery Box</a>
         <a href="/nosotros.html" class="text-sm font-semibold uppercase tracking-wider hover:text-gold transition-colors no-underline text-white">Nosotros</a>
       </div>
@@ -201,13 +271,11 @@
   </section>
 
   <!-- ── Pitch + Cards ───────────────────────────── -->
-  <main class="max-w-6xl mx-auto px-4 py-8">
+  <main class="max-w-4xl mx-auto px-4 py-8">
 
-    <div class="flex flex-col lg:flex-row gap-8 items-start">
-
-      <!-- ── Pitch ─────────────────────────── -->
-      <div class="w-full lg:w-auto lg:flex-shrink-0 flex flex-col items-center">
-        <div class="pitch-container">
+    <!-- ── Pitch (centered, 80vh) ─────────────── -->
+    <div class="flex flex-col items-center">
+      <div class="pitch-container">
 
           <!-- SVG field lines -->
           <svg class="pitch-lines" viewBox="0 0 680 1050" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -283,30 +351,29 @@
         </p>
       </div>
 
-      <!-- ── Player Cards Section ──────────── -->
-      <div class="flex-1 min-w-0">
-        <!-- Position title (hidden until selection) -->
-        <div id="position-header" class="hidden mb-6">
-          <h2 id="position-title" class="text-2xl font-bold uppercase tracking-wider" style="font-family:'Oswald',system-ui,sans-serif;"></h2>
-          <p id="position-count" class="text-smoke text-sm mt-1"></p>
-        </div>
-
-        <!-- Player cards grid -->
-        <div id="player-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <!-- Populated by JS -->
-        </div>
-
-        <!-- Empty state -->
-        <div id="empty-position" class="hidden text-center py-12">
-          <svg class="w-16 h-16 mx-auto text-chalk mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0"/>
-          </svg>
-          <p class="text-smoke font-semibold mb-2">No hay jerseys en esta posición</p>
-          <p class="text-ash text-sm">Pronto agregaremos más piezas</p>
-        </div>
+    <!-- ── Player Cards Section (below pitch) ──── -->
+    <div class="w-full mt-10">
+      <!-- Position title (hidden until selection) -->
+      <div id="position-header" class="hidden mb-6 text-center">
+        <h2 id="position-title" class="text-2xl font-bold uppercase tracking-wider" style="font-family:'Oswald',system-ui,sans-serif;"></h2>
+        <p id="position-count" class="text-smoke text-sm mt-1"></p>
       </div>
 
+      <!-- Player cards grid -->
+      <div id="player-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- Empty state -->
+      <div id="empty-position" class="hidden text-center py-12">
+        <svg class="w-16 h-16 mx-auto text-chalk mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0"/>
+        </svg>
+        <p class="text-smoke font-semibold mb-2">No hay jerseys en esta posición</p>
+        <p class="text-ash text-sm">Pronto agregaremos más piezas</p>
+      </div>
     </div>
+
   </main>
 
   <!-- ── Footer ──────────────────────────────────── -->
@@ -322,6 +389,7 @@
           <div class="flex flex-col gap-2">
             <a href="/tienda.html" class="text-sm text-gray-400 hover:text-gold transition-colors no-underline">Tienda</a>
             <a href="/formacion.html" class="text-sm text-gray-400 hover:text-gold transition-colors no-underline">Formación</a>
+            <a href="/mapa.html" class="text-sm text-gray-400 hover:text-gold transition-colors no-underline">Mapa</a>
             <a href="/mystery-box.html" class="text-sm text-gray-400 hover:text-gold transition-colors no-underline">Mystery Box</a>
             <a href="/nosotros.html" class="text-sm text-gray-400 hover:text-gold transition-colors no-underline">Nosotros</a>
             <a href="/contacto.html" class="text-sm text-gray-400 hover:text-gold transition-colors no-underline">Contacto</a>
@@ -383,6 +451,7 @@
     <div class="flex flex-col items-center gap-8 mt-12">
       <a href="/tienda.html" class="text-2xl font-bold uppercase tracking-wider text-white no-underline hover:text-gold transition-colors">Tienda</a>
       <a href="/formacion.html" class="text-2xl font-bold uppercase tracking-wider text-gold no-underline hover:text-gold transition-colors">Formación</a>
+      <a href="/mapa.html" class="text-2xl font-bold uppercase tracking-wider text-white no-underline hover:text-gold transition-colors">Mapa</a>
       <a href="/mystery-box.html" class="text-2xl font-bold uppercase tracking-wider text-white no-underline hover:text-gold transition-colors">Mystery Box</a>
       <a href="/nosotros.html" class="text-2xl font-bold uppercase tracking-wider text-white no-underline hover:text-gold transition-colors">Nosotros</a>
       <a href="/contacto.html" class="text-2xl font-bold uppercase tracking-wider text-white no-underline hover:text-gold transition-colors">Contacto</a>
@@ -472,7 +541,9 @@
         if (hint) hint.style.opacity = '1';
       }
 
-      // ── Render player cards ──
+      // ── Render player cards with transition ──
+      var isTransitioning = false;
+
       function renderPlayerCards(players, pos) {
         var header = document.getElementById('position-header');
         var title = document.getElementById('position-title');
@@ -484,8 +555,10 @@
         title.textContent = POSITION_NAMES[pos] || pos;
 
         if (players.length === 0) {
-          grid.innerHTML = '';
-          empty.classList.remove('hidden');
+          fadeOutCards(grid, function() {
+            grid.innerHTML = '';
+            empty.classList.remove('hidden');
+          });
           count.textContent = '';
           return;
         }
@@ -497,8 +570,9 @@
         for (var i = 0; i < players.length; i++) {
           var p = players[i];
 
-          // Find portrait photo (prefer the main image)
-          var imgSrc = p.image || '/assets/img/products/placeholder.svg';
+          // Use LAST image (portrait/player photo) from images array
+          var imgs = p.images || [p.image];
+          var imgSrc = imgs[imgs.length - 1] || '/assets/img/products/placeholder.svg';
 
           // Player display name
           var playerDisplay = '';
@@ -507,7 +581,7 @@
             if (p.player_number) playerDisplay += ' #' + p.player_number;
           }
 
-          html += '<a href="/producto.html?id=' + p.id + '" class="player-card animate-fade-in-up" style="animation-delay:' + (i * 0.08) + 's; opacity:0">' +
+          html += '<a href="/producto.html?id=' + p.id + '" class="player-card card-enter" style="animation-delay:' + (i * 0.1) + 's">' +
             '<div class="relative overflow-hidden">' +
               '<img src="' + imgSrc + '" alt="' + p.name + '" loading="lazy">' +
               (p.stock <= 3 && p.stock > 0 ? '<span class="badge-urgency absolute top-2 left-2 text-xs">Última</span>' : '') +
@@ -520,7 +594,28 @@
           '</a>';
         }
 
-        grid.innerHTML = html;
+        // Fade out existing cards, then fade in new ones
+        if (grid.children.length > 0 && !isTransitioning) {
+          fadeOutCards(grid, function() {
+            grid.innerHTML = html;
+          });
+        } else {
+          grid.innerHTML = html;
+        }
+      }
+
+      function fadeOutCards(grid, callback) {
+        var cards = grid.querySelectorAll('.player-card');
+        if (cards.length === 0) { callback(); return; }
+        isTransitioning = true;
+        for (var i = 0; i < cards.length; i++) {
+          cards[i].classList.add('card-exit');
+          cards[i].classList.remove('card-enter');
+        }
+        setTimeout(function() {
+          isTransitioning = false;
+          callback();
+        }, 250);
       }
 
       // ── Load products ──
