@@ -44,50 +44,42 @@
       }
     }
 
-    /* Background countries */
-    .map-bg path {
+    /* All country paths — dark background */
+    .map-container svg path {
       fill: #1a1a1a;
-      stroke: #252525;
-      stroke-width: 0.5;
-      transition: none;
-    }
-
-    /* Team countries — no jerseys (slightly lighter than bg) */
-    .map-countries path {
-      fill: #222;
-      stroke: #333;
-      stroke-width: 0.5;
+      stroke: #2a2a2a;
+      stroke-width: 0.3;
       transition: fill 0.3s ease, stroke 0.3s ease, filter 0.3s ease;
     }
 
-    /* Team countries — has jerseys (bright, unmistakable) */
-    .map-countries path.has-jerseys {
+    /* Countries with jerseys — ice blue glow */
+    .map-container svg path.has-jerseys {
       fill: #1a3a5a;
       stroke: #4DA8FF;
-      stroke-width: 1.2;
+      stroke-width: 0.8;
       cursor: pointer;
-      filter: drop-shadow(0 0 6px rgba(77, 168, 255, 0.25));
+      filter: drop-shadow(0 0 6px rgba(77, 168, 255, 0.3));
       animation: countryPulse 3s ease-in-out infinite;
     }
 
     @keyframes countryPulse {
-      0%, 100% { filter: drop-shadow(0 0 6px rgba(77, 168, 255, 0.25)); }
-      50% { filter: drop-shadow(0 0 10px rgba(77, 168, 255, 0.4)); }
+      0%, 100% { filter: drop-shadow(0 0 6px rgba(77, 168, 255, 0.3)); }
+      50% { filter: drop-shadow(0 0 12px rgba(77, 168, 255, 0.5)); }
     }
 
-    .map-countries path.has-jerseys:hover {
+    .map-container svg path.has-jerseys:hover {
       fill: #2a4a6a;
       stroke: #6BC0FF;
-      stroke-width: 1.5;
-      filter: drop-shadow(0 0 14px rgba(77, 168, 255, 0.5));
+      stroke-width: 1;
+      filter: drop-shadow(0 0 16px rgba(77, 168, 255, 0.6));
       animation: none;
     }
 
-    .map-countries path.has-jerseys.active {
+    .map-container svg path.has-jerseys.active {
       fill: rgba(77, 168, 255, 0.3);
       stroke: #4DA8FF;
-      stroke-width: 2;
-      filter: drop-shadow(0 0 16px rgba(77, 168, 255, 0.6));
+      stroke-width: 1.2;
+      filter: drop-shadow(0 0 18px rgba(77, 168, 255, 0.7));
       animation: none;
     }
 
@@ -403,11 +395,80 @@
       var activeCountry = null;
       var tooltip = document.getElementById('map-tooltip');
 
+      // ── SVG country identification mapping ──
+      // SimpleMaps uses id (ISO Alpha-2) for single-path countries
+      // and class (English name) for multi-path countries
+      var SVG_TO_COUNTRY = {
+        'ES': 'España', 'Spain': 'España',
+        'FR': 'Francia', 'France': 'Francia',
+        'GB': 'Inglaterra', 'United Kingdom': 'Inglaterra',
+        'IT': 'Italia', 'Italy': 'Italia',
+        'DE': 'Alemania', 'Germany': 'Alemania',
+        'AR': 'Argentina', 'Argentina': 'Argentina',
+        'BR': 'Brasil', 'Brazil': 'Brasil',
+        'CO': 'Colombia', 'Colombia': 'Colombia',
+        'MX': 'México', 'Mexico': 'México',
+        'GT': 'Guatemala', 'Guatemala': 'Guatemala',
+        'US': 'Estados Unidos', 'United States': 'Estados Unidos',
+        'JP': 'Japón', 'Japan': 'Japón',
+        'KR': 'Corea del Sur', 'South Korea': 'Corea del Sur',
+        'PT': 'Portugal', 'Portugal': 'Portugal',
+        'NL': 'Países Bajos', 'Netherlands': 'Países Bajos',
+        'BE': 'Bélgica', 'Belgium': 'Bélgica',
+        'HR': 'Croacia', 'Croatia': 'Croacia',
+        'DK': 'Dinamarca', 'Denmark': 'Dinamarca',
+        'SE': 'Suecia', 'Sweden': 'Suecia',
+        'CH': 'Suiza', 'Switzerland': 'Suiza',
+        'PL': 'Polonia', 'Poland': 'Polonia',
+        'RS': 'Serbia', 'Serbia': 'Serbia',
+        'UA': 'Ucrania', 'Ukraine': 'Ucrania',
+        'TR': 'Turquía', 'Turkey': 'Turquía',
+        'AT': 'Austria', 'Austria': 'Austria',
+        'MA': 'Marruecos', 'Morocco': 'Marruecos',
+        'SN': 'Senegal', 'Senegal': 'Senegal',
+        'GH': 'Ghana', 'Ghana': 'Ghana',
+        'CM': 'Camerún', 'Cameroon': 'Camerún',
+        'NG': 'Nigeria', 'Nigeria': 'Nigeria',
+        'SA': 'Arabia Saudita', 'Saudi Arabia': 'Arabia Saudita',
+        'QA': 'Qatar', 'Qatar': 'Qatar',
+        'IR': 'Irán', 'Iran': 'Irán',
+        'AU': 'Australia', 'Australia': 'Australia',
+        'CA': 'Canadá', 'Canada': 'Canadá',
+        'EC': 'Ecuador', 'Ecuador': 'Ecuador',
+        'PE': 'Perú', 'Peru': 'Perú',
+        'CL': 'Chile', 'Chile': 'Chile',
+        'UY': 'Uruguay', 'Uruguay': 'Uruguay',
+        'PY': 'Paraguay', 'Paraguay': 'Paraguay',
+        'PA': 'Panamá', 'Panama': 'Panamá',
+        'CR': 'Costa Rica', 'Costa Rica': 'Costa Rica',
+        'HN': 'Honduras', 'Honduras': 'Honduras',
+        'SV': 'El Salvador', 'El Salvador': 'El Salvador'
+      };
+
       // ── Load SVG map ──
       fetch('/assets/img/world-map.svg')
         .then(function(r) { return r.text(); })
         .then(function(svgText) {
           document.getElementById('map-container').innerHTML = svgText;
+
+          // Clean up SVG root attributes (let CSS handle styling)
+          var svg = document.querySelector('.map-container svg');
+          if (svg) {
+            svg.removeAttribute('fill');
+            svg.removeAttribute('stroke');
+            svg.removeAttribute('stroke-linecap');
+            svg.removeAttribute('stroke-linejoin');
+            svg.removeAttribute('stroke-width');
+            svg.removeAttribute('width');
+            svg.removeAttribute('height');
+            // Fix viewBox casing (SimpleMaps uses lowercase)
+            var vb = svg.getAttribute('viewbox') || svg.getAttribute('viewBox');
+            if (vb) {
+              svg.removeAttribute('viewbox');
+              svg.setAttribute('viewBox', vb);
+            }
+            svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+          }
 
           // Load products and init map
           loadProducts(function(products) {
@@ -422,33 +483,30 @@
 
       // ── Auto-zoom: on mobile, zoom to Europe ──
       function autoZoomToJerseys() {
-        if (window.innerWidth >= 768) return; // desktop: full world map
+        if (window.innerWidth >= 768) return;
 
         var svg = document.querySelector('.map-container svg');
         if (!svg) return;
 
-        // Hard-coded Europe region in SVG coords.
-        // getBBox() is unreliable because France includes French Guiana,
-        // UK includes overseas territories, etc.
-        // These coords cover UK → Italy, Portugal → Germany with padding.
-        var euroX = 420, euroY = 115, euroW = 145, euroH = 100;
+        // Europe region in SimpleMaps coords (viewBox 0 0 2000 857)
+        // Spain ~976, UK ~950, France ~1015, Italy ~1070, top ~130, bottom ~280
+        var euroX = 880, euroY = 100, euroW = 250, euroH = 200;
         var cx = euroX + euroW / 2, cy = euroY + euroH / 2;
 
         var containerW = svg.clientWidth || window.innerWidth;
         var containerH = svg.clientHeight || window.innerHeight;
         var containerAR = containerW / containerH;
 
-        // Width = Europe + generous padding. Height = match container AR.
-        var vw = euroW + 80;
+        var vw = euroW + 100;
         var vh = vw / containerAR;
         var vx = cx - vw / 2;
         var vy = cy - vh / 2;
 
-        // Clamp within SVG bounds (0 0 960 500)
+        // Clamp within SVG bounds (0 0 2000 857)
         if (vy < 0) vy = 0;
         if (vx < 0) vx = 0;
-        if (vy + vh > 500) { vy = 500 - vh; if (vy < 0) vy = 0; }
-        if (vx + vw > 960) { vx = 960 - vw; if (vx < 0) vx = 0; }
+        if (vy + vh > 857) { vy = 857 - vh; if (vy < 0) vy = 0; }
+        if (vx + vw > 2000) { vx = 2000 - vw; if (vx < 0) vx = 0; }
 
         svg.setAttribute('viewBox', vx + ' ' + vy + ' ' + vw + ' ' + vh);
       }
@@ -464,17 +522,22 @@
       }
 
       function colorizeMap() {
-        var paths = document.querySelectorAll('.map-countries path[data-country]');
+        var paths = document.querySelectorAll('.map-container svg path');
         for (var i = 0; i < paths.length; i++) {
-          var country = paths[i].getAttribute('data-country');
-          if (countryMap[country] && countryMap[country].length > 0) {
-            paths[i].classList.add('has-jerseys');
+          var el = paths[i];
+          var id = el.getAttribute('id') || '';
+          var cls = el.getAttribute('class') || '';
+          // Match by id (ISO code) or class (English name)
+          var countryName = SVG_TO_COUNTRY[id] || SVG_TO_COUNTRY[cls];
+          if (countryName && countryMap[countryName] && countryMap[countryName].length > 0) {
+            el.classList.add('has-jerseys');
+            el.setAttribute('data-country', countryName);
           }
         }
       }
 
       function bindMapEvents() {
-        var paths = document.querySelectorAll('.map-countries path.has-jerseys');
+        var paths = document.querySelectorAll('.map-container svg path.has-jerseys');
         for (var i = 0; i < paths.length; i++) {
           paths[i].addEventListener('click', function() {
             var country = this.getAttribute('data-country');
@@ -511,11 +574,11 @@
         window.history.replaceState(null, '', '#' + encodeURIComponent(country.toLowerCase()));
 
         // Update active state on map
-        var paths = document.querySelectorAll('.map-countries path.has-jerseys');
+        var paths = document.querySelectorAll('.map-container svg path.has-jerseys');
         for (var i = 0; i < paths.length; i++) {
           paths[i].classList.remove('active');
         }
-        var activePaths = document.querySelectorAll('.map-countries path[data-country="' + country + '"]');
+        var activePaths = document.querySelectorAll('.map-container svg path[data-country="' + country + '"]');
         for (var j = 0; j < activePaths.length; j++) {
           activePaths[j].classList.add('active');
         }
@@ -532,7 +595,6 @@
         var html = '';
         for (var i = 0; i < jerseys.length; i++) {
           var p = jerseys[i];
-          // Use FIRST image (hero/flat-lay) for map cards
           var imgSrc = p.image || '/assets/img/products/placeholder.svg';
           var playerDisplay = '';
           if (p.player_name) {
@@ -565,7 +627,7 @@
         document.body.style.overflow = '';
         activeCountry = null;
 
-        var paths = document.querySelectorAll('.map-countries path.has-jerseys');
+        var paths = document.querySelectorAll('.map-container svg path.has-jerseys');
         for (var i = 0; i < paths.length; i++) {
           paths[i].classList.remove('active');
         }
@@ -580,7 +642,6 @@
         var hash = decodeURIComponent(window.location.hash.replace('#', ''));
         if (!hash) return;
 
-        // Find matching country (case-insensitive)
         var countries = Object.keys(countryMap);
         for (var i = 0; i < countries.length; i++) {
           if (countries[i].toLowerCase() === hash.toLowerCase()) {
