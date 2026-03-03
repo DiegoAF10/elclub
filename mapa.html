@@ -24,14 +24,22 @@
     /* ── Map ──────────────────────────────────── */
     .map-container {
       width: 100%;
-      max-width: 960px;
+      max-width: 1200px;
       margin: 0 auto;
       position: relative;
+      padding: 0 16px;
     }
 
     .map-container svg {
       width: 100%;
       height: auto;
+      min-height: 50vh;
+      max-height: 70vh;
+    }
+
+    @media (min-width: 768px) {
+      .map-container { padding: 0; }
+      .map-container svg { min-height: 55vh; }
     }
 
     /* Background countries */
@@ -217,7 +225,7 @@
 
     .country-card img {
       width: 100%;
-      aspect-ratio: 740 / 920;
+      aspect-ratio: 1 / 1;
       object-fit: cover;
       background-color: #1C1C1C;
     }
@@ -488,8 +496,8 @@
         var html = '';
         for (var i = 0; i < jerseys.length; i++) {
           var p = jerseys[i];
-          var imgs = p.images || [p.image];
-          var imgSrc = imgs[imgs.length - 1] || '/assets/img/products/placeholder.svg';
+          // Use FIRST image (hero/flat-lay) for map cards
+          var imgSrc = p.image || '/assets/img/products/placeholder.svg';
           var playerDisplay = '';
           if (p.player_name) {
             playerDisplay = p.player_name;
