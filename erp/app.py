@@ -467,10 +467,10 @@ def _do_sync(conn):
         if story:
             description = story
         else:
-            desc_parts = [f"Camiseta del {team} temporada {season}."]
+            desc_parts = [f"Camiseta del {team} temporada {season}. Versión {variant_es.lower()}."]
             if player_name:
                 num = f" (#{player_number})" if player_number else ""
-                desc_parts.append(f"Con nombre y numero de {player_name}{num}.")
+                desc_parts.append(f"Con nombre y número de {player_name}{num}.")
             if patches:
                 desc_parts.append(f"Parches de {patches}.")
             description = " ".join(desc_parts)
