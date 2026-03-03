@@ -449,9 +449,8 @@
         var vx, vy, vw, vh;
 
         if (window.innerWidth < 768) {
-          // MOBILE: hard zoom to Europe. Show just the region with jerseys.
-          // Start with a tight box around the countries + small padding
-          var pad = Math.max(bw, bh) * 0.4;
+          // MOBILE: hard zoom to Europe. Show just the jersey countries.
+          var pad = Math.max(bw, bh) * 0.15;
           vw = bw + pad * 2;
           vh = vw / containerAR; // match container AR exactly
           vx = cx - vw / 2;
