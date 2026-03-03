@@ -1,0 +1,10 @@
+{
+  "La Liga": ["Barcelona", "Real Madrid", "Atlético de Madrid", "Sevilla", "Valencia", "Real Betis", "Athletic Bilbao", "Real Sociedad", "Villarreal", "Girona"],
+  "Premier League": ["Arsenal", "Chelsea", "Liverpool", "Man City", "Man United", "Tottenham", "Newcastle", "Aston Villa", "West Ham", "Brighton"],
+  "Serie A": ["Juventus", "Inter", "Milan", "Napoli", "Roma", "Lazio", "Atalanta", "Fiorentina", "Bologna"],
+  "Bundesliga": ["Bayern Munich", "Borussia Dortmund", "RB Leipzig", "Bayer Leverkusen", "Stuttgart", "Frankfurt"],
+  "Ligue 1": ["PSG", "Marseille", "Lyon", "Monaco", "Lille", "Nice"],
+  "Liga MX": ["América", "Chivas", "Cruz Azul", "Monterrey", "Tigres", "Pumas", "Santos Laguna", "Toluca"],
+  "MLS": ["Inter Miami", "LA Galaxy", "LAFC", "Atlanta United", "Seattle Sounders", "Columbus Crew"],
+  "Selecciones": ["Argentina", "Brasil", "Francia", "España", "Alemania", "Italia", "Inglaterra", "México", "Colombia", "Guatemala", "Portugal", "Países Bajos", "Croacia", "Uruguay"]
+}
