@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS jerseys (
     cost            REAL DEFAULT 100,
     price           REAL,
     status          TEXT DEFAULT 'available' CHECK(status IN ('available', 'reserved', 'sold')),
+    position        TEXT CHECK(position IN ('POR','DEF','MED','DEL')),
     published       INTEGER DEFAULT 0 CHECK(published IN (0, 1)),
     story           TEXT,
     notes           TEXT,

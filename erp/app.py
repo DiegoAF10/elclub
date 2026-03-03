@@ -119,6 +119,12 @@ VARIANT_MAP = {
     "special": "Especial",
 }
 
+POSITIONS = ["POR", "DEF", "MED", "DEL"]
+POSITION_LABELS = {
+    "POR": "Portero", "DEF": "Defensa",
+    "MED": "Mediocampista", "DEL": "Delantero",
+}
+
 VARIANT_REVERSE = {v: k for k, v in VARIANT_MAP.items()}
 
 SEASONS = [
@@ -394,7 +400,8 @@ def _do_sync(conn):
 
     jerseys = conn.execute(
         """SELECT j.jersey_id, j.season, j.variant, j.size, j.price,
-                  j.player_name, j.player_number, j.patches, j.tier, j.notes, j.story,
+                  j.player_name, j.player_number, j.patches, j.tier, j.notes,
+                  j.story, j.position,
                   t.name as team_name, t.short_name, t.league
            FROM jerseys j
            JOIN teams t ON j.team_id = t.team_id
@@ -452,6 +459,7 @@ def _do_sync(conn):
         player_number = None
         patches = None
         story = None
+        position = None
         for item in items:
             if item["player_name"] and not player_name:
                 player_name = item["player_name"]
@@ -460,6 +468,8 @@ def _do_sync(conn):
                 patches = item["patches"]
             if item["story"] and not story:
                 story = item["story"]
+            if item["position"] and not position:
+                position = item["position"]
 
         name_suffix = f" — {player_name}" if player_name else ""
 
@@ -490,6 +500,7 @@ def _do_sync(conn):
             "player_name": player_name,
             "player_number": player_number,
             "patches": patches,
+            "position": position,
             "sizes": sizes,
             "stock": stock,
             "featured": stock >= 2,
@@ -985,10 +996,22 @@ def page_inventory():
                             key=f"enum_{selected_id}",
                         )
 
-                    edit_patches = st.text_input(
-                        "Parches", value=jersey["patches"] or "",
-                        key=f"epatches_{selected_id}",
-                    )
+                    ec7, ec8 = st.columns(2)
+                    with ec7:
+                        edit_patches = st.text_input(
+                            "Parches", value=jersey["patches"] or "",
+                            key=f"epatches_{selected_id}",
+                        )
+                    with ec8:
+                        pos_options = ["—"] + POSITIONS
+                        cur_pos = jersey["position"] if jersey["position"] in POSITIONS else "—"
+                        edit_position = st.selectbox(
+                            "Posición",
+                            pos_options,
+                            index=pos_options.index(cur_pos),
+                            format_func=lambda p: POSITION_LABELS.get(p, "Sin posición"),
+                            key=f"epos_{selected_id}",
+                        )
                     edit_story = st.text_area(
                         "Historia (se muestra en la página)",
                         value=jersey["story"] or "",
@@ -1013,6 +1036,7 @@ def page_inventory():
                             player_name=edit_player.strip() or None,
                             player_number=int(edit_number) if edit_number else None,
                             patches=edit_patches.strip() or None,
+                            position=edit_position if edit_position != "—" else None,
                             story=edit_story.strip() or None,
                             notes=edit_notes.strip() or None,
                         )

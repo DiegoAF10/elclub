@@ -60,6 +60,7 @@
     "player_name": "Ronaldinho",
     "player_number": 10,
     "patches": null,
+    "position": "MED",
     "sizes": [
       "L"
     ],
@@ -91,6 +92,7 @@
     "player_name": "Sergio Ramos",
     "player_number": 4,
     "patches": "La Liga",
+    "position": "DEF",
     "sizes": [
       "XL"
     ],
@@ -121,6 +123,7 @@
     "player_name": "Mbappé",
     "player_number": 7,
     "patches": "Ligue One Uber Eats",
+    "position": "DEL",
     "sizes": [
       "S"
     ],
@@ -151,6 +154,7 @@
     "player_name": "J. Alvarez",
     "player_number": 19,
     "patches": "Premier League",
+    "position": "DEL",
     "sizes": [
       "M"
     ],
@@ -181,6 +185,7 @@
     "player_name": null,
     "player_number": null,
     "patches": "Champions League",
+    "position": null,
     "sizes": [
       "S"
     ],
@@ -211,6 +216,7 @@
     "player_name": "Zidane",
     "player_number": 10,
     "patches": null,
+    "position": "MED",
     "sizes": [
       "XL"
     ],
@@ -242,6 +248,7 @@
     "player_name": "J. Zanetti",
     "player_number": 4,
     "patches": "Champions League",
+    "position": "DEF",
     "sizes": [
       "L"
     ],
@@ -272,6 +279,7 @@
     "player_name": null,
     "player_number": null,
     "patches": "Champions League",
+    "position": null,
     "sizes": [
       "L"
     ],
