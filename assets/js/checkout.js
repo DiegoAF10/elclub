@@ -12,9 +12,8 @@ var SHIPPING_COST = 25;
 var SHIPPING_KEY = 'elclub_shipping';
 var currentStep = 1;
 
-// Worker URL — set this after deploying the Cloudflare Worker
-// Leave empty to fall back to WhatsApp for all payments
-var ELCLUB_API_URL = '';
+// Worker URL for Recurrente checkout sessions
+var ELCLUB_API_URL = 'https://elclub-backoffice.ventusgt.workers.dev';
 
 // ── Step Navigation ──
 function goToStep(step) {
