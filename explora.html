@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="es-GT">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Explora | El Club — Encontra tu pieza legendaria</title>
+
+  <!-- SEO -->
+  <meta name="description" content="Explora jerseys de futbol por filtros, mapa mundial, posicion en cancha o busqueda. Coleccion curada por El Club en Guatemala.">
+  <meta name="keywords" content="jerseys futbol, camisetas guatemala, el club, catalogo jerseys, mystery box guatemala">
+  <meta name="author" content="El Club">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://elclub.club/explora.html">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://elclub.club/explora.html">
+  <meta property="og:title" content="Explora | El Club — Encontra tu pieza legendaria">
+  <meta property="og:description" content="Explora jerseys de futbol por filtros, mapa mundial, posicion en cancha o busqueda.">
+  <meta property="og:image" content="https://elclub.club/assets/img/brand/og-image.png">
+  <meta property="og:site_name" content="El Club">
+  <meta property="og:locale" content="es_GT">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Explora | El Club — Encontra tu pieza legendaria">
+  <meta name="twitter:description" content="Explora jerseys de futbol por filtros, mapa mundial, posicion en cancha o busqueda.">
+  <meta name="twitter:image" content="https://elclub.club/assets/img/brand/og-image.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/assets/img/brand/favicon.png">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS v4 Browser -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <!-- Custom Design System -->
+  <link rel="stylesheet" href="/assets/css/elclub.css?v=2">
+
+  <!-- GA4 -->
+  <!-- TODO: Replace G-XXXXXXXXXX with actual GA4 measurement ID -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX');
+  </script>
+
+  <style>
+    /* ══════════════════════════════════════════════
+       MAP TAB — inline styles (from mapa.html)
+       ══════════════════════════════════════════════ */
+    .map-container {
+      width: 100%;
+      margin: 0 auto;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .map-container svg {
+      width: 100%;
+      height: calc(100vh - 260px);
+      min-height: 300px;
+    }
+
+    @media (max-width: 767px) {
+      .map-container svg {
+        height: calc(100vh - 220px);
+        min-height: 250px;
+      }
+    }
+
+    .map-container svg path {
+      fill: #1a1a1a;
+      stroke: #2a2a2a;
+      stroke-width: 0.3;
+      transition: fill 0.3s ease, stroke 0.3s ease, filter 0.3s ease;
+    }
+
+    .map-container svg path.has-jerseys {
+      fill: #1a3a5a;
+      stroke: #4DA8FF;
+      stroke-width: 0.8;
+      cursor: pointer;
+      filter: drop-shadow(0 0 6px rgba(77, 168, 255, 0.3));
+      animation: countryPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes countryPulse {
+      0%, 100% { filter: drop-shadow(0 0 6px rgba(77, 168, 255, 0.3)); }
+      50% { filter: drop-shadow(0 0 12px rgba(77, 168, 255, 0.5)); }
+    }
+
+    .map-container svg path.has-jerseys:hover {
+      fill: #2a4a6a;
+      stroke: #6BC0FF;
+      stroke-width: 1;
+      filter: drop-shadow(0 0 16px rgba(77, 168, 255, 0.6));
+      animation: none;
+    }
+
+    .map-container svg path.has-jerseys.active {
+      fill: rgba(77, 168, 255, 0.3);
+      stroke: #4DA8FF;
+      stroke-width: 1.2;
+      filter: drop-shadow(0 0 18px rgba(77, 168, 255, 0.7));
+      animation: none;
+    }
+
+    .map-tooltip {
+      position: fixed;
+      background: #111;
+      border: 1px solid rgba(77, 168, 255, 0.4);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-family: 'Oswald', system-ui, sans-serif;
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #4DA8FF;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 50;
+      white-space: nowrap;
+    }
+
+    .map-tooltip.visible {
+      opacity: 1;
+    }
+
+    /* ══════════════════════════════════════════════
+       CANCHA TAB — inline styles (from formacion.html)
+       ══════════════════════════════════════════════ */
+    .pitch-container {
+      position: relative;
+      width: 100%;
+      max-width: 560px;
+      height: 80vh;
+      max-height: 800px;
+      margin: 0 auto;
+      background: linear-gradient(180deg, #0f1f0f 0%, #142814 50%, #0f1f0f 100%);
+      border: 2px solid rgba(255,255,255,0.15);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    @media (max-width: 640px) {
+      .pitch-container {
+        max-width: 100%;
+        height: 70vh;
+        max-height: 600px;
+      }
+    }
+
+    .pitch-container::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        180deg,
+        transparent 0%,
+        transparent 12.5%,
+        rgba(255,255,255,0.02) 12.5%,
+        rgba(255,255,255,0.02) 25%
+      );
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .pitch-lines {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .pitch-zone {
+      position: absolute;
+      left: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 2;
+      transition: background 0.4s ease;
+    }
+
+    .pitch-zone:hover {
+      background: radial-gradient(circle at 50% 50%, rgba(77, 168, 255, 0.12) 0%, transparent 70%);
+    }
+
+    .pitch-zone.active {
+      background: radial-gradient(circle at 50% 50%, rgba(77, 168, 255, 0.2) 0%, rgba(77, 168, 255, 0.05) 60%, transparent 80%);
+    }
+
+    .pitch-zone-label {
+      font-family: 'Oswald', system-ui, sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: rgba(240, 240, 240, 0.35);
+      transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    @media (min-width: 640px) {
+      .pitch-zone-label { font-size: 16px; }
+    }
+
+    .pitch-zone:hover .pitch-zone-label {
+      color: rgba(240, 240, 240, 0.65);
+      transform: scale(1.05);
+    }
+
+    .pitch-zone.active .pitch-zone-label {
+      color: #4DA8FF;
+      font-size: 17px;
+      transform: scale(1.15);
+      text-shadow: 0 0 24px rgba(77, 168, 255, 0.5), 0 0 48px rgba(77, 168, 255, 0.2);
+    }
+
+    @media (min-width: 640px) {
+      .pitch-zone.active .pitch-zone-label { font-size: 19px; }
+    }
+
+    .zone-del { top: 0;    height: 28%; }
+    .zone-med { top: 28%;  height: 22%; }
+    .zone-def { top: 50%;  height: 28%; }
+    .zone-por { top: 78%;  height: 22%; }
+
+    .pitch-dots {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .pitch-dot {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(240, 240, 240, 0.15);
+      transform: translate(-50%, -50%);
+      transition: all 0.4s ease;
+      animation: dotFloat 3s ease-in-out infinite;
+    }
+
+    .pitch-dot:nth-child(1) { animation-delay: 0s; }
+    .pitch-dot:nth-child(2) { animation-delay: 0.3s; }
+    .pitch-dot:nth-child(3) { animation-delay: 0.6s; }
+    .pitch-dot:nth-child(4) { animation-delay: 0.9s; }
+    .pitch-dot:nth-child(5) { animation-delay: 1.2s; }
+    .pitch-dot:nth-child(6) { animation-delay: 0.15s; }
+    .pitch-dot:nth-child(7) { animation-delay: 0.45s; }
+    .pitch-dot:nth-child(8) { animation-delay: 0.75s; }
+    .pitch-dot:nth-child(9) { animation-delay: 1.05s; }
+    .pitch-dot:nth-child(10) { animation-delay: 0.5s; }
+    .pitch-dot:nth-child(11) { animation-delay: 0.8s; }
+
+    @keyframes dotFloat {
+      0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+      50% { transform: translate(-50%, -50%) translateY(-2px); }
+    }
+
+    .pitch-dot.dot-glow {
+      background: #4DA8FF;
+      box-shadow: 0 0 12px rgba(77, 168, 255, 0.6), 0 0 24px rgba(77, 168, 255, 0.3);
+      animation: dotFloat 3s ease-in-out infinite, dotPulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes dotPulse {
+      0%, 100% { box-shadow: 0 0 12px rgba(77, 168, 255, 0.6), 0 0 24px rgba(77, 168, 255, 0.3); }
+      50% { box-shadow: 0 0 18px rgba(77, 168, 255, 0.8), 0 0 36px rgba(77, 168, 255, 0.4); }
+    }
+
+    @keyframes bounceDown {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(6px); }
+    }
+    .bounce-down {
+      animation: bounceDown 2s ease infinite;
+    }
+  </style>
+</head>
+<body class="bg-midnight text-white">
+
+  <!-- ============================================================ -->
+  <!-- NAV (always visible, no auto-hide)                           -->
+  <!-- ============================================================ -->
+  <header id="site-header" class="fixed top-0 left-0 right-0 z-40 bg-midnight/95 backdrop-blur-sm border-b border-chalk transition-all duration-300">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2">
+        <img src="/assets/img/brand/logo.svg" alt="El Club" class="h-10 w-auto">
+      </a>
+      <div class="hidden md:flex items-center gap-8">
+        <a href="/explora.html" class="nav-link active">Explora</a>
+        <a href="/mystery-box.html" class="nav-link">Mystery Box</a>
+        <a href="/personaliza.html" class="nav-link">Personaliza</a>
+        <a href="/nosotros.html" class="nav-link">Nosotros</a>
+      </div>
+      <div class="flex items-center gap-4">
+        <button onclick="openCartDrawer()" class="relative text-white hover:text-ice transition-colors cursor-pointer" aria-label="Abrir carrito">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+          </svg>
+          <span class="cart-badge hidden">0</span>
+        </button>
+        <button onclick="toggleMobileMenu()" class="md:hidden text-white hover:text-ice transition-colors cursor-pointer" aria-label="Menu">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- MOBILE MENU                                                  -->
+  <!-- ============================================================ -->
+  <div id="mobile-menu" class="mobile-menu">
+    <div class="flex flex-col h-full px-6 py-8">
+      <div class="flex justify-end mb-12">
+        <button onclick="closeMobileMenu()" class="text-white hover:text-ice transition-colors cursor-pointer" aria-label="Cerrar menu">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <nav class="flex flex-col gap-8">
+        <a href="/explora.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-ice hover:text-ice transition-colors">Explora</a>
+        <a href="/mystery-box.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Mystery Box</a>
+        <a href="/personaliza.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Personaliza</a>
+        <a href="/nosotros.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Nosotros</a>
+        <a href="/contacto.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Contacto</a>
+      </nav>
+      <div class="mt-auto flex items-center gap-6">
+        <a href="https://www.instagram.com/club.gt" target="_blank" rel="noopener" class="text-smoke hover:text-ice transition-colors" aria-label="Instagram">
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+        </a>
+        <a href="https://www.tiktok.com/@club.gtm" target="_blank" rel="noopener" class="text-smoke hover:text-ice transition-colors" aria-label="TikTok">
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.15V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- PAGE HEADER                                                  -->
+  <!-- ============================================================ -->
+  <section class="pt-24 pb-4 px-4">
+    <div class="max-w-6xl mx-auto">
+      <a href="/" class="text-smoke text-sm hover:text-ice transition-colors mb-4 inline-block">&larr; Volver al hub</a>
+      <h1 class="text-3xl md:text-4xl font-bold uppercase tracking-wider" style="font-family:'Oswald',system-ui,sans-serif;">Explora</h1>
+      <p class="text-smoke text-sm mt-1" id="explora-count">Cargando...</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- TAB BAR (sticky)                                             -->
+  <!-- ============================================================ -->
+  <div class="sticky top-[72px] z-30 bg-midnight/95 backdrop-blur-sm">
+    <div class="max-w-6xl mx-auto px-4">
+      <div class="explora-tabs">
+        <button class="explora-tab active" onclick="switchTab('filtros')">Filtros</button>
+        <button class="explora-tab" onclick="switchTab('mapa')">Mapa</button>
+        <button class="explora-tab" onclick="switchTab('cancha')">Cancha</button>
+        <button class="explora-tab" onclick="switchTab('buscar')">Buscar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TAB CONTENT                                                  -->
+  <!-- ============================================================ -->
+
+  <!-- ── Tab 1: Filtros (default) ──────────────────────────────── -->
+  <div class="explora-content active" id="tab-filtros">
+    <div class="max-w-6xl mx-auto px-4 py-6">
+      <!-- League pills (horizontal scroll) -->
+      <div class="flex gap-2 mb-4 overflow-x-auto pb-2" id="league-pills"></div>
+      <!-- Size pills -->
+      <div class="flex gap-2 mb-6" id="size-pills"></div>
+      <!-- Product grid (asymmetric) -->
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="product-grid"></div>
+    </div>
+  </div>
+
+  <!-- ── Tab 2: Mapa ──────────────────────────────────────────── -->
+  <div class="explora-content" id="tab-mapa">
+    <div class="w-full overflow-hidden" style="background: #0a0a0a;">
+      <div class="map-container" id="map-container"></div>
+      <div class="map-tooltip" id="map-tooltip"></div>
+    </div>
+  </div>
+
+  <!-- ── Tab 3: Cancha ────────────────────────────────────────── -->
+  <div class="explora-content" id="tab-cancha">
+    <div class="max-w-4xl mx-auto px-4 py-8">
+      <div class="flex flex-col items-center">
+        <div class="pitch-container">
+
+          <!-- SVG field lines -->
+          <svg class="pitch-lines" viewBox="0 0 680 1050" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="10" y="10" width="660" height="1030" stroke="rgba(255,255,255,0.12)" stroke-width="2" fill="none"/>
+            <line x1="10" y1="525" x2="670" y2="525" stroke="rgba(255,255,255,0.12)" stroke-width="2"/>
+            <circle cx="340" cy="525" r="91.5" stroke="rgba(255,255,255,0.12)" stroke-width="2" fill="none"/>
+            <circle cx="340" cy="525" r="4" fill="rgba(255,255,255,0.15)"/>
+            <rect x="178" y="10" width="324" height="165" stroke="rgba(255,255,255,0.12)" stroke-width="2" fill="none"/>
+            <rect x="248" y="10" width="184" height="55" stroke="rgba(255,255,255,0.12)" stroke-width="2" fill="none"/>
+            <circle cx="340" cy="120" r="4" fill="rgba(255,255,255,0.15)"/>
+            <path d="M 268 175 A 91.5 91.5 0 0 0 412 175" stroke="rgba(255,255,255,0.12)" stroke-width="2" fill="none"/>
+            <rect x="178" y="875" width="324" height="165" stroke="rgba(255,255,255,0.12)" stroke-width="2" fill="none"/>
+            <rect x="248" y="985" width="184" height="55" stroke="rgba(255,255,255,0.12)" stroke-width="2" fill="none"/>
+            <circle cx="340" cy="930" r="4" fill="rgba(255,255,255,0.15)"/>
+            <path d="M 268 875 A 91.5 91.5 0 0 1 412 875" stroke="rgba(255,255,255,0.12)" stroke-width="2" fill="none"/>
+            <path d="M 10 20 A 10 10 0 0 0 20 10" stroke="rgba(255,255,255,0.12)" stroke-width="2" fill="none"/>
+            <path d="M 660 10 A 10 10 0 0 0 670 20" stroke="rgba(255,255,255,0.12)" stroke-width="2" fill="none"/>
+            <path d="M 10 1030 A 10 10 0 0 1 20 1040" stroke="rgba(255,255,255,0.12)" stroke-width="2" fill="none"/>
+            <path d="M 660 1040 A 10 10 0 0 1 670 1030" stroke="rgba(255,255,255,0.12)" stroke-width="2" fill="none"/>
+          </svg>
+
+          <!-- Clickable zones -->
+          <div class="pitch-zone zone-del" onclick="selectZone('DEL')" id="zone-del">
+            <span class="pitch-zone-label">Delanteros</span>
+          </div>
+          <div class="pitch-zone zone-med" onclick="selectZone('MED')" id="zone-med">
+            <span class="pitch-zone-label">Mediocampistas</span>
+          </div>
+          <div class="pitch-zone zone-def" onclick="selectZone('DEF')" id="zone-def">
+            <span class="pitch-zone-label">Defensas</span>
+          </div>
+          <div class="pitch-zone zone-por" onclick="selectZone('POR')" id="zone-por">
+            <span class="pitch-zone-label">Porteros</span>
+          </div>
+
+          <!-- Formation dots (4-3-3) -->
+          <div class="pitch-dots">
+            <!-- GK -->
+            <div class="pitch-dot" data-pos="POR" style="left:50%; top:89%"></div>
+            <!-- DEF line -->
+            <div class="pitch-dot" data-pos="DEF" style="left:15%; top:66%"></div>
+            <div class="pitch-dot" data-pos="DEF" style="left:38%; top:63%"></div>
+            <div class="pitch-dot" data-pos="DEF" style="left:62%; top:63%"></div>
+            <div class="pitch-dot" data-pos="DEF" style="left:85%; top:66%"></div>
+            <!-- MID line -->
+            <div class="pitch-dot" data-pos="MED" style="left:25%; top:42%"></div>
+            <div class="pitch-dot" data-pos="MED" style="left:50%; top:38%"></div>
+            <div class="pitch-dot" data-pos="MED" style="left:75%; top:42%"></div>
+            <!-- FWD line -->
+            <div class="pitch-dot" data-pos="DEL" style="left:20%; top:18%"></div>
+            <div class="pitch-dot" data-pos="DEL" style="left:50%; top:14%"></div>
+            <div class="pitch-dot" data-pos="DEL" style="left:80%; top:18%"></div>
+          </div>
+        </div>
+
+        <!-- Hint text -->
+        <p id="pitch-hint" class="text-ash text-xs mt-4 text-center transition-opacity duration-300">
+          <svg class="w-4 h-4 inline-block mr-1 bounce-down" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+          Toca una zona de la cancha
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Tab 4: Buscar ────────────────────────────────────────── -->
+  <div class="explora-content" id="tab-buscar">
+    <div class="max-w-6xl mx-auto px-4 py-6">
+      <div class="relative mb-6">
+        <input type="text" id="search-input" placeholder="Busca por equipo, jugador, liga..."
+          class="w-full bg-pitch border border-chalk rounded-lg px-4 py-3 text-white placeholder-ash focus:border-ice focus:outline-none transition-colors"
+          oninput="handleSearch(this.value)">
+        <svg class="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-ash" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4" id="search-results"></div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SHARED OVERLAY (used by Mapa + Cancha)                       -->
+  <!-- ============================================================ -->
+  <div class="overlay-backdrop" id="overlay-backdrop" onclick="closeOverlay()"></div>
+  <div class="overlay-panel" id="overlay-panel">
+    <div class="overlay-handle"></div>
+    <div class="overlay-header">
+      <h2 id="overlay-title" class="text-2xl font-bold uppercase tracking-wider" style="font-family:'Oswald',system-ui,sans-serif;"></h2>
+      <p id="overlay-count" class="text-smoke text-sm mt-1"></p>
+      <button class="overlay-close" onclick="closeOverlay()" aria-label="Cerrar">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="overlay-grid" id="overlay-grid"></div>
+    <div id="overlay-empty" class="hidden text-center py-12 px-6">
+      <p class="text-smoke font-semibold mb-2">No hay jerseys aqui</p>
+      <p class="text-ash text-sm">Pronto agregaremos mas piezas</p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- FOOTER                                                       -->
+  <!-- ============================================================ -->
+  <footer class="border-t border-chalk pt-12 pb-8 px-4">
+    <div class="max-w-6xl mx-auto">
+      <div class="grid md:grid-cols-3 gap-10 mb-10">
+        <!-- Col 1: Brand -->
+        <div>
+          <a href="/" class="inline-block mb-4"><img src="/assets/img/brand/logo.svg" alt="El Club" class="h-12"></a>
+          <p class="text-smoke text-sm leading-relaxed max-w-xs">La camiseta con historia. Mystery boxes curadas con lo mejor del futbol mundial.</p>
+        </div>
+        <!-- Col 2: Links -->
+        <div>
+          <p class="text-white font-bold text-sm uppercase tracking-wider mb-4">Navegacion</p>
+          <nav class="flex flex-col gap-3">
+            <a href="/explora.html" class="text-smoke text-sm hover:text-ice transition-colors">Explora</a>
+            <a href="/mystery-box.html" class="text-smoke text-sm hover:text-ice transition-colors">Mystery Box</a>
+            <a href="/personaliza.html" class="text-smoke text-sm hover:text-ice transition-colors">Personaliza</a>
+            <a href="/nosotros.html" class="text-smoke text-sm hover:text-ice transition-colors">Nosotros</a>
+            <a href="/contacto.html" class="text-smoke text-sm hover:text-ice transition-colors">Contacto</a>
+          </nav>
+        </div>
+        <!-- Col 3: Social -->
+        <div>
+          <p class="text-white font-bold text-sm uppercase tracking-wider mb-4">Seguinos</p>
+          <div class="flex items-center gap-4 mb-6">
+            <a href="https://www.instagram.com/club.gt" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-chalk flex items-center justify-center text-smoke hover:text-ice hover:border-ice transition-colors" aria-label="Instagram">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+            </a>
+            <a href="https://www.tiktok.com/@club.gtm" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-chalk flex items-center justify-center text-smoke hover:text-ice hover:border-ice transition-colors" aria-label="TikTok">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.15V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/></svg>
+            </a>
+            <a href="https://wa.me/502XXXXXXXX" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-chalk flex items-center justify-center text-smoke hover:text-ice hover:border-ice transition-colors" aria-label="WhatsApp">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-chalk pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <p class="text-ash text-xs">El Club 2026. Todos los derechos reservados.</p>
+        <p class="text-ash text-xs">Guatemala</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============================================================ -->
+  <!-- CART OVERLAY + DRAWER                                        -->
+  <!-- ============================================================ -->
+  <div id="cart-overlay" class="cart-overlay" onclick="closeCartDrawer()"></div>
+
+  <div id="cart-drawer" class="cart-drawer">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-chalk">
+      <h2 class="font-bold text-lg uppercase tracking-wider">Tu carrito</h2>
+      <button onclick="closeCartDrawer()" class="text-ash hover:text-white transition-colors cursor-pointer" aria-label="Cerrar carrito">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div id="cart-empty" class="flex-1 flex flex-col items-center justify-center px-5 text-center">
+      <svg class="w-16 h-16 text-chalk mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+      </svg>
+      <p class="text-smoke font-semibold mb-1">Tu carrito esta vacio</p>
+      <p class="text-ash text-sm mb-6">Agrega algo increible para empezar.</p>
+      <a href="/explora.html" onclick="closeCartDrawer()" class="btn-primary text-sm">Ver catalogo</a>
+    </div>
+    <div id="cart-filled" class="hidden flex-1 flex flex-col">
+      <div id="cart-items" class="flex-1 overflow-y-auto px-5"></div>
+      <div class="border-t border-chalk px-5 py-4">
+        <div class="flex items-center justify-between mb-4">
+          <span class="font-bold text-sm uppercase tracking-wider">Total</span>
+          <span id="cart-total" class="font-extrabold text-xl text-ice">Q0</span>
+        </div>
+        <p class="text-ash text-xs mb-4">Envio Q25 — se calcula en el checkout.</p>
+        <a href="/pedidos.html" onclick="closeCartDrawer()" class="btn-primary w-full text-center text-sm py-3.5 block">
+          Ir a pedidos
+        </a>
+        <button onclick="closeCartDrawer()" class="btn-ghost w-full text-sm py-2 mt-2 cursor-pointer">
+          Seguir comprando
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- WHATSAPP FLOATING BUTTON                                     -->
+  <!-- ============================================================ -->
+  <a
+    href="https://wa.me/502XXXXXXXX?text=Hola%21%20Quiero%20saber%20mas%20sobre%20El%20Club."
+    target="_blank"
+    rel="noopener"
+    class="whatsapp-float"
+    aria-label="Contactar por WhatsApp"
+  >
+    <svg viewBox="0 0 24 24">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+  </a>
+
+  <!-- ============================================================ -->
+  <!-- SCRIPTS                                                      -->
+  <!-- ============================================================ -->
+  <script src="/assets/js/cart.js?v=2"></script>
+  <script src="/assets/js/app.js?v=2"></script>
+
+  <script>
+  (function() {
+    var allProducts = [];
+    var mapLoaded = false;
+    var canchaInitialized = false;
+
+    // ══════════════════════════════════════════════
+    // TAB SWITCHING
+    // ══════════════════════════════════════════════
+
+    var TAB_NAMES = ['filtros', 'mapa', 'cancha', 'buscar'];
+
+    window.switchTab = function(tabName) {
+      if (TAB_NAMES.indexOf(tabName) === -1) return;
+
+      // Update tab buttons
+      var btns = document.querySelectorAll('.explora-tab');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].classList.remove('active');
+        var btnTab = btns[i].textContent.toLowerCase()
+          .replace('á', 'a').replace('ú', 'u');
+        if (btnTab === tabName) {
+          btns[i].classList.add('active');
+        }
+      }
+
+      // Update content panels
+      var contents = document.querySelectorAll('.explora-content');
+      for (var k = 0; k < contents.length; k++) {
+        contents[k].classList.remove('active');
+      }
+      var target = document.getElementById('tab-' + tabName);
+      if (target) target.classList.add('active');
+
+      // Update URL hash
+      window.history.replaceState(null, '', '#' + tabName);
+
+      // Lazy-load map on first switch
+      if (tabName === 'mapa' && !mapLoaded) {
+        loadMap();
+        mapLoaded = true;
+      }
+
+      // Init cancha on first switch
+      if (tabName === 'cancha' && !canchaInitialized) {
+        initCancha(allProducts);
+        canchaInitialized = true;
+      }
+
+      // Auto-focus search input
+      if (tabName === 'buscar') {
+        var input = document.getElementById('search-input');
+        if (input) setTimeout(function() { input.focus(); }, 100);
+      }
+    };
+
+    // ══════════════════════════════════════════════
+    // SHARED OVERLAY (used by Mapa + Cancha)
+    // ══════════════════════════════════════════════
+
+    var overlayBackdrop = document.getElementById('overlay-backdrop');
+    var overlayPanel = document.getElementById('overlay-panel');
+    var overlayTitle = document.getElementById('overlay-title');
+    var overlayCount = document.getElementById('overlay-count');
+    var overlayGrid = document.getElementById('overlay-grid');
+    var overlayEmpty = document.getElementById('overlay-empty');
+
+    function openOverlay(items, title) {
+      overlayTitle.textContent = title;
+
+      if (items.length === 0) {
+        overlayGrid.innerHTML = '';
+        overlayEmpty.classList.remove('hidden');
+        overlayCount.textContent = '';
+      } else {
+        overlayEmpty.classList.add('hidden');
+        overlayCount.textContent = items.length + ' pieza' + (items.length !== 1 ? 's' : '');
+
+        var html = '';
+        for (var i = 0; i < items.length; i++) {
+          var p = items[i];
+          var imgs = p.images || [p.image];
+          var imgSrc = (imgs.length > 0 ? imgs[imgs.length - 1] : null) || p.image || '/assets/img/products/placeholder.svg';
+          var playerDisplay = '';
+          if (p.player_name) {
+            playerDisplay = p.player_name;
+            if (p.player_number) playerDisplay += ' #' + p.player_number;
+          }
+
+          html += '<a href="/producto.html?id=' + p.id + '" class="overlay-card card-shoot" style="animation-delay:' + (i * 0.08 + 0.15) + 's">' +
+            '<div class="relative overflow-hidden">' +
+              '<img src="' + imgSrc + '" alt="' + p.name + '" loading="lazy">' +
+              (p.stock <= 3 && p.stock > 0 ? '<span class="badge-urgency absolute top-2 left-2 text-xs">Ultima</span>' : '') +
+            '</div>' +
+            '<div class="p-3">' +
+              '<p class="text-xs text-smoke uppercase tracking-wider font-semibold mb-1">' + (p.team || '') + ' — ' + (p.season || '') + '</p>' +
+              (playerDisplay ? '<p class="font-bold text-sm text-white mb-1">' + playerDisplay + '</p>' : '') +
+              '<span class="text-ice text-base font-bold">Q' + p.price + '</span>' +
+            '</div>' +
+          '</a>';
+        }
+        overlayGrid.innerHTML = html;
+      }
+
+      overlayBackdrop.classList.add('active');
+      overlayPanel.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    window.closeOverlay = function() {
+      overlayBackdrop.classList.remove('active');
+      overlayPanel.classList.remove('active');
+      document.body.style.overflow = '';
+
+      // Reset cancha state
+      activeZone = null;
+      var zones = document.querySelectorAll('.pitch-zone');
+      for (var i = 0; i < zones.length; i++) zones[i].classList.remove('active');
+      var dots = document.querySelectorAll('.pitch-dot');
+      for (var j = 0; j < dots.length; j++) dots[j].classList.remove('dot-glow');
+      var hint = document.getElementById('pitch-hint');
+      if (hint) hint.style.opacity = '1';
+
+      // Reset map state
+      activeCountry = null;
+      var paths = document.querySelectorAll('.map-container svg path.has-jerseys');
+      for (var m = 0; m < paths.length; m++) {
+        paths[m].classList.remove('active');
+      }
+    };
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeOverlay();
+    });
+
+    // ══════════════════════════════════════════════
+    // MAP TAB (from mapa.html)
+    // ══════════════════════════════════════════════
+
+    var countryMap = {};
+    var activeCountry = null;
+    var tooltip = document.getElementById('map-tooltip');
+
+    var SVG_TO_COUNTRY = {
+      'ES': 'España', 'Spain': 'España',
+      'FR': 'Francia', 'France': 'Francia',
+      'GB': 'Inglaterra', 'United Kingdom': 'Inglaterra',
+      'IT': 'Italia', 'Italy': 'Italia',
+      'DE': 'Alemania', 'Germany': 'Alemania',
+      'AR': 'Argentina', 'Argentina': 'Argentina',
+      'BR': 'Brasil', 'Brazil': 'Brasil',
+      'CO': 'Colombia', 'Colombia': 'Colombia',
+      'MX': 'México', 'Mexico': 'México',
+      'GT': 'Guatemala', 'Guatemala': 'Guatemala',
+      'US': 'Estados Unidos', 'United States': 'Estados Unidos',
+      'JP': 'Japón', 'Japan': 'Japón',
+      'KR': 'Corea del Sur', 'South Korea': 'Corea del Sur',
+      'PT': 'Portugal', 'Portugal': 'Portugal',
+      'NL': 'Países Bajos', 'Netherlands': 'Países Bajos',
+      'BE': 'Bélgica', 'Belgium': 'Bélgica',
+      'HR': 'Croacia', 'Croatia': 'Croacia',
+      'DK': 'Dinamarca', 'Denmark': 'Dinamarca',
+      'SE': 'Suecia', 'Sweden': 'Suecia',
+      'CH': 'Suiza', 'Switzerland': 'Suiza',
+      'PL': 'Polonia', 'Poland': 'Polonia',
+      'RS': 'Serbia', 'Serbia': 'Serbia',
+      'UA': 'Ucrania', 'Ukraine': 'Ucrania',
+      'TR': 'Turquía', 'Turkey': 'Turquía',
+      'AT': 'Austria', 'Austria': 'Austria',
+      'MA': 'Marruecos', 'Morocco': 'Marruecos',
+      'SN': 'Senegal', 'Senegal': 'Senegal',
+      'GH': 'Ghana', 'Ghana': 'Ghana',
+      'CM': 'Camerún', 'Cameroon': 'Camerún',
+      'NG': 'Nigeria', 'Nigeria': 'Nigeria',
+      'SA': 'Arabia Saudita', 'Saudi Arabia': 'Arabia Saudita',
+      'QA': 'Qatar', 'Qatar': 'Qatar',
+      'IR': 'Irán', 'Iran': 'Irán',
+      'AU': 'Australia', 'Australia': 'Australia',
+      'CA': 'Canadá', 'Canada': 'Canadá',
+      'EC': 'Ecuador', 'Ecuador': 'Ecuador',
+      'PE': 'Perú', 'Peru': 'Perú',
+      'CL': 'Chile', 'Chile': 'Chile',
+      'UY': 'Uruguay', 'Uruguay': 'Uruguay',
+      'PY': 'Paraguay', 'Paraguay': 'Paraguay',
+      'PA': 'Panamá', 'Panama': 'Panamá',
+      'CR': 'Costa Rica', 'Costa Rica': 'Costa Rica',
+      'HN': 'Honduras', 'Honduras': 'Honduras',
+      'SV': 'El Salvador', 'El Salvador': 'El Salvador'
+    };
+
+    function loadMap() {
+      fetch('/assets/img/world-map.svg')
+        .then(function(r) { return r.text(); })
+        .then(function(svgText) {
+          document.getElementById('map-container').innerHTML = svgText;
+
+          var svg = document.querySelector('.map-container svg');
+          if (svg) {
+            svg.removeAttribute('fill');
+            svg.removeAttribute('stroke');
+            svg.removeAttribute('stroke-linecap');
+            svg.removeAttribute('stroke-linejoin');
+            svg.removeAttribute('stroke-width');
+            svg.removeAttribute('width');
+            svg.removeAttribute('height');
+            var vb = svg.getAttribute('viewbox') || svg.getAttribute('viewBox');
+            if (vb) {
+              svg.removeAttribute('viewbox');
+              svg.setAttribute('viewBox', vb);
+            }
+            svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+          }
+
+          buildCountryMap();
+          colorizeMap();
+          bindMapEvents();
+          autoZoomToJerseys();
+        });
+    }
+
+    function buildCountryMap() {
+      countryMap = {};
+      for (var i = 0; i < allProducts.length; i++) {
+        var p = allProducts[i];
+        if (p.type !== 'jersey' || !p.country) continue;
+        if (!countryMap[p.country]) countryMap[p.country] = [];
+        countryMap[p.country].push(p);
+      }
+    }
+
+    function colorizeMap() {
+      var paths = document.querySelectorAll('.map-container svg path');
+      for (var i = 0; i < paths.length; i++) {
+        var el = paths[i];
+        var id = el.getAttribute('id') || '';
+        var cls = el.getAttribute('class') || '';
+        var countryName = SVG_TO_COUNTRY[id] || SVG_TO_COUNTRY[cls];
+        if (countryName && countryMap[countryName] && countryMap[countryName].length > 0) {
+          el.classList.add('has-jerseys');
+          el.setAttribute('data-country', countryName);
+        }
+      }
+    }
+
+    function bindMapEvents() {
+      var paths = document.querySelectorAll('.map-container svg path.has-jerseys');
+      for (var i = 0; i < paths.length; i++) {
+        paths[i].addEventListener('click', function() {
+          var country = this.getAttribute('data-country');
+          selectCountry(country);
+        });
+
+        paths[i].addEventListener('mouseenter', function() {
+          var country = this.getAttribute('data-country');
+          var count = countryMap[country] ? countryMap[country].length : 0;
+          tooltip.textContent = country + ' — ' + count + ' pieza' + (count !== 1 ? 's' : '');
+          tooltip.classList.add('visible');
+        });
+
+        paths[i].addEventListener('mousemove', function(e) {
+          tooltip.style.left = (e.clientX + 12) + 'px';
+          tooltip.style.top = (e.clientY - 30) + 'px';
+        });
+
+        paths[i].addEventListener('mouseleave', function() {
+          tooltip.classList.remove('visible');
+        });
+      }
+    }
+
+    function autoZoomToJerseys() {
+      if (window.innerWidth >= 768) return;
+
+      var svg = document.querySelector('.map-container svg');
+      if (!svg) return;
+
+      var euroX = 880, euroY = 100, euroW = 250, euroH = 200;
+      var cx = euroX + euroW / 2, cy = euroY + euroH / 2;
+
+      var containerW = svg.clientWidth || window.innerWidth;
+      var containerH = svg.clientHeight || window.innerHeight;
+      var containerAR = containerW / containerH;
+
+      var vw = euroW + 100;
+      var vh = vw / containerAR;
+      var vx = cx - vw / 2;
+      var vy = cy - vh / 2;
+
+      if (vy < 0) vy = 0;
+      if (vx < 0) vx = 0;
+      if (vy + vh > 857) { vy = 857 - vh; if (vy < 0) vy = 0; }
+      if (vx + vw > 2000) { vx = 2000 - vw; if (vx < 0) vx = 0; }
+
+      svg.setAttribute('viewBox', vx + ' ' + vy + ' ' + vw + ' ' + vh);
+    }
+
+    function selectCountry(country) {
+      activeCountry = country;
+
+      // Update active state on map paths
+      var paths = document.querySelectorAll('.map-container svg path.has-jerseys');
+      for (var i = 0; i < paths.length; i++) {
+        paths[i].classList.remove('active');
+      }
+      var activePaths = document.querySelectorAll('.map-container svg path[data-country="' + country + '"]');
+      for (var j = 0; j < activePaths.length; j++) {
+        activePaths[j].classList.add('active');
+      }
+
+      var jerseys = countryMap[country] || [];
+      openOverlay(jerseys, country);
+    }
+
+    // ══════════════════════════════════════════════
+    // CANCHA TAB (from formacion.html)
+    // ══════════════════════════════════════════════
+
+    var activeZone = null;
+
+    var POSITION_NAMES = {
+      'POR': 'Porteros',
+      'DEF': 'Defensas',
+      'MED': 'Mediocampistas',
+      'DEL': 'Delanteros'
+    };
+
+    function initCancha(products) {
+      // Count jerseys per position
+      var positionCounts = {};
+      for (var i = 0; i < products.length; i++) {
+        if (products[i].type === 'jersey' && products[i].position) {
+          positionCounts[products[i].position] = (positionCounts[products[i].position] || 0) + 1;
+        }
+      }
+
+      // Update zone labels with count
+      var positions = ['POR', 'DEF', 'MED', 'DEL'];
+      for (var j = 0; j < positions.length; j++) {
+        var c = positionCounts[positions[j]] || 0;
+        var zoneEl = document.getElementById('zone-' + positions[j].toLowerCase());
+        if (zoneEl && c > 0) {
+          var label = zoneEl.querySelector('.pitch-zone-label');
+          label.textContent = POSITION_NAMES[positions[j]] + ' (' + c + ')';
+        }
+      }
+    }
+
+    window.selectZone = function(pos) {
+      // Toggle if same zone clicked
+      if (activeZone === pos) {
+        activeZone = null;
+        clearZoneSelection();
+        return;
+      }
+
+      activeZone = pos;
+
+      // Update zone highlights
+      var zones = document.querySelectorAll('.pitch-zone');
+      for (var i = 0; i < zones.length; i++) {
+        zones[i].classList.remove('active');
+      }
+      document.getElementById('zone-' + pos.toLowerCase()).classList.add('active');
+
+      // Update dots
+      var dots = document.querySelectorAll('.pitch-dot');
+      for (var j = 0; j < dots.length; j++) {
+        if (dots[j].getAttribute('data-pos') === pos) {
+          dots[j].classList.add('dot-glow');
+        } else {
+          dots[j].classList.remove('dot-glow');
+        }
+      }
+
+      // Filter and open overlay
+      var filtered = allProducts.filter(function(p) {
+        return p.type === 'jersey' && p.position === pos;
+      });
+
+      openOverlay(filtered, POSITION_NAMES[pos] || pos);
+
+      // Hide hint
+      var hint = document.getElementById('pitch-hint');
+      if (hint) hint.style.opacity = '0';
+    };
+
+    function clearZoneSelection() {
+      var zones = document.querySelectorAll('.pitch-zone');
+      for (var i = 0; i < zones.length; i++) zones[i].classList.remove('active');
+      var dots = document.querySelectorAll('.pitch-dot');
+      for (var j = 0; j < dots.length; j++) dots[j].classList.remove('dot-glow');
+      var hint = document.getElementById('pitch-hint');
+      if (hint) hint.style.opacity = '1';
+    }
+
+    // ══════════════════════════════════════════════
+    // SEARCH TAB
+    // ══════════════════════════════════════════════
+
+    var searchTimeout = null;
+
+    window.handleSearch = function(value) {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(function() {
+        if (!value || value.trim() === '') {
+          // Show all available jerseys when search is empty
+          var all = filterProducts(allProducts, { type: 'jersey', availableOnly: true });
+          renderProductGrid('search-results', all, false);
+          return;
+        }
+        var filtered = filterProducts(allProducts, { search: value, type: 'jersey', availableOnly: true });
+        renderProductGrid('search-results', filtered, false);
+      }, 300);
+    };
+
+    // ══════════════════════════════════════════════
+    // INITIALIZATION
+    // ══════════════════════════════════════════════
+
+    loadProducts(function(products) {
+      allProducts = products;
+
+      // Count
+      var jerseys = products.filter(function(p) { return p.type === 'jersey' && p.stock > 0; });
+      var countEl = document.getElementById('explora-count');
+      if (countEl) countEl.textContent = jerseys.length + ' piezas disponibles';
+
+      // Init filtros tab (always visible first)
+      initPillFilters(products);
+      applyFilters();
+
+      // Check hash for initial tab
+      var hash = window.location.hash.replace('#', '') || 'filtros';
+      if (TAB_NAMES.indexOf(hash) !== -1) {
+        switchTab(hash);
+      }
+    });
+
+    // Listen for hash changes
+    window.addEventListener('hashchange', function() {
+      var hash = window.location.hash.replace('#', '');
+      if (TAB_NAMES.indexOf(hash) !== -1) {
+        switchTab(hash);
+      }
+    });
+
+  })();
+  </script>
+
+</body>
+</html>
