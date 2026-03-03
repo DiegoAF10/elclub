@@ -449,34 +449,22 @@
         var vx, vy, vw, vh;
 
         if (window.innerWidth < 768) {
-          // MOBILE: hard zoom to Europe. Show just the jersey countries.
+          // MOBILE: tight zoom to jersey countries
           var pad = Math.max(bw, bh) * 0.15;
           vw = bw + pad * 2;
-          vh = vw / containerAR; // match container AR exactly
+          vh = vw / containerAR; // match container AR → no dead space
           vx = cx - vw / 2;
           vy = cy - vh / 2;
-        } else {
-          // DESKTOP: generous context showing continents around Europe
-          var pad = Math.max(bw, bh) * 2;
-          vw = bw + pad * 2;
-          vh = bh + pad * 2;
-          // Fit to container AR
-          if (containerAR > vw / vh) {
-            vw = vh * containerAR;
-          } else {
-            vh = vw / containerAR;
-          }
-          vx = cx - vw / 2;
-          vy = cy - vh / 2;
+
+          // Clamp within SVG bounds
+          if (vx < 0) vx = 0;
+          if (vy < 0) vy = 0;
+          if (vx + vw > 960) vx = 960 - vw;
+          if (vy + vh > 500) vy = 500 - vh;
+
+          svg.setAttribute('viewBox', vx + ' ' + vy + ' ' + vw + ' ' + vh);
         }
-
-        // Clamp to SVG bounds
-        if (vx < 0) vx = 0;
-        if (vy < 0) vy = 0;
-        if (vx + vw > 960) { vx = Math.max(0, 960 - vw); }
-        if (vy + vh > 500) { vy = Math.max(0, 500 - vh); }
-
-        svg.setAttribute('viewBox', vx + ' ' + vy + ' ' + vw + ' ' + vh);
+        // Desktop: keep original viewBox (0 0 960 500) — full world map
       }
 
       function buildCountryMap() {
