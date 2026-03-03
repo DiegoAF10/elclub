@@ -50,7 +50,7 @@ CREATE INDEX IF NOT EXISTS idx_jerseys_tier ON jerseys(tier);
 CREATE TABLE IF NOT EXISTS photos (
     photo_id    INTEGER PRIMARY KEY AUTOINCREMENT,
     jersey_id   TEXT NOT NULL REFERENCES jerseys(jersey_id) ON DELETE CASCADE,
-    photo_type  TEXT NOT NULL CHECK(photo_type IN ('front', 'back', 'detail')),
+    photo_type  TEXT NOT NULL,
     filename    TEXT NOT NULL,
     uploaded_at TEXT DEFAULT (datetime('now', 'localtime'))
 );
@@ -92,10 +92,7 @@ SELECT
     j.season,
     j.variant,
     j.size,
-    COUNT(p.photo_id) as photo_count,
-    SUM(CASE WHEN p.photo_type = 'front' THEN 1 ELSE 0 END) as has_front,
-    SUM(CASE WHEN p.photo_type = 'back' THEN 1 ELSE 0 END) as has_back,
-    SUM(CASE WHEN p.photo_type = 'detail' THEN 1 ELSE 0 END) as has_detail
+    COUNT(p.photo_id) as photo_count
 FROM jerseys j
 JOIN teams t ON j.team_id = t.team_id
 LEFT JOIN photos p ON j.jersey_id = p.jersey_id

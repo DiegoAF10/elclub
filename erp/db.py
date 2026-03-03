@@ -66,6 +66,57 @@ def insert_photo(conn, jersey_id, photo_type, filename) -> int:
     return cur.lastrowid
 
 
+def next_photo_seq(conn, jersey_id):
+    """Get next photo sequence number for a jersey."""
+    row = conn.execute(
+        "SELECT MAX(CAST(photo_type AS INTEGER)) FROM photos WHERE jersey_id = ?",
+        (jersey_id,),
+    ).fetchone()
+    return (row[0] or 0) + 1
+
+
+def migrate_db(conn):
+    """Run one-time migrations for schema changes."""
+    # Drop view first (depends on photos table)
+    conn.execute("DROP VIEW IF EXISTS v_photo_coverage")
+    conn.commit()
+
+    # Remove CHECK constraint on photos.photo_type (was limited to front/back/detail)
+    table_info = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='photos'"
+    ).fetchone()
+    if table_info and "'front'" in table_info["sql"]:
+        conn.executescript("""
+            CREATE TABLE photos_new (
+                photo_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+                jersey_id   TEXT NOT NULL REFERENCES jerseys(jersey_id) ON DELETE CASCADE,
+                photo_type  TEXT NOT NULL,
+                filename    TEXT NOT NULL,
+                uploaded_at TEXT DEFAULT (datetime('now', 'localtime'))
+            );
+            INSERT INTO photos_new SELECT * FROM photos;
+            DROP TABLE photos;
+            ALTER TABLE photos_new RENAME TO photos;
+            CREATE INDEX IF NOT EXISTS idx_photos_jersey ON photos(jersey_id);
+        """)
+
+    # Recreate view with updated schema
+    conn.executescript("""
+        CREATE VIEW IF NOT EXISTS v_photo_coverage AS
+        SELECT
+            j.jersey_id,
+            t.short_name as team,
+            j.season,
+            j.variant,
+            j.size,
+            COUNT(p.photo_id) as photo_count
+        FROM jerseys j
+        JOIN teams t ON j.team_id = t.team_id
+        LEFT JOIN photos p ON j.jersey_id = p.jersey_id
+        GROUP BY j.jersey_id;
+    """)
+
+
 def get_teams(conn):
     """Get all teams ordered by league then name."""
     return conn.execute(

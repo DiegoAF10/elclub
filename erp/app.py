@@ -10,8 +10,8 @@ import os
 from datetime import datetime, date
 from collections import defaultdict
 from db import (
-    get_conn, init_db, count_jerseys, count_teams,
-    insert_jersey, insert_photo, next_jersey_id,
+    get_conn, init_db, migrate_db, count_jerseys, count_teams,
+    insert_jersey, insert_photo, next_jersey_id, next_photo_seq,
     PHOTOS_DIR, BASE_DIR,
 )
 
@@ -20,6 +20,9 @@ from db import (
 # ═══════════════════════════════════════
 
 init_db()
+_mig_conn = get_conn()
+migrate_db(_mig_conn)
+_mig_conn.close()
 
 # Seed teams if empty
 _conn_check = get_conn()
@@ -117,7 +120,10 @@ VARIANT_REVERSE = {v: k for k, v in VARIANT_MAP.items()}
 
 SEASONS = [
     "2025/26", "2024/25", "2023/24", "2022/23", "2021/22",
-    "2020/21", "2019/20", "Retro", "Clásica",
+    "2020/21", "2019/20", "2018/19", "2017/18", "2016/17",
+    "2015/16", "2014/15", "2013/14", "2012/13", "2011/12",
+    "2010/11", "2009/10", "2008/09", "2007/08", "2006/07",
+    "2005/06", "Retro (pre-2005)",
 ]
 
 SIZES = ["S", "M", "L", "XL"]
@@ -134,12 +140,12 @@ PLOTLY_LAYOUT = dict(
 ICE_BLUE = "#4DA8FF"
 
 
-def save_photo_file(jersey_id, photo_file, photo_type):
-    """Save an uploaded photo to disk and return the relative filename."""
+def save_photo_file(jersey_id, photo_file, seq_num):
+    """Save an uploaded photo to disk as SKU-NN and return the relative filename."""
     jersey_dir = os.path.join(PHOTOS_DIR, jersey_id)
     os.makedirs(jersey_dir, exist_ok=True)
     ext = photo_file.name.rsplit(".", 1)[-1].lower()
-    filename = f"{photo_type}.{ext}"
+    filename = f"{jersey_id}-{seq_num:02d}.{ext}"
     filepath = os.path.join(jersey_dir, filename)
     with open(filepath, "wb") as f:
         f.write(photo_file.getbuffer())
@@ -253,13 +259,13 @@ def page_dashboard():
         # Breakdown
         full_coverage = conn.execute(
             """SELECT COUNT(*) FROM (
-                SELECT j.jersey_id, COUNT(DISTINCT p.photo_type) as types
+                SELECT j.jersey_id, COUNT(p.photo_id) as cnt
                 FROM jerseys j JOIN photos p ON j.jersey_id = p.jersey_id
                 WHERE j.status = 'available'
-                GROUP BY j.jersey_id HAVING types >= 2
+                GROUP BY j.jersey_id HAVING cnt >= 2
             )"""
         ).fetchone()[0]
-        st.caption(f"📸 {full_coverage} con 2+ fotos (frente + atrás)")
+        st.caption(f"📸 {full_coverage} con 2+ fotos")
 
     # Sync button
     st.markdown("---")
@@ -305,7 +311,7 @@ def _sync_to_website(conn):
         # Photo
         first_id = items[0]["jersey_id"]
         photo = conn.execute(
-            "SELECT filename FROM photos WHERE jersey_id = ? AND photo_type = 'front' LIMIT 1",
+            "SELECT filename FROM photos WHERE jersey_id = ? ORDER BY photo_type LIMIT 1",
             (first_id,),
         ).fetchone()
         image = f"/erp/photos/{photo['filename']}" if photo else "/assets/img/products/placeholder.svg"
@@ -370,6 +376,10 @@ def page_register():
     st.title("📝 Registrar Camiseta")
 
     conn = get_conn()
+
+    # Show next correlative ID
+    next_id = next_jersey_id(conn)
+    st.info(f"🏷️ **Próximo correlativo:** {next_id}")
 
     # Load teams for dropdown
     teams_raw = conn.execute(
@@ -440,14 +450,15 @@ def page_register():
             notes = st.text_area("Notas (opcional)", height=68)
 
         # Photos
-        st.markdown("##### 📸 Fotos (opcional — podés agregarlas después)")
-        pc1, pc2, pc3 = st.columns(3)
-        with pc1:
-            photo_front = st.file_uploader("Frente", type=["jpg", "jpeg", "png"], key="pf")
-        with pc2:
-            photo_back = st.file_uploader("Atrás", type=["jpg", "jpeg", "png"], key="pb")
-        with pc3:
-            photo_detail = st.file_uploader("Detalle", type=["jpg", "jpeg", "png"], key="pd")
+        st.markdown("##### 📸 Fotos (opcional — máximo 7)")
+        photos_uploaded = st.file_uploader(
+            "Subí las fotos de la camiseta",
+            type=["jpg", "jpeg", "png"],
+            accept_multiple_files=True,
+            key="photos",
+        )
+        if photos_uploaded and len(photos_uploaded) > 7:
+            st.warning("⚠️ Máximo 7 fotos. Solo se guardarán las primeras 7.")
 
         submitted = st.form_submit_button(
             "💾 Guardar y Siguiente",
@@ -476,15 +487,12 @@ def page_register():
                 notes=notes.strip() if notes else None,
             )
 
-            # Save photos
-            for pfile, ptype in [
-                (photo_front, "front"),
-                (photo_back, "back"),
-                (photo_detail, "detail"),
-            ]:
-                if pfile is not None:
-                    rel_path = save_photo_file(jersey_id, pfile, ptype)
-                    insert_photo(conn, jersey_id, ptype, rel_path)
+            # Save photos (sequential: 01, 02, 03...)
+            if photos_uploaded:
+                for idx, pfile in enumerate(photos_uploaded[:7]):
+                    seq = idx + 1
+                    rel_path = save_photo_file(jersey_id, pfile, seq)
+                    insert_photo(conn, jersey_id, f"{seq:02d}", rel_path)
 
             st.session_state.reg_count += 1
             display = team.get("short_name") or team["name"]
@@ -675,11 +683,12 @@ def page_inventory():
 
         with dc2:
             if photos:
-                pcols = st.columns(min(len(photos), 3))
+                cols_count = min(len(photos), 4)
+                pcols = st.columns(cols_count)
                 for i, photo in enumerate(photos):
                     fpath = os.path.join(PHOTOS_DIR, photo["filename"])
                     if os.path.exists(fpath):
-                        pcols[i % 3].image(fpath, caption=photo["photo_type"].capitalize())
+                        pcols[i % cols_count].image(fpath, caption=f"Foto {photo['photo_type']}")
             else:
                 st.info("📸 Sin fotos. Usá **Agregar Fotos** para subir.")
 
@@ -743,51 +752,63 @@ def page_photos():
         (jersey_id,),
     ).fetchall()
 
+    total_photos = len(existing)
+    remaining = 7 - total_photos
+
     if existing:
-        st.markdown("**Fotos actuales:**")
-        pcols = st.columns(3)
-        type_to_col = {"front": 0, "back": 1, "detail": 2}
-        for photo in existing:
+        st.markdown(f"**Fotos actuales ({total_photos}/7):**")
+        cols_count = min(total_photos, 4)
+        pcols = st.columns(cols_count)
+        for i, photo in enumerate(existing):
             fpath = os.path.join(PHOTOS_DIR, photo["filename"])
-            ci = type_to_col.get(photo["photo_type"], 0)
+            col = pcols[i % cols_count]
             if os.path.exists(fpath):
-                pcols[ci].image(fpath, caption=photo["photo_type"].capitalize())
+                col.image(fpath, caption=f"{jersey_id}-{photo['photo_type']}")
+                if col.button("🗑️", key=f"del_photo_{photo['photo_id']}"):
+                    # Delete from disk and DB
+                    if os.path.exists(fpath):
+                        os.remove(fpath)
+                    conn.execute(
+                        "DELETE FROM photos WHERE photo_id = ?",
+                        (photo["photo_id"],),
+                    )
+                    conn.commit()
+                    st.rerun()
             else:
-                pcols[ci].warning(f"{photo['photo_type']}: archivo no encontrado")
+                col.warning(f"{photo['filename']}: no encontrado")
     else:
         st.caption("Sin fotos todavía.")
 
     # Upload form
-    st.markdown("---")
-    st.markdown("**Subir fotos nuevas:**")
+    if remaining > 0:
+        st.markdown("---")
+        st.markdown(f"**Subir fotos nuevas ({remaining} disponibles):**")
 
-    with st.form(f"photo_upload_{jersey_id}", clear_on_submit=True):
-        uc1, uc2, uc3 = st.columns(3)
-        with uc1:
-            front = st.file_uploader("📷 Frente", type=["jpg", "jpeg", "png"], key=f"f_{jersey_id}")
-        with uc2:
-            back = st.file_uploader("📷 Atrás", type=["jpg", "jpeg", "png"], key=f"b_{jersey_id}")
-        with uc3:
-            detail = st.file_uploader("📷 Detalle", type=["jpg", "jpeg", "png"], key=f"d_{jersey_id}")
+        with st.form(f"photo_upload_{jersey_id}", clear_on_submit=True):
+            new_photos = st.file_uploader(
+                "Seleccioná las fotos",
+                type=["jpg", "jpeg", "png"],
+                accept_multiple_files=True,
+                key=f"up_{jersey_id}",
+            )
+            if new_photos and len(new_photos) > remaining:
+                st.warning(f"⚠️ Solo hay espacio para {remaining} fotos más.")
 
-        if st.form_submit_button("📸 Subir Fotos", type="primary", use_container_width=True):
-            saved = 0
-            for pfile, ptype in [(front, "front"), (back, "back"), (detail, "detail")]:
-                if pfile is not None:
-                    rel_path = save_photo_file(jersey_id, pfile, ptype)
-                    # Replace existing photo of same type
-                    conn.execute(
-                        "DELETE FROM photos WHERE jersey_id = ? AND photo_type = ?",
-                        (jersey_id, ptype),
-                    )
-                    insert_photo(conn, jersey_id, ptype, rel_path)
-                    saved += 1
-
-            if saved > 0:
-                st.success(f"✅ {saved} foto(s) guardada(s) para {jersey_id}")
-                st.rerun()
-            else:
-                st.warning("No seleccionaste ninguna foto.")
+            if st.form_submit_button("📸 Subir Fotos", type="primary", use_container_width=True):
+                if new_photos:
+                    start_seq = next_photo_seq(conn, jersey_id)
+                    saved = 0
+                    for idx, pfile in enumerate(new_photos[:remaining]):
+                        seq = start_seq + idx
+                        rel_path = save_photo_file(jersey_id, pfile, seq)
+                        insert_photo(conn, jersey_id, f"{seq:02d}", rel_path)
+                        saved += 1
+                    st.success(f"✅ {saved} foto(s) guardada(s) para {jersey_id}")
+                    st.rerun()
+                else:
+                    st.warning("No seleccionaste ninguna foto.")
+    else:
+        st.info("📸 Esta camiseta ya tiene 7 fotos (máximo).")
 
     conn.close()
 
