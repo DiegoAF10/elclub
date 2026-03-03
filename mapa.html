@@ -420,51 +420,37 @@
           });
         });
 
-      // ── Auto-zoom: fit viewBox to countries with jerseys ──
+      // ── Auto-zoom: on mobile, zoom to Europe ──
       function autoZoomToJerseys() {
+        if (window.innerWidth >= 768) return; // desktop: full world map
+
         var svg = document.querySelector('.map-container svg');
         if (!svg) return;
 
-        var paths = svg.querySelectorAll('.map-countries path.has-jerseys');
-        if (paths.length === 0) return;
+        // Hard-coded Europe region in SVG coords.
+        // getBBox() is unreliable because France includes French Guiana,
+        // UK includes overseas territories, etc.
+        // These coords cover UK → Italy, Portugal → Germany with padding.
+        var euroX = 420, euroY = 115, euroW = 145, euroH = 100;
+        var cx = euroX + euroW / 2, cy = euroY + euroH / 2;
 
-        // Compute bounding box of all countries with jerseys
-        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        for (var i = 0; i < paths.length; i++) {
-          var bbox = paths[i].getBBox();
-          if (bbox.x < minX) minX = bbox.x;
-          if (bbox.y < minY) minY = bbox.y;
-          if (bbox.x + bbox.width > maxX) maxX = bbox.x + bbox.width;
-          if (bbox.y + bbox.height > maxY) maxY = bbox.y + bbox.height;
-        }
-
-        var bw = maxX - minX, bh = maxY - minY;
-        var cx = minX + bw / 2, cy = minY + bh / 2;
-
-        // Get container aspect ratio
         var containerW = svg.clientWidth || window.innerWidth;
         var containerH = svg.clientHeight || window.innerHeight;
         var containerAR = containerW / containerH;
 
-        var vx, vy, vw, vh;
+        // Width = Europe + generous padding. Height = match container AR.
+        var vw = euroW + 80;
+        var vh = vw / containerAR;
+        var vx = cx - vw / 2;
+        var vy = cy - vh / 2;
 
-        if (window.innerWidth < 768) {
-          // MOBILE: tight zoom to jersey countries
-          var pad = Math.max(bw, bh) * 0.15;
-          vw = bw + pad * 2;
-          vh = vw / containerAR; // match container AR → no dead space
-          vx = cx - vw / 2;
-          vy = cy - vh / 2;
+        // Clamp within SVG bounds (0 0 960 500)
+        if (vy < 0) vy = 0;
+        if (vx < 0) vx = 0;
+        if (vy + vh > 500) { vy = 500 - vh; if (vy < 0) vy = 0; }
+        if (vx + vw > 960) { vx = 960 - vw; if (vx < 0) vx = 0; }
 
-          // Clamp within SVG bounds
-          if (vx < 0) vx = 0;
-          if (vy < 0) vy = 0;
-          if (vx + vw > 960) vx = 960 - vw;
-          if (vy + vh > 500) vy = 500 - vh;
-
-          svg.setAttribute('viewBox', vx + ' ' + vy + ' ' + vw + ' ' + vh);
-        }
-        // Desktop: keep original viewBox (0 0 960 500) — full world map
+        svg.setAttribute('viewBox', vx + ' ' + vy + ' ' + vw + ' ' + vh);
       }
 
       function buildCountryMap() {
