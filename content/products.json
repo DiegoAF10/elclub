@@ -44,7 +44,7 @@
     "id": "JRS-BARCELONA-200506-H",
     "type": "jersey",
     "name": "Barcelona Local 2005/06 — Ronaldinho",
-    "description": "Camiseta del FC Barcelona temporada 2005/06. Version local. Con nombre y numero de Ronaldinho (#10). Final UCL 2006.",
+    "description": "La magia tiene nombre y numero: Ronaldinho #10. Temporada 2005/06 — el ano en que Ronaldinho hizo que el Bernabeu entero se pusiera de pie a aplaudirlo. Un rival, en la casa del enemigo, recibiendo ovacion de pie. Eso no habia pasado nunca y no ha vuelto a pasar. Esa misma temporada, Barcelona gano la Champions League en Paris contra el Arsenal. Ronaldinho no fue solo el mejor jugador del mundo — fue el que mas disfrutaba jugando. Se nota en cada jugada.",
     "price": 200,
     "image": "/assets/img/products/JRS-004-JRS-004-01.png",
     "images": [
@@ -60,7 +60,6 @@
     "player_name": "Ronaldinho",
     "player_number": 10,
     "patches": null,
-    "tier": "A",
     "sizes": [
       "L"
     ],
@@ -75,7 +74,7 @@
     "id": "JRS-PSG-202324-H",
     "type": "jersey",
     "name": "PSG Local 2023/24 — Mbappé",
-    "description": "Camiseta del Paris Saint-Germain temporada 2023/24. Version local. Con nombre y numero de Mbappé (#7). Parches de Ligue One Uber Eats.",
+    "description": "La ultima temporada de Kylian Mbappe en Paris. El #7 se despidio del PSG con 44 goles en 2023/24 antes de cumplir su sueno de vestir de blanco en el Real Madrid. Con los parches oficiales de la Ligue 1, esta camiseta representa el cierre de una era en la que Mbappe se convirtio en el maximo goleador historico del club con 256 goles. La velocidad, los sombreros, las chilenas — todo empezo con esta camiseta.",
     "price": 200,
     "image": "/assets/img/products/JRS-003-JRS-003-01.png",
     "images": [
@@ -91,7 +90,6 @@
     "player_name": "Mbappé",
     "player_number": 7,
     "patches": "Ligue One Uber Eats",
-    "tier": "A",
     "sizes": [
       "S"
     ],
@@ -106,7 +104,7 @@
     "id": "JRS-MANCITY-202324-H",
     "type": "jersey",
     "name": "Man City Local 2023/24 — J. Alvarez",
-    "description": "Camiseta del Manchester City temporada 2023/24. Version local. Con nombre y numero de J. Alvarez (#19). Parches de Premier League.",
+    "description": "Julian Alvarez llego al Manchester City como campeon del mundo con Argentina y se convirtio en pieza clave del equipo que domino el futbol ingles. El #19 aporto goles decisivos en la temporada 2023/24, la cuarta Premier League consecutiva del City. Con los parches oficiales de la Premier League, esta camiseta captura el momento antes de que Alvarez partiera al Atletico de Madrid. Un pedazo de la dinastia mas dominante en la historia de la liga inglesa.",
     "price": 200,
     "image": "/assets/img/products/JRS-006-JRS-006-01.png",
     "images": [
@@ -122,7 +120,6 @@
     "player_name": "J. Alvarez",
     "player_number": 19,
     "patches": "Premier League",
-    "tier": "C",
     "sizes": [
       "M"
     ],
@@ -137,7 +134,7 @@
     "id": "JRS-NEWCASTLE-202324-H",
     "type": "jersey",
     "name": "Newcastle Local 2023/24",
-    "description": "Camiseta del Newcastle United temporada 2023/24. Version local. Parches de Champions League.",
+    "description": "El regreso de Newcastle a la elite. Despues de 20 anos fuera de la Champions League, los Magpies volvieron en 2023/24 con la pasion de St. James Park empujandolos. Las famosas rayas blanco y negro son una de las camisetas mas iconicas del futbol ingles — un diseno que no ha cambiado en mas de un siglo. Con parches de Champions League, esta camiseta representa el inicio de una nueva era para uno de los clubes mas apasionados de Inglaterra.",
     "price": 200,
     "image": "/assets/img/products/JRS-005-JRS-005-01.png",
     "images": [
@@ -153,7 +150,6 @@
     "player_name": null,
     "player_number": null,
     "patches": "Champions League",
-    "tier": "C",
     "sizes": [
       "S"
     ],
@@ -168,7 +164,7 @@
     "id": "JRS-FRANCIA-200506-A",
     "type": "jersey",
     "name": "Francia Visita 2005/06 — Zidane",
-    "description": "Camiseta del Selección de Francia temporada 2005/06. Version visita. Con nombre y numero de Zidane (#10). Final Mundial 2006 Alemania.",
+    "description": "El ultimo baile de Zinedine Zidane. Esta camiseta visita de Francia es de la temporada del Mundial 2006 en Alemania, donde Zidane salio del retiro para llevar a Francia a la final. El #10 marco uno de los penales mas frios de la historia en esa final contra Italia — un panenka con el mundo mirando. Minutos despues, el cabezazo a Materazzi. Zidane se fue del futbol caminando junto a la Copa del Mundo sin mirarla. La camiseta de la despedida mas dramatica que el futbol ha visto.",
     "price": 200,
     "image": "/assets/img/products/JRS-002-JRS-002-01.png",
     "images": [
@@ -184,7 +180,6 @@
     "player_name": "Zidane",
     "player_number": 10,
     "patches": null,
-    "tier": "A",
     "sizes": [
       "XL"
     ],
@@ -199,7 +194,7 @@
     "id": "JRS-INTER-201011-H",
     "type": "jersey",
     "name": "Inter Local 2010/11 — J. Zanetti",
-    "description": "Camiseta del Inter de Milán temporada 2010/11. Version local. Con nombre y numero de J. Zanetti (#4). Parches de Champions League. Final UCL 2011 Madrid.",
+    "description": "La camiseta del capitan eterno. Javier Zanetti llevo el #4 del Inter durante 19 temporadas — el extranjero con mas partidos en la historia de la Serie A. Esta es la camiseta de la temporada siguiente al triplete historico de Mourinho, cuando Inter gano Serie A, Coppa Italia y Champions League en 2010. Zanetti levanto la orejona en el Bernabeu ese mayo. Con parches de Champions League, esta pieza representa una de las ultimas grandes dinastias del futbol italiano.",
     "price": 200,
     "image": "/assets/img/products/JRS-001-JRS-001-01.png",
     "images": [
@@ -216,7 +211,6 @@
     "player_name": "J. Zanetti",
     "player_number": 4,
     "patches": "Champions League",
-    "tier": "A",
     "sizes": [
       "L"
     ],
@@ -231,7 +225,7 @@
     "id": "JRS-NAPOLI-202324-H",
     "type": "jersey",
     "name": "Napoli Local 2023/24",
-    "description": "Camiseta del SSC Napoli temporada 2023/24. Version local. Parches de Champions League.",
+    "description": "La temporada siguiente al Scudetto que cambio todo. En 2022/23, Napoli gano la Serie A por primera vez desde Maradona en 1990 — 33 anos de espera. Toda la ciudad exploto. La temporada 2023/24 fue la defensa de ese titulo, con Napoli entrando a la Champions League como campeon de Italia. Con parches de Champions, esta camiseta azul celeste lleva el peso de la historia: Maradona, el Vesubio, y una ciudad que vive el futbol como religion.",
     "price": 200,
     "image": "/assets/img/products/JRS-007-JRS-007-01.png",
     "images": [
@@ -247,7 +241,6 @@
     "player_name": null,
     "player_number": null,
     "patches": "Champions League",
-    "tier": "A",
     "sizes": [
       "L"
     ],
