@@ -174,6 +174,98 @@
       50% { box-shadow: 0 0 18px rgba(77, 168, 255, 0.8), 0 0 36px rgba(77, 168, 255, 0.4); }
     }
 
+    /* ── Fullscreen Overlay ─────────────────── */
+    .overlay-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0);
+      backdrop-filter: blur(0px);
+      -webkit-backdrop-filter: blur(0px);
+      z-index: 100;
+      pointer-events: none;
+      transition: background 0.4s ease, backdrop-filter 0.4s ease, -webkit-backdrop-filter 0.4s ease;
+    }
+
+    .overlay-backdrop.active {
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      pointer-events: auto;
+    }
+
+    .overlay-panel {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      max-height: 85vh;
+      background: #111;
+      border-top: 1px solid rgba(77, 168, 255, 0.3);
+      border-radius: 20px 20px 0 0;
+      z-index: 101;
+      transform: translateY(100%);
+      transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+
+    .overlay-panel.active {
+      transform: translateY(0);
+    }
+
+    .overlay-handle {
+      width: 40px;
+      height: 4px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 2px;
+      margin: 12px auto 0;
+    }
+
+    .overlay-header {
+      position: sticky;
+      top: 0;
+      background: linear-gradient(180deg, #111 80%, transparent);
+      padding: 20px 24px 16px;
+      z-index: 2;
+    }
+
+    .overlay-close {
+      position: absolute;
+      top: 16px;
+      right: 20px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .overlay-close:hover {
+      background: rgba(255,255,255,0.15);
+      border-color: rgba(77, 168, 255, 0.4);
+    }
+
+    .overlay-grid {
+      padding: 0 24px 40px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    @media (min-width: 640px) {
+      .overlay-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    @media (min-width: 768px) {
+      .overlay-grid { grid-template-columns: repeat(4, 1fr); max-width: 900px; margin: 0 auto; }
+    }
+
     /* ── Player Card ─────────────────────────── */
     .player-card {
       background: #1C1C1C;
@@ -200,29 +292,24 @@
     }
 
     /* ── Card animations ─────────────────────── */
-    @keyframes cardFadeInUp {
-      from {
+    @keyframes cardShootIn {
+      0% {
         opacity: 0;
-        transform: translateY(20px);
+        transform: translateY(60px) scale(0.85);
       }
-      to {
+      60% {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(-8px) scale(1.02);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
       }
     }
 
-    .card-enter {
-      animation: cardFadeInUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    .card-shoot {
+      animation: cardShootIn 0.6s cubic-bezier(0.22, 1.2, 0.36, 1) forwards;
       opacity: 0;
-    }
-
-    @keyframes cardFadeOut {
-      from { opacity: 1; transform: translateY(0); }
-      to { opacity: 0; transform: translateY(-10px); }
-    }
-
-    .card-exit {
-      animation: cardFadeOut 0.25s ease-out forwards;
     }
 
     /* ── Scroll indicator ────────────────────── */
@@ -351,30 +438,29 @@
         </p>
       </div>
 
-    <!-- ── Player Cards Section (below pitch) ──── -->
-    <div class="w-full mt-10">
-      <!-- Position title (hidden until selection) -->
-      <div id="position-header" class="hidden mb-6 text-center">
-        <h2 id="position-title" class="text-2xl font-bold uppercase tracking-wider" style="font-family:'Oswald',system-ui,sans-serif;"></h2>
-        <p id="position-count" class="text-smoke text-sm mt-1"></p>
-      </div>
-
-      <!-- Player cards grid -->
-      <div id="player-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
-        <!-- Populated by JS -->
-      </div>
-
-      <!-- Empty state -->
-      <div id="empty-position" class="hidden text-center py-12">
-        <svg class="w-16 h-16 mx-auto text-chalk mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0"/>
-        </svg>
-        <p class="text-smoke font-semibold mb-2">No hay jerseys en esta posición</p>
-        <p class="text-ash text-sm">Pronto agregaremos más piezas</p>
-      </div>
-    </div>
-
   </main>
+
+  <!-- ── Fullscreen Overlay ──────────────────────── -->
+  <div class="overlay-backdrop" id="overlay-backdrop" onclick="closeOverlay()"></div>
+  <div class="overlay-panel" id="overlay-panel">
+    <div class="overlay-handle"></div>
+    <div class="overlay-header">
+      <h2 id="overlay-title" class="text-2xl font-bold uppercase tracking-wider" style="font-family:'Oswald',system-ui,sans-serif;"></h2>
+      <p id="overlay-count" class="text-smoke text-sm mt-1"></p>
+      <button class="overlay-close" onclick="closeOverlay()" aria-label="Cerrar">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="overlay-grid" id="overlay-grid"></div>
+    <!-- Empty state -->
+    <div id="overlay-empty" class="hidden text-center py-12 px-6">
+      <svg class="w-16 h-16 mx-auto text-chalk mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0"/>
+      </svg>
+      <p class="text-smoke font-semibold mb-2">No hay jerseys en esta posición</p>
+      <p class="text-ash text-sm">Pronto agregaremos más piezas</p>
+    </div>
+  </div>
 
   <!-- ── Footer ──────────────────────────────────── -->
   <footer class="bg-carbon text-white py-12 mt-16">
@@ -506,117 +592,86 @@
           }
         }
 
-        // Filter and render
+        // Filter and open overlay
         var filtered = allProducts.filter(function(p) {
           return p.type === 'jersey' && p.position === pos;
         });
 
-        renderPlayerCards(filtered, pos);
+        openOverlay(filtered, pos);
 
         // Hide hint
         var hint = document.getElementById('pitch-hint');
         if (hint) hint.style.opacity = '0';
-
-        // Scroll to cards on mobile
-        if (window.innerWidth < 1024) {
-          setTimeout(function() {
-            var header = document.getElementById('position-header');
-            if (header) header.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }, 100);
-        }
       };
 
-      function clearSelection() {
+      // ── Overlay controls ──
+      var overlayBackdrop = document.getElementById('overlay-backdrop');
+      var overlayPanel = document.getElementById('overlay-panel');
+      var overlayTitle = document.getElementById('overlay-title');
+      var overlayCount = document.getElementById('overlay-count');
+      var overlayGrid = document.getElementById('overlay-grid');
+      var overlayEmpty = document.getElementById('overlay-empty');
+
+      function openOverlay(players, pos) {
+        overlayTitle.textContent = POSITION_NAMES[pos] || pos;
+
+        if (players.length === 0) {
+          overlayGrid.innerHTML = '';
+          overlayEmpty.classList.remove('hidden');
+          overlayCount.textContent = '';
+        } else {
+          overlayEmpty.classList.add('hidden');
+          overlayCount.textContent = players.length + ' pieza' + (players.length !== 1 ? 's' : '');
+
+          var html = '';
+          for (var i = 0; i < players.length; i++) {
+            var p = players[i];
+            var imgs = p.images || [p.image];
+            var imgSrc = imgs[imgs.length - 1] || '/assets/img/products/placeholder.svg';
+            var playerDisplay = '';
+            if (p.player_name) {
+              playerDisplay = p.player_name;
+              if (p.player_number) playerDisplay += ' #' + p.player_number;
+            }
+
+            html += '<a href="/producto.html?id=' + p.id + '" class="player-card card-shoot" style="animation-delay:' + (i * 0.08 + 0.15) + 's">' +
+              '<div class="relative overflow-hidden">' +
+                '<img src="' + imgSrc + '" alt="' + p.name + '" loading="lazy">' +
+                (p.stock <= 3 && p.stock > 0 ? '<span class="badge-urgency absolute top-2 left-2 text-xs">Última</span>' : '') +
+              '</div>' +
+              '<div class="p-3">' +
+                '<p class="text-xs text-smoke uppercase tracking-wider font-semibold mb-1">' + (p.team || '') + ' — ' + (p.season || '') + '</p>' +
+                (playerDisplay ? '<p class="font-bold text-sm text-white mb-1">' + playerDisplay + '</p>' : '') +
+                '<span class="text-ice text-base font-bold">Q' + p.price + '</span>' +
+              '</div>' +
+            '</a>';
+          }
+          overlayGrid.innerHTML = html;
+        }
+
+        overlayBackdrop.classList.add('active');
+        overlayPanel.classList.add('active');
+        document.body.style.overflow = 'hidden';
+      }
+
+      window.closeOverlay = function() {
+        overlayBackdrop.classList.remove('active');
+        overlayPanel.classList.remove('active');
+        document.body.style.overflow = '';
+        activeZone = null;
+
         var zones = document.querySelectorAll('.pitch-zone');
         for (var i = 0; i < zones.length; i++) zones[i].classList.remove('active');
-
         var dots = document.querySelectorAll('.pitch-dot');
         for (var j = 0; j < dots.length; j++) dots[j].classList.remove('dot-glow');
 
-        document.getElementById('position-header').classList.add('hidden');
-        document.getElementById('player-grid').innerHTML = '';
-        document.getElementById('empty-position').classList.add('hidden');
-
         var hint = document.getElementById('pitch-hint');
         if (hint) hint.style.opacity = '1';
-      }
+      };
 
-      // ── Render player cards with transition ──
-      var isTransitioning = false;
-
-      function renderPlayerCards(players, pos) {
-        var header = document.getElementById('position-header');
-        var title = document.getElementById('position-title');
-        var count = document.getElementById('position-count');
-        var grid = document.getElementById('player-grid');
-        var empty = document.getElementById('empty-position');
-
-        header.classList.remove('hidden');
-        title.textContent = POSITION_NAMES[pos] || pos;
-
-        if (players.length === 0) {
-          fadeOutCards(grid, function() {
-            grid.innerHTML = '';
-            empty.classList.remove('hidden');
-          });
-          count.textContent = '';
-          return;
-        }
-
-        empty.classList.add('hidden');
-        count.textContent = players.length + ' pieza' + (players.length !== 1 ? 's' : '');
-
-        var html = '';
-        for (var i = 0; i < players.length; i++) {
-          var p = players[i];
-
-          // Use LAST image (portrait/player photo) from images array
-          var imgs = p.images || [p.image];
-          var imgSrc = imgs[imgs.length - 1] || '/assets/img/products/placeholder.svg';
-
-          // Player display name
-          var playerDisplay = '';
-          if (p.player_name) {
-            playerDisplay = p.player_name;
-            if (p.player_number) playerDisplay += ' #' + p.player_number;
-          }
-
-          html += '<a href="/producto.html?id=' + p.id + '" class="player-card card-enter" style="animation-delay:' + (i * 0.1) + 's">' +
-            '<div class="relative overflow-hidden">' +
-              '<img src="' + imgSrc + '" alt="' + p.name + '" loading="lazy">' +
-              (p.stock <= 3 && p.stock > 0 ? '<span class="badge-urgency absolute top-2 left-2 text-xs">Última</span>' : '') +
-            '</div>' +
-            '<div class="p-3">' +
-              '<p class="text-xs text-smoke uppercase tracking-wider font-semibold mb-1">' + (p.team || '') + ' — ' + (p.season || '') + '</p>' +
-              (playerDisplay ? '<p class="font-bold text-sm text-white mb-1">' + playerDisplay + '</p>' : '') +
-              '<span class="text-ice text-base font-bold">Q' + p.price + '</span>' +
-            '</div>' +
-          '</a>';
-        }
-
-        // Fade out existing cards, then fade in new ones
-        if (grid.children.length > 0 && !isTransitioning) {
-          fadeOutCards(grid, function() {
-            grid.innerHTML = html;
-          });
-        } else {
-          grid.innerHTML = html;
-        }
-      }
-
-      function fadeOutCards(grid, callback) {
-        var cards = grid.querySelectorAll('.player-card');
-        if (cards.length === 0) { callback(); return; }
-        isTransitioning = true;
-        for (var i = 0; i < cards.length; i++) {
-          cards[i].classList.add('card-exit');
-          cards[i].classList.remove('card-enter');
-        }
-        setTimeout(function() {
-          isTransitioning = false;
-          callback();
-        }, 250);
-      }
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeOverlay();
+      });
 
       // ── Load products ──
       loadProducts(function(products) {

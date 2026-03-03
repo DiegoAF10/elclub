@@ -36,38 +36,49 @@
 
     /* Background countries */
     .map-bg path {
-      fill: #1C1C1C;
-      stroke: #2A2A2A;
+      fill: #1a1a1a;
+      stroke: #252525;
       stroke-width: 0.5;
       transition: none;
     }
 
-    /* Team countries — no jerseys (grayed out, not clickable) */
+    /* Team countries — no jerseys (slightly lighter than bg) */
     .map-countries path {
-      fill: #1C1C1C;
-      stroke: #2A2A2A;
+      fill: #222;
+      stroke: #333;
       stroke-width: 0.5;
       transition: fill 0.3s ease, stroke 0.3s ease, filter 0.3s ease;
     }
 
-    /* Team countries — has jerseys */
+    /* Team countries — has jerseys (bright, unmistakable) */
     .map-countries path.has-jerseys {
-      fill: #2A3A4A;
-      stroke: rgba(77, 168, 255, 0.3);
+      fill: #1a3a5a;
+      stroke: #4DA8FF;
+      stroke-width: 1.2;
       cursor: pointer;
+      filter: drop-shadow(0 0 6px rgba(77, 168, 255, 0.25));
+      animation: countryPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes countryPulse {
+      0%, 100% { filter: drop-shadow(0 0 6px rgba(77, 168, 255, 0.25)); }
+      50% { filter: drop-shadow(0 0 10px rgba(77, 168, 255, 0.4)); }
     }
 
     .map-countries path.has-jerseys:hover {
-      fill: #3A4A5A;
-      stroke: rgba(77, 168, 255, 0.6);
-      filter: drop-shadow(0 0 8px rgba(77, 168, 255, 0.3));
+      fill: #2a4a6a;
+      stroke: #6BC0FF;
+      stroke-width: 1.5;
+      filter: drop-shadow(0 0 14px rgba(77, 168, 255, 0.5));
+      animation: none;
     }
 
     .map-countries path.has-jerseys.active {
-      fill: rgba(77, 168, 255, 0.2);
+      fill: rgba(77, 168, 255, 0.3);
       stroke: #4DA8FF;
-      stroke-width: 1.5;
-      filter: drop-shadow(0 0 12px rgba(77, 168, 255, 0.4));
+      stroke-width: 2;
+      filter: drop-shadow(0 0 16px rgba(77, 168, 255, 0.6));
+      animation: none;
     }
 
     /* ── Tooltip ─────────────────────────────── */
@@ -92,6 +103,98 @@
 
     .map-tooltip.visible {
       opacity: 1;
+    }
+
+    /* ── Fullscreen Overlay ─────────────────── */
+    .overlay-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0);
+      backdrop-filter: blur(0px);
+      -webkit-backdrop-filter: blur(0px);
+      z-index: 100;
+      pointer-events: none;
+      transition: background 0.4s ease, backdrop-filter 0.4s ease, -webkit-backdrop-filter 0.4s ease;
+    }
+
+    .overlay-backdrop.active {
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      pointer-events: auto;
+    }
+
+    .overlay-panel {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      max-height: 85vh;
+      background: #111;
+      border-top: 1px solid rgba(77, 168, 255, 0.3);
+      border-radius: 20px 20px 0 0;
+      z-index: 101;
+      transform: translateY(100%);
+      transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+
+    .overlay-panel.active {
+      transform: translateY(0);
+    }
+
+    .overlay-handle {
+      width: 40px;
+      height: 4px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 2px;
+      margin: 12px auto 0;
+    }
+
+    .overlay-header {
+      position: sticky;
+      top: 0;
+      background: linear-gradient(180deg, #111 80%, transparent);
+      padding: 20px 24px 16px;
+      z-index: 2;
+    }
+
+    .overlay-close {
+      position: absolute;
+      top: 16px;
+      right: 20px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .overlay-close:hover {
+      background: rgba(255,255,255,0.15);
+      border-color: rgba(77, 168, 255, 0.4);
+    }
+
+    .overlay-grid {
+      padding: 0 24px 40px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    @media (min-width: 640px) {
+      .overlay-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    @media (min-width: 768px) {
+      .overlay-grid { grid-template-columns: repeat(4, 1fr); max-width: 900px; margin: 0 auto; }
     }
 
     /* ── Country Cards ───────────────────────── */
@@ -119,13 +222,14 @@
       background-color: #1C1C1C;
     }
 
-    @keyframes cardFadeInUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
+    @keyframes cardShootIn {
+      0% { opacity: 0; transform: translateY(60px) scale(0.85); }
+      60% { opacity: 1; transform: translateY(-8px) scale(1.02); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
     }
 
-    .card-enter {
-      animation: cardFadeInUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    .card-shoot {
+      animation: cardShootIn 0.6s cubic-bezier(0.22, 1.2, 0.36, 1) forwards;
       opacity: 0;
     }
   </style>
@@ -176,18 +280,21 @@
     <!-- Tooltip -->
     <div class="map-tooltip" id="map-tooltip"></div>
 
-    <!-- Country jerseys section -->
-    <div id="country-section" class="hidden mt-10">
-      <div class="text-center mb-6">
-        <h2 id="country-title" class="text-2xl font-bold uppercase tracking-wider" style="font-family:'Oswald',system-ui,sans-serif;"></h2>
-        <p id="country-count" class="text-smoke text-sm mt-1"></p>
-      </div>
-      <div id="country-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
-        <!-- Populated by JS -->
-      </div>
-    </div>
-
   </main>
+
+  <!-- ── Fullscreen Overlay ──────────────────────── -->
+  <div class="overlay-backdrop" id="overlay-backdrop" onclick="closeOverlay()"></div>
+  <div class="overlay-panel" id="overlay-panel">
+    <div class="overlay-handle"></div>
+    <div class="overlay-header">
+      <h2 id="overlay-title" class="text-2xl font-bold uppercase tracking-wider" style="font-family:'Oswald',system-ui,sans-serif;"></h2>
+      <p id="overlay-count" class="text-smoke text-sm mt-1"></p>
+      <button class="overlay-close" onclick="closeOverlay()" aria-label="Cerrar">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="overlay-grid" id="overlay-grid"></div>
+  </div>
 
   <!-- ── Footer ──────────────────────────────────── -->
   <footer class="bg-carbon text-white py-12 mt-16">
@@ -348,15 +455,14 @@
         }
       }
 
-      function selectCountry(country) {
-        // Toggle if same country
-        if (activeCountry === country) {
-          activeCountry = null;
-          clearSelection();
-          window.history.replaceState(null, '', window.location.pathname);
-          return;
-        }
+      // ── Overlay controls ──
+      var overlayBackdrop = document.getElementById('overlay-backdrop');
+      var overlayPanel = document.getElementById('overlay-panel');
+      var overlayTitle = document.getElementById('overlay-title');
+      var overlayCount = document.getElementById('overlay-count');
+      var overlayGrid = document.getElementById('overlay-grid');
 
+      function selectCountry(country) {
         activeCountry = country;
         window.history.replaceState(null, '', '#' + encodeURIComponent(country.toLowerCase()));
 
@@ -370,52 +476,27 @@
           activePaths[j].classList.add('active');
         }
 
-        // Render jerseys
+        // Render and open overlay
         var jerseys = countryMap[country] || [];
-        renderCountryCards(jerseys, country);
-
-        // Scroll to cards on mobile
-        if (window.innerWidth < 768) {
-          setTimeout(function() {
-            var section = document.getElementById('country-section');
-            if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }, 100);
-        }
+        openOverlay(jerseys, country);
       }
 
-      function clearSelection() {
-        var paths = document.querySelectorAll('.map-countries path.has-jerseys');
-        for (var i = 0; i < paths.length; i++) {
-          paths[i].classList.remove('active');
-        }
-        document.getElementById('country-section').classList.add('hidden');
-      }
-
-      function renderCountryCards(jerseys, country) {
-        var section = document.getElementById('country-section');
-        var title = document.getElementById('country-title');
-        var count = document.getElementById('country-count');
-        var grid = document.getElementById('country-grid');
-
-        section.classList.remove('hidden');
-        title.textContent = country;
-        count.textContent = jerseys.length + ' pieza' + (jerseys.length !== 1 ? 's' : '');
+      function openOverlay(jerseys, country) {
+        overlayTitle.textContent = country;
+        overlayCount.textContent = jerseys.length + ' pieza' + (jerseys.length !== 1 ? 's' : '');
 
         var html = '';
         for (var i = 0; i < jerseys.length; i++) {
           var p = jerseys[i];
-
-          // Use last image (portrait)
           var imgs = p.images || [p.image];
           var imgSrc = imgs[imgs.length - 1] || '/assets/img/products/placeholder.svg';
-
           var playerDisplay = '';
           if (p.player_name) {
             playerDisplay = p.player_name;
             if (p.player_number) playerDisplay += ' #' + p.player_number;
           }
 
-          html += '<a href="/producto.html?id=' + p.id + '" class="country-card card-enter" style="animation-delay:' + (i * 0.1) + 's">' +
+          html += '<a href="/producto.html?id=' + p.id + '" class="country-card card-shoot" style="animation-delay:' + (i * 0.08 + 0.15) + 's">' +
             '<div class="relative overflow-hidden">' +
               '<img src="' + imgSrc + '" alt="' + p.name + '" loading="lazy">' +
               (p.stock <= 3 && p.stock > 0 ? '<span class="badge-urgency absolute top-2 left-2 text-xs">Última</span>' : '') +
@@ -427,9 +508,29 @@
             '</div>' +
           '</a>';
         }
+        overlayGrid.innerHTML = html;
 
-        grid.innerHTML = html;
+        overlayBackdrop.classList.add('active');
+        overlayPanel.classList.add('active');
+        document.body.style.overflow = 'hidden';
       }
+
+      window.closeOverlay = function() {
+        overlayBackdrop.classList.remove('active');
+        overlayPanel.classList.remove('active');
+        document.body.style.overflow = '';
+        activeCountry = null;
+
+        var paths = document.querySelectorAll('.map-countries path.has-jerseys');
+        for (var i = 0; i < paths.length; i++) {
+          paths[i].classList.remove('active');
+        }
+        window.history.replaceState(null, '', window.location.pathname);
+      };
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeOverlay();
+      });
 
       function checkHash() {
         var hash = decodeURIComponent(window.location.hash.replace('#', ''));
