@@ -229,24 +229,27 @@
 
   <div class="section-divider mx-4"></div>
 
-  <!-- ═══ POPULAR TEAMS ═══ -->
-  <section class="px-4 py-8" id="popular-section">
-    <h2 class="font-display text-xl text-center text-white mb-6" style="letter-spacing:0.08em;">
-      LAS MAS PEDIDAS
+  <!-- ═══ FEATURED TEAMS (with photos) ═══ -->
+  <section class="px-4 py-8 max-w-lg mx-auto">
+    <h2 class="font-display text-xl text-center text-white mb-2" style="letter-spacing:0.08em;">
+      ASI SE VEN
     </h2>
-    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3" id="popular-grid">
+    <p class="text-ash text-xs text-center mb-6">Las mas pedidas — local y visita</p>
+
+    <div class="space-y-6" id="featured-grid">
       <!-- Rendered by JS -->
     </div>
   </section>
 
   <div class="section-divider mx-4"></div>
 
-  <!-- ═══ ALL TEAMS BY GROUP ═══ -->
-  <section class="px-4 py-8" id="all-teams-section">
-    <h2 class="font-display text-xl text-center text-white mb-8" style="letter-spacing:0.08em;">
+  <!-- ═══ ALL TEAMS BY GROUP (compact list) ═══ -->
+  <section class="px-4 py-8 max-w-lg mx-auto">
+    <h2 class="font-display text-xl text-center text-white mb-2" style="letter-spacing:0.08em;">
       TODAS LAS SELECCIONES
     </h2>
-    <div id="groups-container">
+    <p class="text-ash text-xs text-center mb-6">48 selecciones disponibles · Consulta por la tuya</p>
+    <div id="groups-compact">
       <!-- Rendered by JS -->
     </div>
   </section>
@@ -416,91 +419,55 @@
       { code: 'pan', name: 'Panama', flag: '\u{1F1F5}\u{1F1E6}', group: 'L' },
     ];
 
-    const POPULAR_CODES = ['arg','bra','mex','usa','esp','ger','fra','eng','por','col','uru','ned'];
+    // Teams that have actual photos
+    const FEATURED_CODES = ['arg','bra','esp','ger','eng','por'];
 
-    // ── IMAGE FALLBACK ──
-    function handleImgError(img) {
-      const div = document.createElement('div');
-      div.className = 'kit-img placeholder rounded';
-      div.innerHTML = '<svg viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:60%;height:60%;opacity:0.15;"><path d="M60 8L95 25V95C95 115 60 152 60 152C60 152 25 115 25 95V25L60 8Z" stroke="#999" stroke-width="2"/><path d="M45 65H75M60 50V80" stroke="#666" stroke-width="2" stroke-linecap="round"/></svg>';
-      img.replaceWith(div);
-    }
+    // ── RENDER FEATURED SECTION (with photos) ──
+    const featuredGrid = document.getElementById('featured-grid');
+    const featuredTeams = TEAMS.filter(t => FEATURED_CODES.includes(t.code));
+    featuredTeams.sort((a, b) => FEATURED_CODES.indexOf(a.code) - FEATURED_CODES.indexOf(b.code));
 
-    // ── RENDER TEAM CARD ──
-    function teamCard(team, showPopular = false) {
-      const homeImg = `assets/img/mundial/${team.code}-home.png`;
-      const awayImg = `assets/img/mundial/${team.code}-away.png`;
-
-      const badges = [];
-      if (showPopular && team.popular) badges.push('<span class="popular-badge">Popular</span>');
-      if (team.tbd) badges.push(`<span class="group-tag" style="color:#4DA8FF;border:1px solid #4DA8FF33;background:transparent;">${team.note || 'TBD'}</span>`);
-
+    featuredGrid.innerHTML = featuredTeams.map(t => {
+      const homeImg = `assets/img/mundial/${t.code}-home.png`;
+      const awayImg = `assets/img/mundial/${t.code}-away.png`;
       return `
-        <div class="team-card p-3 ${team.tbd ? 'opacity-50' : ''}">
+        <div>
           <div class="flex items-center gap-2 mb-3">
-            <span class="text-2xl leading-none">${team.flag}</span>
-            <div class="flex-1 min-w-0">
-              <p class="font-display text-sm text-white truncate" style="letter-spacing:0.05em;">${team.name.toUpperCase()}</p>
-              <div class="flex items-center gap-1.5 mt-0.5">
-                <span class="group-tag">Grupo ${team.group}</span>
-                ${badges.join('')}
-              </div>
-            </div>
+            <span class="text-2xl leading-none">${t.flag}</span>
+            <p class="font-display text-lg text-white" style="letter-spacing:0.05em;">${t.name.toUpperCase()}</p>
+            <span class="group-tag">Grupo ${t.group}</span>
           </div>
-          ${team.tbd ? `
-            <div class="flex gap-2">
-              <div class="flex-1 text-center">
-                <div class="kit-img placeholder rounded" id="ph-${team.code}"></div>
-                <p class="kit-label mt-1">Pendiente</p>
-              </div>
+          <div class="flex gap-3">
+            <div class="flex-1 text-center">
+              <img src="${homeImg}" alt="${t.name} Local" class="kit-img rounded">
+              <p class="kit-label mt-1">Local</p>
             </div>
-          ` : `
-            <div class="flex gap-2">
-              <div class="flex-1 text-center">
-                <img src="${homeImg}" alt="${team.name} Local" class="kit-img rounded"
-                     onerror="handleImgError(this)">
-                <p class="kit-label mt-1">Local</p>
-              </div>
-              <div class="flex-1 text-center">
-                <img src="${awayImg}" alt="${team.name} Visita" class="kit-img rounded"
-                     onerror="handleImgError(this)">
-                <p class="kit-label mt-1">Visita</p>
-              </div>
+            <div class="flex-1 text-center">
+              <img src="${awayImg}" alt="${t.name} Visita" class="kit-img rounded">
+              <p class="kit-label mt-1">Visita</p>
             </div>
-          `}
-        </div>`;
-    }
-
-    // ── RENDER POPULAR SECTION ──
-    const popularGrid = document.getElementById('popular-grid');
-    const popularTeams = TEAMS.filter(t => POPULAR_CODES.includes(t.code));
-    // Sort by POPULAR_CODES order
-    popularTeams.sort((a, b) => POPULAR_CODES.indexOf(a.code) - POPULAR_CODES.indexOf(b.code));
-    popularGrid.innerHTML = popularTeams.map(t => teamCard(t, true)).join('');
-
-    // ── RENDER ALL GROUPS ──
-    const groupsContainer = document.getElementById('groups-container');
-    const groups = [...new Set(TEAMS.map(t => t.group))];
-
-    // Fill TBD placeholders with SVG
-    function fillPlaceholders() {
-      document.querySelectorAll('[id^="ph-"]').forEach(el => {
-        el.innerHTML = '<svg viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:60%;height:60%;opacity:0.15;"><path d="M60 8L95 25V95C95 115 60 152 60 152C60 152 25 115 25 95V25L60 8Z" stroke="#999" stroke-width="2"/><path d="M45 65H75M60 50V80" stroke="#666" stroke-width="2" stroke-linecap="round"/></svg>';
-      });
-    }
-
-    groupsContainer.innerHTML = groups.map(g => {
-      const groupTeams = TEAMS.filter(t => t.group === g);
-      return `
-        <div class="mb-8">
-          <h3 class="font-display text-base text-smoke text-center mb-4" style="letter-spacing:0.1em;">GRUPO ${g}</h3>
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            ${groupTeams.map(t => teamCard(t)).join('')}
           </div>
         </div>`;
     }).join('');
 
-    fillPlaceholders();
+    // ── RENDER COMPACT GROUPS (no photos) ──
+    const groupsCompact = document.getElementById('groups-compact');
+    const groups = [...new Set(TEAMS.map(t => t.group))];
+
+    groupsCompact.innerHTML = groups.map(g => {
+      const groupTeams = TEAMS.filter(t => t.group === g);
+      const teamList = groupTeams.map(t => {
+        if (t.tbd) return `<span style="color:#666;font-style:italic;">${t.note || 'Por definir'}</span>`;
+        return `<span>${t.flag} ${t.name}</span>`;
+      }).join(' · ');
+      return `
+        <div class="mb-4">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="text-ice font-display text-sm" style="letter-spacing:0.08em;">GRUPO ${g}</span>
+          </div>
+          <p class="text-smoke text-sm leading-relaxed">${teamList}</p>
+        </div>`;
+    }).join('');
   </script>
 
 </body>
