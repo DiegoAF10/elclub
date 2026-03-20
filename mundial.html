@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="es-GT">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mundial 2026 — El Club</title>
+
+  <meta name="description" content="Pre-venta de camisetas de selecciones para el Mundial 2026. Todas las selecciones. Parches incluidos. Solo para cercanos.">
+  <meta property="og:title" content="Mundial 2026 — El Club">
+  <meta property="og:description" content="Pre-venta exclusiva de camisetas mundialistas. 48 selecciones. Parches incluidos.">
+  <meta property="og:image" content="https://elclub.club/assets/img/brand/og-image.png">
+
+  <link rel="icon" type="image/png" href="/assets/img/brand/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link rel="stylesheet" href="/assets/css/elclub.css">
+
+  <style>
+    .kit-img {
+      width: 100%;
+      aspect-ratio: 3/4;
+      object-fit: contain;
+      background: #1C1C1C;
+      border: 1px solid #2A2A2A;
+      border-radius: 4px;
+    }
+    .kit-img.placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .team-card {
+      background: #1C1C1C;
+      border: 1px solid #2A2A2A;
+      border-radius: 8px;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+    .team-card:hover {
+      border-color: #4DA8FF;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .group-tag {
+      font-family: 'Oswald', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #999;
+      background: #2A2A2A;
+      padding: 2px 8px;
+      border-radius: 3px;
+    }
+    .popular-badge {
+      background: #4DA8FF;
+      color: #0D0D0D;
+      font-family: 'Oswald', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 3px;
+    }
+    .promo-card {
+      background: linear-gradient(135deg, #1C1C1C 0%, #0D0D0D 100%);
+      border: 2px solid #4DA8FF;
+      border-radius: 12px;
+    }
+    .price-highlight {
+      font-family: 'Oswald', sans-serif;
+      font-weight: 700;
+    }
+    .info-pill {
+      background: #2A2A2A;
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+    .section-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #2A2A2A, transparent);
+    }
+    .kit-label {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #666;
+    }
+    .flag-large {
+      font-size: 2rem;
+      line-height: 1;
+    }
+    .sticky-cta {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      background: linear-gradient(transparent, #0D0D0D 30%);
+      padding: 24px 16px 16px;
+    }
+  </style>
+
+  <!-- GA4 -->
+  <!-- TODO: Replace G-XXXXXXXXXX with actual GA4 measurement ID -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX');
+  </script>
+</head>
+<body class="bg-midnight text-white pb-24">
+
+  <!-- ═══ HERO ═══ -->
+  <section class="pt-8 pb-6 px-4 text-center">
+    <a href="/">
+      <img src="/assets/img/brand/logo.svg" alt="El Club" class="h-10 mx-auto mb-6">
+    </a>
+    <p class="text-smoke text-xs uppercase tracking-widest mb-2" style="font-family:'Space Grotesk',sans-serif;">Pre-venta exclusiva</p>
+    <h1 class="font-display text-4xl md:text-6xl text-white leading-tight mb-2" style="letter-spacing:0.08em;">
+      MUNDIAL<br>2026
+    </h1>
+    <p class="text-smoke text-sm mt-3" style="font-family:'Space Grotesk',sans-serif;">
+      11 jun — 19 jul&ensp;·&ensp;USA · MEX · CAN
+    </p>
+    <p class="text-ash text-xs mt-2" style="font-family:'Space Grotesk',sans-serif;">
+      48 selecciones · Parches incluidos · Todas las tallas
+    </p>
+  </section>
+
+  <div class="section-divider mx-4"></div>
+
+  <!-- ═══ PRICING ═══ -->
+  <section class="px-4 py-8 max-w-lg mx-auto">
+
+    <!-- Main prices -->
+    <div class="text-center mb-6">
+      <p class="text-ash text-xs uppercase tracking-widest mb-4" style="font-family:'Oswald',sans-serif;">Precios</p>
+      <div class="flex justify-center gap-4 mb-2">
+        <div class="flex-1 bg-pitch border border-chalk rounded-lg p-4 text-center">
+          <p class="price-highlight text-3xl text-ice">Q450</p>
+          <p class="text-smoke text-xs mt-1">Con dorsal</p>
+          <p class="text-ash text-[10px] mt-0.5">Nombre + Numero</p>
+        </div>
+        <div class="flex-1 bg-pitch border border-chalk rounded-lg p-4 text-center">
+          <p class="price-highlight text-3xl text-white">Q420</p>
+          <p class="text-smoke text-xs mt-1">Sin dorsal</p>
+          <p class="text-ash text-[10px] mt-0.5">Solo camiseta + parches</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Promo -->
+    <div class="promo-card p-5 text-center mb-6">
+      <p class="text-ice text-xs uppercase tracking-widest mb-1" style="font-family:'Oswald',sans-serif;">Promo grupal</p>
+      <p class="price-highlight text-2xl text-white">COMPRA 4, LA 5TA GRATIS</p>
+      <p class="text-smoke text-sm mt-2">
+        Juntate con tus amigos.<br>
+        <span class="text-ice font-semibold">Q360 efectiva c/u</span> con dorsal ·
+        <span class="text-white font-semibold">Q336 c/u</span> sin dorsal
+      </p>
+    </div>
+
+    <!-- How it works -->
+    <div class="bg-pitch border border-chalk rounded-xl p-5 mb-6">
+      <p class="text-ice text-xs uppercase tracking-widest mb-3 text-center" style="font-family:'Oswald',sans-serif;">Como funciona</p>
+      <div class="space-y-3 text-sm">
+        <div class="flex items-start gap-3">
+          <span class="text-ice font-bold text-lg leading-none mt-0.5">1</span>
+          <div>
+            <p class="text-white font-semibold">Pedis por WhatsApp</p>
+            <p class="text-smoke text-xs">Seleccion, version, talla, dorsal y cantidad.</p>
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="text-ice font-bold text-lg leading-none mt-0.5">2</span>
+          <div>
+            <p class="text-white font-semibold">Hago pedido cada domingo</p>
+            <p class="text-smoke text-xs">Junto todos los pedidos de la semana y los mando a pedir.</p>
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <span class="text-ice font-bold text-lg leading-none mt-0.5">3</span>
+          <div>
+            <p class="text-white font-semibold">Te aviso cuando llegue</p>
+            <p class="text-smoke text-xs">Pago contra entrega. Sin anticipos.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Details -->
+    <div class="grid grid-cols-2 gap-3 text-sm">
+      <div class="info-pill">
+        <p class="text-ash text-[10px] uppercase tracking-wider mb-0.5">Pedidos</p>
+        <p class="text-white font-semibold">Cada domingo</p>
+        <p class="text-ash text-[10px] mt-0.5">Proximo corte: <span id="next-sunday"></span></p>
+      </div>
+      <div class="info-pill">
+        <p class="text-ash text-[10px] uppercase tracking-wider mb-0.5">Entrega</p>
+        <p class="text-white font-semibold">Mediados de mayo</p>
+        <p class="text-ash text-[10px] mt-0.5">Segun fecha de pedido</p>
+      </div>
+      <div class="info-pill">
+        <p class="text-ash text-[10px] uppercase tracking-wider mb-0.5">Pago</p>
+        <p class="text-white font-semibold">Contra entrega</p>
+      </div>
+      <div class="info-pill">
+        <p class="text-ash text-[10px] uppercase tracking-wider mb-0.5">Tallas</p>
+        <p class="text-white font-semibold">S · M · L · XL</p>
+      </div>
+    </div>
+
+    <p class="text-ash text-xs text-center mt-4">
+      Todas las camisetas incluyen parches del torneo.
+      Local y visita disponibles.
+    </p>
+  </section>
+
+  <div class="section-divider mx-4"></div>
+
+  <!-- ═══ ORDER TEMPLATE ═══ -->
+  <section class="px-4 py-6 max-w-lg mx-auto">
+    <p class="text-ash text-xs uppercase tracking-widest mb-3 text-center" style="font-family:'Oswald',sans-serif;">En tu mensaje inclui</p>
+    <div class="bg-pitch border border-chalk rounded-lg p-4 text-sm text-smoke space-y-1.5">
+      <p>· <span class="text-white font-semibold">Seleccion</span> — ej: Argentina, Brasil</p>
+      <p>· <span class="text-white font-semibold">Version</span> — Local o Visita</p>
+      <p>· <span class="text-white font-semibold">Talla</span> — S, M, L, XL</p>
+      <p>· <span class="text-white font-semibold">Dorsal</span> — Nombre + Numero (o sin dorsal)</p>
+      <p>· <span class="text-white font-semibold">Cantidad</span></p>
+    </div>
+  </section>
+
+  <div class="section-divider mx-4"></div>
+
+  <!-- ═══ POPULAR TEAMS ═══ -->
+  <section class="px-4 py-8" id="popular-section">
+    <h2 class="font-display text-xl text-center text-white mb-6" style="letter-spacing:0.08em;">
+      LAS MAS PEDIDAS
+    </h2>
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3" id="popular-grid">
+      <!-- Rendered by JS -->
+    </div>
+  </section>
+
+  <div class="section-divider mx-4"></div>
+
+  <!-- ═══ ALL TEAMS BY GROUP ═══ -->
+  <section class="px-4 py-8" id="all-teams-section">
+    <h2 class="font-display text-xl text-center text-white mb-8" style="letter-spacing:0.08em;">
+      TODAS LAS SELECCIONES
+    </h2>
+    <div id="groups-container">
+      <!-- Rendered by JS -->
+    </div>
+  </section>
+
+  <!-- ═══ STICKY CTA ═══ -->
+  <div class="sticky-cta">
+    <a id="wa-cta"
+       href="#"
+       target="_blank"
+       rel="noopener"
+       class="btn-whatsapp w-full justify-center text-base py-4"
+       style="border-radius:12px;">
+      <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.625.846 5.059 2.284 7.034L.789 23.492a.5.5 0 00.611.611l4.458-1.495A11.952 11.952 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-2.319 0-4.46-.764-6.186-2.054l-.43-.338-2.636.884.884-2.636-.338-.43A9.956 9.956 0 012 12C2 6.486 6.486 2 12 2s10 4.486 10 10-4.486 10-10 10z"/></svg>
+      PEDIR POR WHATSAPP
+    </a>
+  </div>
+
+  <!-- ═══ FOOTER ═══ -->
+  <footer class="px-4 py-8 text-center border-t border-chalk mt-8 mb-20">
+    <img src="/assets/img/brand/logo.svg" alt="El Club" class="h-8 mx-auto mb-3 opacity-50">
+    <p class="text-ash text-xs">Pre-venta Mundial 2026 · Pedidos cada domingo</p>
+    <p class="text-ash text-[10px] mt-1">elclub.club</p>
+    <div class="flex justify-center gap-4 text-ash text-xs mt-3">
+      <a href="/politicas.html#privacidad" class="hover:text-smoke transition-colors">Privacidad</a>
+      <a href="/politicas.html#terminos" class="hover:text-smoke transition-colors">Términos</a>
+      <a href="/politicas.html#devoluciones" class="hover:text-smoke transition-colors">Devoluciones</a>
+    </div>
+  </footer>
+
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- DATA + RENDERING                               -->
+  <!-- ═══════════════════════════════════════════════ -->
+  <script>
+    // ── CONFIG ──
+    // TODO: Replace with Diego's WhatsApp number
+    const WA_NUMBER = '502XXXXXXXX';
+    const WA_MESSAGE = encodeURIComponent(
+      'Hola! Quiero pedir camisetas del Mundial 2026 🏆\n\n' +
+      'Mi pedido:\n' +
+      '- Seleccion: \n' +
+      '- Version: Local / Visita\n' +
+      '- Talla: S / M / L / XL\n' +
+      '- Con dorsal (nombre + numero): Si / No\n' +
+      '- Cantidad: \n'
+    );
+    document.getElementById('wa-cta').href = `https://wa.me/${WA_NUMBER}?text=${WA_MESSAGE}`;
+
+    // ── NEXT SUNDAY CALCULATOR ──
+    function getNextSunday() {
+      const now = new Date();
+      const day = now.getDay();
+      const diff = day === 0 ? 7 : 7 - day;
+      const next = new Date(now);
+      next.setDate(now.getDate() + diff);
+      const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      return `${next.getDate()} ${months[next.getMonth()]}`;
+    }
+    const sundayEl = document.getElementById('next-sunday');
+    if (sundayEl) sundayEl.textContent = getNextSunday();
+
+    // ── TEAM DATA ──
+    // Images: assets/img/mundial/{code}-home.png, {code}-away.png
+    const TEAMS = [
+      // Group A
+      { code: 'mex', name: 'Mexico', flag: '\u{1F1F2}\u{1F1FD}', group: 'A', popular: true },
+      { code: 'kor', name: 'Corea del Sur', flag: '\u{1F1F0}\u{1F1F7}', group: 'A' },
+      { code: 'rsa', name: 'Sudafrica', flag: '\u{1F1FF}\u{1F1E6}', group: 'A' },
+      { code: 'tbd-a', name: 'Por Definir', flag: '\u{1F3C6}', group: 'A', tbd: true, note: 'UEFA Playoff D' },
+
+      // Group B
+      { code: 'can', name: 'Canada', flag: '\u{1F1E8}\u{1F1E6}', group: 'B' },
+      { code: 'sui', name: 'Suiza', flag: '\u{1F1E8}\u{1F1ED}', group: 'B' },
+      { code: 'qat', name: 'Qatar', flag: '\u{1F1F6}\u{1F1E6}', group: 'B' },
+      { code: 'tbd-b', name: 'Por Definir', flag: '\u{1F3C6}', group: 'B', tbd: true, note: 'UEFA Playoff A' },
+
+      // Group C
+      { code: 'bra', name: 'Brasil', flag: '\u{1F1E7}\u{1F1F7}', group: 'C', popular: true },
+      { code: 'mar', name: 'Marruecos', flag: '\u{1F1F2}\u{1F1E6}', group: 'C' },
+      { code: 'hai', name: 'Haiti', flag: '\u{1F1ED}\u{1F1F9}', group: 'C' },
+      { code: 'sco', name: 'Escocia', flag: '\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}', group: 'C' },
+
+      // Group D
+      { code: 'usa', name: 'Estados Unidos', flag: '\u{1F1FA}\u{1F1F8}', group: 'D', popular: true },
+      { code: 'par', name: 'Paraguay', flag: '\u{1F1F5}\u{1F1FE}', group: 'D' },
+      { code: 'aus', name: 'Australia', flag: '\u{1F1E6}\u{1F1FA}', group: 'D' },
+      { code: 'tbd-d', name: 'Por Definir', flag: '\u{1F3C6}', group: 'D', tbd: true, note: 'UEFA Playoff C' },
+
+      // Group E
+      { code: 'ger', name: 'Alemania', flag: '\u{1F1E9}\u{1F1EA}', group: 'E', popular: true },
+      { code: 'cur', name: 'Curazao', flag: '\u{1F1E8}\u{1F1FC}', group: 'E' },
+      { code: 'civ', name: 'Costa de Marfil', flag: '\u{1F1E8}\u{1F1EE}', group: 'E' },
+      { code: 'ecu', name: 'Ecuador', flag: '\u{1F1EA}\u{1F1E8}', group: 'E' },
+
+      // Group F
+      { code: 'ned', name: 'Paises Bajos', flag: '\u{1F1F3}\u{1F1F1}', group: 'F', popular: true },
+      { code: 'jpn', name: 'Japon', flag: '\u{1F1EF}\u{1F1F5}', group: 'F' },
+      { code: 'tun', name: 'Tunez', flag: '\u{1F1F9}\u{1F1F3}', group: 'F' },
+      { code: 'tbd-f', name: 'Por Definir', flag: '\u{1F3C6}', group: 'F', tbd: true, note: 'UEFA Playoff B' },
+
+      // Group G
+      { code: 'bel', name: 'Belgica', flag: '\u{1F1E7}\u{1F1EA}', group: 'G' },
+      { code: 'egy', name: 'Egipto', flag: '\u{1F1EA}\u{1F1EC}', group: 'G' },
+      { code: 'irn', name: 'Iran', flag: '\u{1F1EE}\u{1F1F7}', group: 'G' },
+      { code: 'nzl', name: 'Nueva Zelanda', flag: '\u{1F1F3}\u{1F1FF}', group: 'G' },
+
+      // Group H
+      { code: 'esp', name: 'Espana', flag: '\u{1F1EA}\u{1F1F8}', group: 'H', popular: true },
+      { code: 'cpv', name: 'Cabo Verde', flag: '\u{1F1E8}\u{1F1FB}', group: 'H' },
+      { code: 'ksa', name: 'Arabia Saudita', flag: '\u{1F1F8}\u{1F1E6}', group: 'H' },
+      { code: 'uru', name: 'Uruguay', flag: '\u{1F1FA}\u{1F1FE}', group: 'H', popular: true },
+
+      // Group I
+      { code: 'fra', name: 'Francia', flag: '\u{1F1EB}\u{1F1F7}', group: 'I', popular: true },
+      { code: 'sen', name: 'Senegal', flag: '\u{1F1F8}\u{1F1F3}', group: 'I' },
+      { code: 'nor', name: 'Noruega', flag: '\u{1F1F3}\u{1F1F4}', group: 'I' },
+      { code: 'tbd-i', name: 'Por Definir', flag: '\u{1F3C6}', group: 'I', tbd: true, note: 'Intercontinental 2' },
+
+      // Group J
+      { code: 'arg', name: 'Argentina', flag: '\u{1F1E6}\u{1F1F7}', group: 'J', popular: true },
+      { code: 'alg', name: 'Argelia', flag: '\u{1F1E9}\u{1F1FF}', group: 'J' },
+      { code: 'aut', name: 'Austria', flag: '\u{1F1E6}\u{1F1F9}', group: 'J' },
+      { code: 'jor', name: 'Jordania', flag: '\u{1F1EF}\u{1F1F4}', group: 'J' },
+
+      // Group K
+      { code: 'por', name: 'Portugal', flag: '\u{1F1F5}\u{1F1F9}', group: 'K', popular: true },
+      { code: 'col', name: 'Colombia', flag: '\u{1F1E8}\u{1F1F4}', group: 'K', popular: true },
+      { code: 'uzb', name: 'Uzbekistan', flag: '\u{1F1FA}\u{1F1FF}', group: 'K' },
+      { code: 'tbd-k', name: 'Por Definir', flag: '\u{1F3C6}', group: 'K', tbd: true, note: 'Intercontinental 1' },
+
+      // Group L
+      { code: 'eng', name: 'Inglaterra', flag: '\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}', group: 'L', popular: true },
+      { code: 'cro', name: 'Croacia', flag: '\u{1F1ED}\u{1F1F7}', group: 'L' },
+      { code: 'gha', name: 'Ghana', flag: '\u{1F1EC}\u{1F1ED}', group: 'L' },
+      { code: 'pan', name: 'Panama', flag: '\u{1F1F5}\u{1F1E6}', group: 'L' },
+    ];
+
+    const POPULAR_CODES = ['arg','bra','mex','usa','esp','ger','fra','eng','por','col','uru','ned'];
+
+    // ── IMAGE FALLBACK ──
+    function handleImgError(img) {
+      const div = document.createElement('div');
+      div.className = 'kit-img placeholder rounded';
+      div.innerHTML = '<svg viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:60%;height:60%;opacity:0.15;"><path d="M60 8L95 25V95C95 115 60 152 60 152C60 152 25 115 25 95V25L60 8Z" stroke="#999" stroke-width="2"/><path d="M45 65H75M60 50V80" stroke="#666" stroke-width="2" stroke-linecap="round"/></svg>';
+      img.replaceWith(div);
+    }
+
+    // ── RENDER TEAM CARD ──
+    function teamCard(team, showPopular = false) {
+      const homeImg = `assets/img/mundial/${team.code}-home.png`;
+      const awayImg = `assets/img/mundial/${team.code}-away.png`;
+
+      const badges = [];
+      if (showPopular && team.popular) badges.push('<span class="popular-badge">Popular</span>');
+      if (team.tbd) badges.push(`<span class="group-tag" style="color:#4DA8FF;border:1px solid #4DA8FF33;background:transparent;">${team.note || 'TBD'}</span>`);
+
+      return `
+        <div class="team-card p-3 ${team.tbd ? 'opacity-50' : ''}">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-2xl leading-none">${team.flag}</span>
+            <div class="flex-1 min-w-0">
+              <p class="font-display text-sm text-white truncate" style="letter-spacing:0.05em;">${team.name.toUpperCase()}</p>
+              <div class="flex items-center gap-1.5 mt-0.5">
+                <span class="group-tag">Grupo ${team.group}</span>
+                ${badges.join('')}
+              </div>
+            </div>
+          </div>
+          ${team.tbd ? `
+            <div class="flex gap-2">
+              <div class="flex-1 text-center">
+                <div class="kit-img placeholder rounded" id="ph-${team.code}"></div>
+                <p class="kit-label mt-1">Pendiente</p>
+              </div>
+            </div>
+          ` : `
+            <div class="flex gap-2">
+              <div class="flex-1 text-center">
+                <img src="${homeImg}" alt="${team.name} Local" class="kit-img rounded"
+                     onerror="handleImgError(this)">
+                <p class="kit-label mt-1">Local</p>
+              </div>
+              <div class="flex-1 text-center">
+                <img src="${awayImg}" alt="${team.name} Visita" class="kit-img rounded"
+                     onerror="handleImgError(this)">
+                <p class="kit-label mt-1">Visita</p>
+              </div>
+            </div>
+          `}
+        </div>`;
+    }
+
+    // ── RENDER POPULAR SECTION ──
+    const popularGrid = document.getElementById('popular-grid');
+    const popularTeams = TEAMS.filter(t => POPULAR_CODES.includes(t.code));
+    // Sort by POPULAR_CODES order
+    popularTeams.sort((a, b) => POPULAR_CODES.indexOf(a.code) - POPULAR_CODES.indexOf(b.code));
+    popularGrid.innerHTML = popularTeams.map(t => teamCard(t, true)).join('');
+
+    // ── RENDER ALL GROUPS ──
+    const groupsContainer = document.getElementById('groups-container');
+    const groups = [...new Set(TEAMS.map(t => t.group))];
+
+    // Fill TBD placeholders with SVG
+    function fillPlaceholders() {
+      document.querySelectorAll('[id^="ph-"]').forEach(el => {
+        el.innerHTML = '<svg viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:60%;height:60%;opacity:0.15;"><path d="M60 8L95 25V95C95 115 60 152 60 152C60 152 25 115 25 95V25L60 8Z" stroke="#999" stroke-width="2"/><path d="M45 65H75M60 50V80" stroke="#666" stroke-width="2" stroke-linecap="round"/></svg>';
+      });
+    }
+
+    groupsContainer.innerHTML = groups.map(g => {
+      const groupTeams = TEAMS.filter(t => t.group === g);
+      return `
+        <div class="mb-8">
+          <h3 class="font-display text-base text-smoke text-center mb-4" style="letter-spacing:0.1em;">GRUPO ${g}</h3>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            ${groupTeams.map(t => teamCard(t)).join('')}
+          </div>
+        </div>`;
+    }).join('');
+
+    fillPlaceholders();
+  </script>
+
+</body>
+</html>
