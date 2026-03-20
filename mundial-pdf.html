@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es-GT">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mundial 2026 — El Club</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      background: #0D0D0D;
+      color: #F0F0F0;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .page {
+      width: 100%;
+      min-height: 100vh;
+      padding: 40px 24px 60px;
+      position: relative;
+      page-break-after: always;
+    }
+    .page:last-child { page-break-after: avoid; }
+
+    .wa-bar {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      background: #25D366;
+      padding: 12px 24px;
+      text-align: center;
+    }
+    .wa-bar a {
+      color: #fff;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 0.03em;
+    }
+
+    .display { font-family: 'Oswald', sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+    .label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: #666; }
+    .section-label { font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #666; }
+    .ice { color: #4DA8FF; }
+    .smoke { color: #999; }
+    .ash { color: #666; }
+    .center { text-align: center; }
+
+    .card { background: #1C1C1C; border: 1px solid #2A2A2A; border-radius: 8px; padding: 16px; }
+    .price-card { background: #1C1C1C; border: 1px solid #2A2A2A; border-radius: 8px; padding: 20px; text-align: center; flex: 1; }
+    .price-big { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 32px; }
+
+    .kit-row { display: flex; gap: 12px; }
+    .kit-col { flex: 1; text-align: center; }
+    .kit-img { width: 100%; aspect-ratio: 3/4; object-fit: contain; background: #1C1C1C; border: 1px solid #2A2A2A; border-radius: 4px; }
+
+    .pills { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .pill { background: #2A2A2A; border-radius: 8px; padding: 12px 14px; }
+
+    .group-row { margin-bottom: 12px; }
+    .group-label { font-family: 'Oswald', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; color: #4DA8FF; margin-bottom: 4px; }
+    .group-teams { color: #999; font-size: 13px; line-height: 1.6; }
+    .group-teams em { color: #555; }
+
+    .team-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .team-name { font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 18px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .group-tag { font-family: 'Oswald', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #999; background: #2A2A2A; padding: 2px 8px; border-radius: 3px; }
+
+    .divider { height: 1px; background: #2A2A2A; margin: 20px 0; }
+    .step { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+    .step-num { color: #4DA8FF; font-weight: 700; font-size: 18px; line-height: 1; min-width: 20px; }
+    .step-title { font-weight: 600; font-size: 14px; }
+    .step-desc { color: #999; font-size: 12px; margin-top: 2px; }
+    .logo { height: 36px; display: block; margin: 0 auto 24px; }
+    .clubs-card { background: #1C1C1C; border: 1px solid #2A2A2A; border-radius: 12px; padding: 24px; text-align: center; }
+
+    .mb-4 { margin-bottom: 4px; } .mb-8 { margin-bottom: 8px; } .mb-16 { margin-bottom: 16px; } .mb-24 { margin-bottom: 24px; }
+    .mt-8 { margin-top: 8px; } .mt-12 { margin-top: 12px; } .mt-16 { margin-top: 16px; }
+
+    @media print {
+      body { background: #0D0D0D !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- PAGE 1: Hero + Precios + Cómo funciona -->
+  <div class="page">
+    <img src="assets/img/brand/logo.svg" alt="El Club" class="logo">
+
+    <p class="section-label center mb-8">Pre-venta exclusiva</p>
+    <h1 class="display center" style="font-size:42px;line-height:1;">MUNDIAL<br><span class="ice">2026</span></h1>
+    <p class="smoke center mt-12" style="font-size:14px;">11 jun — 19 jul &middot; USA &middot; MEX &middot; CAN</p>
+    <p class="ash center mt-8" style="font-size:12px;">48 selecciones &middot; Parches incluidos &middot; Todas las tallas</p>
+
+    <div class="divider"></div>
+
+    <p class="section-label center mb-8">Precios</p>
+    <div style="display:flex;gap:12px;margin-bottom:16px;">
+      <div class="price-card">
+        <p class="price-big ice">Q450</p>
+        <p class="smoke" style="font-size:12px;margin-top:4px;">Con dorsal</p>
+        <p class="ash" style="font-size:10px;">Nombre + Número</p>
+      </div>
+      <div class="price-card">
+        <p class="price-big">Q420</p>
+        <p class="smoke" style="font-size:12px;margin-top:4px;">Sin dorsal</p>
+        <p class="ash" style="font-size:10px;">Solo camiseta + parches</p>
+      </div>
+    </div>
+
+    <div class="card mb-16">
+      <p class="section-label center mb-16">Cómo funciona</p>
+      <div class="step"><span class="step-num">1</span><div><p class="step-title">Pedís por WhatsApp</p><p class="step-desc">Selección, versión, talla, dorsal y cantidad.</p></div></div>
+      <div class="step"><span class="step-num">2</span><div><p class="step-title">Hago pedido cada domingo</p><p class="step-desc">Junto todos los pedidos de la semana y los mando a pedir.</p></div></div>
+      <div class="step" style="margin-bottom:0;"><span class="step-num">3</span><div><p class="step-title">Te aviso cuando llegue</p><p class="step-desc">Pago contra entrega. Sin anticipos.</p></div></div>
+    </div>
+
+    <div class="pills">
+      <div class="pill"><p class="label mb-4">Pedidos</p><p style="font-weight:600;font-size:14px;">Cada domingo</p></div>
+      <div class="pill"><p class="label mb-4">Entrega</p><p style="font-weight:600;font-size:14px;">Mediados de mayo</p></div>
+      <div class="pill"><p class="label mb-4">Pago</p><p style="font-weight:600;font-size:14px;">Contra entrega</p></div>
+      <div class="pill"><p class="label mb-4">Tallas</p><p style="font-weight:600;font-size:14px;">S &middot; M &middot; L &middot; XL</p></div>
+    </div>
+
+    <div class="wa-bar"><a href="https://wa.me/50237436510?text=Hola!%20Quiero%20pedir%20camisetas%20del%20Mundial%202026%20%F0%9F%8F%86">APACHÁ ACÁ PARA PEDIR → 3743-6510</a></div>
+  </div>
+
+  <!-- PAGE 2: Argentina, Brasil, España -->
+  <div class="page">
+    <p class="section-label center mb-8">Así se ven</p>
+    <h2 class="display center mb-24" style="font-size:20px;">LAS MÁS PEDIDAS</h2>
+
+    <div class="mb-24">
+      <div class="team-header"><span class="team-name">Argentina</span><span class="group-tag">Grupo J</span></div>
+      <div class="kit-row">
+        <div class="kit-col"><img src="assets/img/mundial/arg-home-sm.jpg" alt="Argentina Local" class="kit-img"><p class="label mt-8">Local</p></div>
+        <div class="kit-col"><img src="assets/img/mundial/arg-away-sm.jpg" alt="Argentina Visita" class="kit-img"><p class="label mt-8">Visita</p></div>
+      </div>
+    </div>
+
+    <div class="mb-24">
+      <div class="team-header"><span class="team-name">Brasil</span><span class="group-tag">Grupo C</span></div>
+      <div class="kit-row">
+        <div class="kit-col"><img src="assets/img/mundial/bra-home-sm.jpg" alt="Brasil Local" class="kit-img"><p class="label mt-8">Local</p></div>
+        <div class="kit-col"><img src="assets/img/mundial/bra-away-sm.jpg" alt="Brasil Visita" class="kit-img"><p class="label mt-8">Visita</p></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="team-header"><span class="team-name">España</span><span class="group-tag">Grupo H</span></div>
+      <div class="kit-row">
+        <div class="kit-col"><img src="assets/img/mundial/esp-home-sm.jpg" alt="España Local" class="kit-img"><p class="label mt-8">Local</p></div>
+        <div class="kit-col"><img src="assets/img/mundial/esp-away-sm.jpg" alt="España Visita" class="kit-img"><p class="label mt-8">Visita</p></div>
+      </div>
+    </div>
+
+    <div class="wa-bar"><a href="https://wa.me/50237436510?text=Hola!%20Quiero%20pedir%20camisetas%20del%20Mundial%202026%20%F0%9F%8F%86">APACHÁ ACÁ PARA PEDIR → 3743-6510</a></div>
+  </div>
+
+  <!-- PAGE 3: Alemania, Inglaterra, Portugal -->
+  <div class="page">
+    <p class="section-label center mb-24">Así se ven</p>
+
+    <div class="mb-24">
+      <div class="team-header"><span class="team-name">Alemania</span><span class="group-tag">Grupo E</span></div>
+      <div class="kit-row">
+        <div class="kit-col"><img src="assets/img/mundial/ger-home-sm.jpg" alt="Alemania Local" class="kit-img"><p class="label mt-8">Local</p></div>
+        <div class="kit-col"><img src="assets/img/mundial/ger-away-sm.jpg" alt="Alemania Visita" class="kit-img"><p class="label mt-8">Visita</p></div>
+      </div>
+    </div>
+
+    <div class="mb-24">
+      <div class="team-header"><span class="team-name">Inglaterra</span><span class="group-tag">Grupo L</span></div>
+      <div class="kit-row">
+        <div class="kit-col"><img src="assets/img/mundial/eng-home-sm.jpg" alt="Inglaterra Local" class="kit-img"><p class="label mt-8">Local</p></div>
+        <div class="kit-col"><img src="assets/img/mundial/eng-away-sm.jpg" alt="Inglaterra Visita" class="kit-img"><p class="label mt-8">Visita</p></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="team-header"><span class="team-name">Portugal</span><span class="group-tag">Grupo K</span></div>
+      <div class="kit-row">
+        <div class="kit-col"><img src="assets/img/mundial/por-home-sm.jpg" alt="Portugal Local" class="kit-img"><p class="label mt-8">Local</p></div>
+        <div class="kit-col"><img src="assets/img/mundial/por-away-sm.jpg" alt="Portugal Visita" class="kit-img"><p class="label mt-8">Visita</p></div>
+      </div>
+    </div>
+
+    <p class="ash center mt-16" style="font-size:11px;">Parches oficiales del torneo incluidos &middot; Local y visita disponibles</p>
+    <div class="wa-bar"><a href="https://wa.me/50237436510?text=Hola!%20Quiero%20pedir%20camisetas%20del%20Mundial%202026%20%F0%9F%8F%86">APACHÁ ACÁ PARA PEDIR → 3743-6510</a></div>
+  </div>
+
+  <!-- PAGE 4: Todos los grupos + Clubes -->
+  <div class="page">
+    <h2 class="display center mb-8" style="font-size:20px;">TODAS LAS SELECCIONES</h2>
+    <p class="ash center mb-24" style="font-size:12px;">48 selecciones disponibles &middot; Consultá por la tuya</p>
+
+    <div class="group-row"><p class="group-label">GRUPO A</p><p class="group-teams">México &middot; Corea del Sur &middot; Sudáfrica &middot; <em>Por definir</em></p></div>
+    <div class="group-row"><p class="group-label">GRUPO B</p><p class="group-teams">Canadá &middot; Suiza &middot; Qatar &middot; <em>Por definir</em></p></div>
+    <div class="group-row"><p class="group-label">GRUPO C</p><p class="group-teams">Brasil &middot; Marruecos &middot; Haití &middot; Escocia</p></div>
+    <div class="group-row"><p class="group-label">GRUPO D</p><p class="group-teams">Estados Unidos &middot; Paraguay &middot; Australia &middot; <em>Por definir</em></p></div>
+    <div class="group-row"><p class="group-label">GRUPO E</p><p class="group-teams">Alemania &middot; Curazao &middot; Costa de Marfil &middot; Ecuador</p></div>
+    <div class="group-row"><p class="group-label">GRUPO F</p><p class="group-teams">Países Bajos &middot; Japón &middot; Túnez &middot; <em>Por definir</em></p></div>
+    <div class="group-row"><p class="group-label">GRUPO G</p><p class="group-teams">Bélgica &middot; Egipto &middot; Irán &middot; Nueva Zelanda</p></div>
+    <div class="group-row"><p class="group-label">GRUPO H</p><p class="group-teams">España &middot; Cabo Verde &middot; Arabia Saudita &middot; Uruguay</p></div>
+    <div class="group-row"><p class="group-label">GRUPO I</p><p class="group-teams">Francia &middot; Senegal &middot; Noruega &middot; <em>Por definir</em></p></div>
+    <div class="group-row"><p class="group-label">GRUPO J</p><p class="group-teams">Argentina &middot; Argelia &middot; Austria &middot; Jordania</p></div>
+    <div class="group-row"><p class="group-label">GRUPO K</p><p class="group-teams">Portugal &middot; Colombia &middot; Uzbekistán &middot; <em>Por definir</em></p></div>
+    <div class="group-row"><p class="group-label">GRUPO L</p><p class="group-teams">Inglaterra &middot; Croacia &middot; Ghana &middot; Panamá</p></div>
+
+    <p class="ash center mt-16" style="font-size:10px;font-style:italic;">* Equipos por definir en playoffs de marzo</p>
+
+    <div class="divider"></div>
+
+    <div class="clubs-card">
+      <p class="section-label mb-8">No solo selecciones</p>
+      <p class="display" style="font-size:18px;">TAMBIÉN TENEMOS CLUBES</p>
+      <p class="smoke mt-8" style="font-size:13px;">Barcelona, Real Madrid, Liverpool, Inter, Juventus...<br>Cualquier equipo. Misma calidad. Mismo precio.</p>
+    </div>
+
+    <div class="wa-bar"><a href="https://wa.me/50237436510?text=Hola!%20Quiero%20pedir%20camisetas%20del%20Mundial%202026%20%F0%9F%8F%86">APACHÁ ACÁ PARA PEDIR → 3743-6510</a></div>
+  </div>
+
+</body>
+</html>
