@@ -104,6 +104,37 @@
       background: linear-gradient(transparent, #0D0D0D 30%);
       padding: 24px 16px 16px;
     }
+
+    /* ── Print / Save as PDF ── */
+    @media print {
+      body { background: #0D0D0D !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .sticky-cta { display: none !important; }
+      .section-divider { display: none !important; }
+
+      /* Page 1: Hero + Precios + Cómo funciona */
+      section:nth-of-type(1) { page-break-after: avoid; }
+      section:nth-of-type(2) { page-break-after: always; }
+
+      /* Page 2: Template + Así se ven (first 3 teams) */
+      section:nth-of-type(3) { page-break-after: avoid; }
+      section:nth-of-type(4) { page-break-after: always; }
+
+      /* Page 3: Así se ven (last 3 teams) continues into groups */
+      section:nth-of-type(5) { page-break-after: always; }
+
+      /* Page 4: Clubes + Footer */
+      section:nth-of-type(6) { page-break-after: avoid; }
+      footer { page-break-before: avoid; }
+
+      /* Keep featured teams together in pairs */
+      #featured-grid > div:nth-child(3n) { page-break-after: always; }
+
+      /* Never break inside a featured team */
+      #featured-grid > div { page-break-inside: avoid; }
+
+      /* Keep all groups on one page */
+      #groups-compact { page-break-inside: avoid; }
+    }
   </style>
 
   <!-- GA4 -->
@@ -147,7 +178,7 @@
         <div class="flex-1 bg-pitch border border-chalk rounded-lg p-4 text-center">
           <p class="price-highlight text-3xl text-ice">Q450</p>
           <p class="text-smoke text-xs mt-1">Con dorsal</p>
-          <p class="text-ash text-[10px] mt-0.5">Nombre + Numero</p>
+          <p class="text-ash text-[10px] mt-0.5">Nombre + Número</p>
         </div>
         <div class="flex-1 bg-pitch border border-chalk rounded-lg p-4 text-center">
           <p class="price-highlight text-3xl text-white">Q420</p>
@@ -159,13 +190,13 @@
 
     <!-- How it works -->
     <div class="bg-pitch border border-chalk rounded-xl p-5 mb-6">
-      <p class="text-ice text-xs uppercase tracking-widest mb-3 text-center" style="font-family:'Oswald',sans-serif;">Como funciona</p>
+      <p class="text-ice text-xs uppercase tracking-widest mb-3 text-center" style="font-family:'Oswald',sans-serif;">Cómo funciona</p>
       <div class="space-y-3 text-sm">
         <div class="flex items-start gap-3">
           <span class="text-ice font-bold text-lg leading-none mt-0.5">1</span>
           <div>
-            <p class="text-white font-semibold">Pedis por WhatsApp</p>
-            <p class="text-smoke text-xs">Seleccion, version, talla, dorsal y cantidad.</p>
+            <p class="text-white font-semibold">Pedís por WhatsApp</p>
+            <p class="text-smoke text-xs">Selección, versión, talla, dorsal y cantidad.</p>
           </div>
         </div>
         <div class="flex items-start gap-3">
@@ -190,12 +221,12 @@
       <div class="info-pill">
         <p class="text-ash text-[10px] uppercase tracking-wider mb-0.5">Pedidos</p>
         <p class="text-white font-semibold">Cada domingo</p>
-        <p class="text-ash text-[10px] mt-0.5">Proximo corte: <span id="next-sunday"></span></p>
+        <p class="text-ash text-[10px] mt-0.5">Próximo corte: <span id="next-sunday"></span></p>
       </div>
       <div class="info-pill">
         <p class="text-ash text-[10px] uppercase tracking-wider mb-0.5">Entrega</p>
         <p class="text-white font-semibold">Mediados de mayo</p>
-        <p class="text-ash text-[10px] mt-0.5">Segun fecha de pedido</p>
+        <p class="text-ash text-[10px] mt-0.5">Según fecha de pedido</p>
       </div>
       <div class="info-pill">
         <p class="text-ash text-[10px] uppercase tracking-wider mb-0.5">Pago</p>
@@ -217,12 +248,12 @@
 
   <!-- ═══ ORDER TEMPLATE ═══ -->
   <section class="px-4 py-6 max-w-lg mx-auto">
-    <p class="text-ash text-xs uppercase tracking-widest mb-3 text-center" style="font-family:'Oswald',sans-serif;">En tu mensaje inclui</p>
+    <p class="text-ash text-xs uppercase tracking-widest mb-3 text-center" style="font-family:'Oswald',sans-serif;">En tu mensaje incluí</p>
     <div class="bg-pitch border border-chalk rounded-lg p-4 text-sm text-smoke space-y-1.5">
-      <p>· <span class="text-white font-semibold">Seleccion</span> — ej: Argentina, Brasil</p>
-      <p>· <span class="text-white font-semibold">Version</span> — Local o Visita</p>
+      <p>· <span class="text-white font-semibold">Selección</span> — ej: Argentina, Brasil</p>
+      <p>· <span class="text-white font-semibold">Versión</span> — Local o Visita</p>
       <p>· <span class="text-white font-semibold">Talla</span> — S, M, L, XL</p>
-      <p>· <span class="text-white font-semibold">Dorsal</span> — Nombre + Numero (o sin dorsal)</p>
+      <p>· <span class="text-white font-semibold">Dorsal</span> — Nombre + Número (o sin dorsal)</p>
       <p>· <span class="text-white font-semibold">Cantidad</span></p>
     </div>
   </section>
@@ -232,9 +263,9 @@
   <!-- ═══ FEATURED TEAMS (with photos) ═══ -->
   <section class="px-4 py-8 max-w-lg mx-auto">
     <h2 class="font-display text-xl text-center text-white mb-2" style="letter-spacing:0.08em;">
-      ASI SE VEN
+      ASÍ SE VEN
     </h2>
-    <p class="text-ash text-xs text-center mb-6">Las mas pedidas — local y visita</p>
+    <p class="text-ash text-xs text-center mb-6">Las más pedidas — local y visita</p>
 
     <div class="space-y-6" id="featured-grid">
       <!-- Rendered by JS -->
@@ -258,7 +289,7 @@
   <section class="px-4 py-8 max-w-lg mx-auto text-center">
     <div class="bg-pitch border border-chalk rounded-xl p-6">
       <p class="text-smoke text-xs uppercase tracking-widest mb-2" style="font-family:'Oswald',sans-serif;">No solo selecciones</p>
-      <p class="font-display text-lg text-white mb-2" style="letter-spacing:0.05em;">TAMBIEN TENEMOS CLUBES</p>
+      <p class="font-display text-lg text-white mb-2" style="letter-spacing:0.05em;">TAMBIÉN TENEMOS CLUBES</p>
       <p class="text-smoke text-sm mb-4">
         Barcelona, Real Madrid, Liverpool, Inter, Juventus...<br>
         Cualquier equipo. Misma calidad. Mismo precio.
@@ -312,17 +343,17 @@
     const WA_MESSAGE = encodeURIComponent(
       'Hola! Quiero pedir camisetas del Mundial 2026 🏆\n\n' +
       'Mi pedido:\n' +
-      '- Seleccion: \n' +
-      '- Version: Local / Visita\n' +
+      '- Selección: \n' +
+      '- Versión: Local / Visita\n' +
       '- Talla: S / M / L / XL\n' +
-      '- Con dorsal (nombre + numero): Si / No\n' +
+      '- Con dorsal (nombre + número): Sí / No\n' +
       '- Cantidad: \n'
     );
     document.getElementById('wa-cta').href = `https://wa.me/${WA_NUMBER}?text=${WA_MESSAGE}`;
 
     // Clubs CTA
     const WA_CLUBS_MSG = encodeURIComponent(
-      'Hola! Vi el catalogo del Mundial y quiero consultar por camisetas de clubes ⚽\n\n' +
+      'Hola! Vi el catálogo del Mundial y quiero consultar por camisetas de clubes ⚽\n\n' +
       '- Equipo: \n' +
       '- Talla: \n' +
       '- Con dorsal: Si / No\n'
@@ -347,13 +378,13 @@
     // Images: assets/img/mundial/{code}-home.png, {code}-away.png
     const TEAMS = [
       // Group A
-      { code: 'mex', name: 'Mexico', flag: '\u{1F1F2}\u{1F1FD}', group: 'A', popular: true },
+      { code: 'mex', name: 'México', flag: '\u{1F1F2}\u{1F1FD}', group: 'A', popular: true },
       { code: 'kor', name: 'Corea del Sur', flag: '\u{1F1F0}\u{1F1F7}', group: 'A' },
-      { code: 'rsa', name: 'Sudafrica', flag: '\u{1F1FF}\u{1F1E6}', group: 'A' },
+      { code: 'rsa', name: 'Sudáfrica', flag: '\u{1F1FF}\u{1F1E6}', group: 'A' },
       { code: 'tbd-a', name: 'Por Definir', flag: '\u{1F3C6}', group: 'A', tbd: true, note: 'UEFA Playoff D' },
 
       // Group B
-      { code: 'can', name: 'Canada', flag: '\u{1F1E8}\u{1F1E6}', group: 'B' },
+      { code: 'can', name: 'Canadá', flag: '\u{1F1E8}\u{1F1E6}', group: 'B' },
       { code: 'sui', name: 'Suiza', flag: '\u{1F1E8}\u{1F1ED}', group: 'B' },
       { code: 'qat', name: 'Qatar', flag: '\u{1F1F6}\u{1F1E6}', group: 'B' },
       { code: 'tbd-b', name: 'Por Definir', flag: '\u{1F3C6}', group: 'B', tbd: true, note: 'UEFA Playoff A' },
@@ -361,7 +392,7 @@
       // Group C
       { code: 'bra', name: 'Brasil', flag: '\u{1F1E7}\u{1F1F7}', group: 'C', popular: true },
       { code: 'mar', name: 'Marruecos', flag: '\u{1F1F2}\u{1F1E6}', group: 'C' },
-      { code: 'hai', name: 'Haiti', flag: '\u{1F1ED}\u{1F1F9}', group: 'C' },
+      { code: 'hai', name: 'Haití', flag: '\u{1F1ED}\u{1F1F9}', group: 'C' },
       { code: 'sco', name: 'Escocia', flag: '\u{1F3F4}\u{E0067}\u{E0062}\u{E0073}\u{E0063}\u{E0074}\u{E007F}', group: 'C' },
 
       // Group D
@@ -377,19 +408,19 @@
       { code: 'ecu', name: 'Ecuador', flag: '\u{1F1EA}\u{1F1E8}', group: 'E' },
 
       // Group F
-      { code: 'ned', name: 'Paises Bajos', flag: '\u{1F1F3}\u{1F1F1}', group: 'F', popular: true },
-      { code: 'jpn', name: 'Japon', flag: '\u{1F1EF}\u{1F1F5}', group: 'F' },
-      { code: 'tun', name: 'Tunez', flag: '\u{1F1F9}\u{1F1F3}', group: 'F' },
+      { code: 'ned', name: 'Países Bajos', flag: '\u{1F1F3}\u{1F1F1}', group: 'F', popular: true },
+      { code: 'jpn', name: 'Japón', flag: '\u{1F1EF}\u{1F1F5}', group: 'F' },
+      { code: 'tun', name: 'Túnez', flag: '\u{1F1F9}\u{1F1F3}', group: 'F' },
       { code: 'tbd-f', name: 'Por Definir', flag: '\u{1F3C6}', group: 'F', tbd: true, note: 'UEFA Playoff B' },
 
       // Group G
-      { code: 'bel', name: 'Belgica', flag: '\u{1F1E7}\u{1F1EA}', group: 'G' },
+      { code: 'bel', name: 'Bélgica', flag: '\u{1F1E7}\u{1F1EA}', group: 'G' },
       { code: 'egy', name: 'Egipto', flag: '\u{1F1EA}\u{1F1EC}', group: 'G' },
-      { code: 'irn', name: 'Iran', flag: '\u{1F1EE}\u{1F1F7}', group: 'G' },
+      { code: 'irn', name: 'Irán', flag: '\u{1F1EE}\u{1F1F7}', group: 'G' },
       { code: 'nzl', name: 'Nueva Zelanda', flag: '\u{1F1F3}\u{1F1FF}', group: 'G' },
 
       // Group H
-      { code: 'esp', name: 'Espana', flag: '\u{1F1EA}\u{1F1F8}', group: 'H', popular: true },
+      { code: 'esp', name: 'España', flag: '\u{1F1EA}\u{1F1F8}', group: 'H', popular: true },
       { code: 'cpv', name: 'Cabo Verde', flag: '\u{1F1E8}\u{1F1FB}', group: 'H' },
       { code: 'ksa', name: 'Arabia Saudita', flag: '\u{1F1F8}\u{1F1E6}', group: 'H' },
       { code: 'uru', name: 'Uruguay', flag: '\u{1F1FA}\u{1F1FE}', group: 'H', popular: true },
@@ -409,14 +440,14 @@
       // Group K
       { code: 'por', name: 'Portugal', flag: '\u{1F1F5}\u{1F1F9}', group: 'K', popular: true },
       { code: 'col', name: 'Colombia', flag: '\u{1F1E8}\u{1F1F4}', group: 'K', popular: true },
-      { code: 'uzb', name: 'Uzbekistan', flag: '\u{1F1FA}\u{1F1FF}', group: 'K' },
+      { code: 'uzb', name: 'Uzbekistán', flag: '\u{1F1FA}\u{1F1FF}', group: 'K' },
       { code: 'tbd-k', name: 'Por Definir', flag: '\u{1F3C6}', group: 'K', tbd: true, note: 'Intercontinental 1' },
 
       // Group L
       { code: 'eng', name: 'Inglaterra', flag: '\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}', group: 'L', popular: true },
       { code: 'cro', name: 'Croacia', flag: '\u{1F1ED}\u{1F1F7}', group: 'L' },
       { code: 'gha', name: 'Ghana', flag: '\u{1F1EC}\u{1F1ED}', group: 'L' },
-      { code: 'pan', name: 'Panama', flag: '\u{1F1F5}\u{1F1E6}', group: 'L' },
+      { code: 'pan', name: 'Panamá', flag: '\u{1F1F5}\u{1F1E6}', group: 'L' },
     ];
 
     // Teams that have actual photos
