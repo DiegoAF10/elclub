@@ -104,6 +104,37 @@
     ]
   },
   {
+    "id": "JRS-REALMADRID-200506-H",
+    "type": "jersey",
+    "name": "Real Madrid Local 2005/06 — Ronaldo",
+    "description": "Camiseta del Real Madrid temporada 2005/06. Versión local. Con nombre y número de Ronaldo (#9).",
+    "price": 200,
+    "image": "/assets/img/products/JRS-023-JRS-023-01.png",
+    "images": [
+      "/assets/img/products/JRS-023-JRS-023-01.png",
+      "/assets/img/products/JRS-023-JRS-023-02.png",
+      "/assets/img/products/JRS-023-JRS-023-03.png"
+    ],
+    "league": "La Liga",
+    "team": "Real Madrid",
+    "season": "2005/06",
+    "variant": "Local",
+    "player_name": "Ronaldo",
+    "player_number": 9,
+    "patches": null,
+    "position": "DEL",
+    "country": "España",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "la-liga",
+      "real-madrid"
+    ]
+  },
+  {
     "id": "JRS-SEVILLA-202324-H",
     "type": "jersey",
     "name": "Sevilla Local 2023/24 — Sergio Ramos",
