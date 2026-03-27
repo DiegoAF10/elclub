@@ -170,6 +170,37 @@
     ]
   },
   {
+    "id": "JRS-MANUNITED-201314-H",
+    "type": "jersey",
+    "name": "Man United Local 2013/14 — Chicharito",
+    "description": "Camiseta del Manchester United temporada 2013/14. Versión local. Con nombre y número de Chicharito (#14). Parches de Champions League.",
+    "price": 200,
+    "image": "/assets/img/products/JRS-011-JRS-011-01.png",
+    "images": [
+      "/assets/img/products/JRS-011-JRS-011-01.png",
+      "/assets/img/products/JRS-011-JRS-011-02.png",
+      "/assets/img/products/JRS-011-JRS-011-03.png"
+    ],
+    "league": "Premier League",
+    "team": "Man United",
+    "season": "2013/14",
+    "variant": "Local",
+    "player_name": "Chicharito",
+    "player_number": 14,
+    "patches": "Champions League",
+    "position": "DEL",
+    "country": "Inglaterra",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "premier-league",
+      "man-united"
+    ]
+  },
+  {
     "id": "JRS-NEWCASTLE-202324-H",
     "type": "jersey",
     "name": "Newcastle Local 2023/24",
