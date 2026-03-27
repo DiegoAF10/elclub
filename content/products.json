@@ -145,7 +145,10 @@
     "images": [
       "/assets/img/products/JRS-023-JRS-023-01.png",
       "/assets/img/products/JRS-023-JRS-023-02.png",
-      "/assets/img/products/JRS-023-JRS-023-03.png"
+      "/assets/img/products/JRS-023-JRS-023-03.png",
+      "/assets/img/products/JRS-031-JRS-031-01.png",
+      "/assets/img/products/JRS-031-JRS-031-02.png",
+      "/assets/img/products/JRS-031-JRS-031-03.png"
     ],
     "league": "La Liga",
     "team": "Real Madrid",
@@ -159,8 +162,8 @@
     "sizes": [
       "M"
     ],
-    "stock": 1,
-    "featured": false,
+    "stock": 2,
+    "featured": true,
     "tags": [
       "la-liga",
       "real-madrid"
