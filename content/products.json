@@ -335,7 +335,11 @@
     "images": [
       "/assets/img/products/JRS-013-JRS-013-01.png",
       "/assets/img/products/JRS-013-JRS-013-02.png",
-      "/assets/img/products/JRS-013-JRS-013-03.png"
+      "/assets/img/products/JRS-013-JRS-013-03.png",
+      "/assets/img/products/JRS-017-JRS-017-01.png",
+      "/assets/img/products/JRS-017-JRS-017-02.png",
+      "/assets/img/products/JRS-017-JRS-017-03.png",
+      "/assets/img/products/JRS-017-JRS-017-04.png"
     ],
     "league": "Selecciones",
     "team": "Francia",
@@ -347,10 +351,11 @@
     "position": "DEL",
     "country": "Francia",
     "sizes": [
-      "M"
+      "M",
+      "XL"
     ],
-    "stock": 1,
-    "featured": false,
+    "stock": 2,
+    "featured": true,
     "tags": [
       "selecciones",
       "francia"
