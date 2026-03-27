@@ -234,6 +234,38 @@
     ]
   },
   {
+    "id": "JRS-PORTUGAL-200506-H",
+    "type": "jersey",
+    "name": "Portugal Local 2005/06 — Cristiano Ronaldo",
+    "description": "Camiseta del Selección de Portugal temporada 2005/06. Versión local. Con nombre y número de Cristiano Ronaldo (#17).",
+    "price": 200,
+    "image": "/assets/img/products/JRS-009-JRS-009-01.png",
+    "images": [
+      "/assets/img/products/JRS-009-JRS-009-01.png",
+      "/assets/img/products/JRS-009-JRS-009-02.png",
+      "/assets/img/products/JRS-009-JRS-009-03.png",
+      "/assets/img/products/JRS-009-JRS-009-04.png"
+    ],
+    "league": "Selecciones",
+    "team": "Portugal",
+    "season": "2005/06",
+    "variant": "Local",
+    "player_name": "Cristiano Ronaldo",
+    "player_number": 17,
+    "patches": null,
+    "position": "DEL",
+    "country": "Portugal",
+    "sizes": [
+      "L"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "selecciones",
+      "portugal"
+    ]
+  },
+  {
     "id": "JRS-INTER-201011-H",
     "type": "jersey",
     "name": "Inter Local 2010/11 — J. Zanetti",
