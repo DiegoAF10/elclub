@@ -138,6 +138,37 @@
     ]
   },
   {
+    "id": "JRS-LEICESTER-201516-H",
+    "type": "jersey",
+    "name": "Leicester Local 2015/16 — Vardy",
+    "description": "Camiseta del Leicester City temporada 2015/16. Versión local. Con nombre y número de Vardy (#9).",
+    "price": 200,
+    "image": "/assets/img/products/JRS-012-JRS-012-01.png",
+    "images": [
+      "/assets/img/products/JRS-012-JRS-012-01.png",
+      "/assets/img/products/JRS-012-JRS-012-02.png",
+      "/assets/img/products/JRS-012-JRS-012-03.png"
+    ],
+    "league": "Premier League",
+    "team": "Leicester",
+    "season": "2015/16",
+    "variant": "Local",
+    "player_name": "Vardy",
+    "player_number": 9,
+    "patches": null,
+    "position": "DEL",
+    "country": "Inglaterra",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "premier-league",
+      "leicester"
+    ]
+  },
+  {
     "id": "JRS-MANCITY-202324-H",
     "type": "jersey",
     "name": "Man City Local 2023/24 — J. Alvarez",
