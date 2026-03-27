@@ -619,6 +619,37 @@
     ]
   },
   {
+    "id": "JRS-MILAN-200910-A",
+    "type": "jersey",
+    "name": "Milan Visita 2009/10 — Beckham",
+    "description": "Camiseta del AC Milan temporada 2009/10. Versión visita. Con nombre y número de Beckham (#32).",
+    "price": 200,
+    "image": "/assets/img/products/JRS-025-JRS-025-01.png",
+    "images": [
+      "/assets/img/products/JRS-025-JRS-025-01.png",
+      "/assets/img/products/JRS-025-JRS-025-02.png",
+      "/assets/img/products/JRS-025-JRS-025-03.png"
+    ],
+    "league": "Serie A",
+    "team": "Milan",
+    "season": "2009/10",
+    "variant": "Visita",
+    "player_name": "Beckham",
+    "player_number": 32,
+    "patches": null,
+    "position": "MED",
+    "country": "Italia",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "serie-a",
+      "milan"
+    ]
+  },
+  {
     "id": "JRS-INTER-201011-H",
     "type": "jersey",
     "name": "Inter Local 2010/11 — J. Zanetti",
