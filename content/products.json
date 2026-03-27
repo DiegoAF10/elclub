@@ -361,6 +361,38 @@
     ]
   },
   {
+    "id": "JRS-ALHILAL-202324-H",
+    "type": "jersey",
+    "name": "Al Hilal Local 2023/24 — Neymar Jr.",
+    "description": "Camiseta del Al Hilal temporada 2023/24. Versión local. Con nombre y número de Neymar Jr. (#10).",
+    "price": 200,
+    "image": "/assets/img/products/JRS-021-JRS-021-01.png",
+    "images": [
+      "/assets/img/products/JRS-021-JRS-021-01.png",
+      "/assets/img/products/JRS-021-JRS-021-02.png",
+      "/assets/img/products/JRS-021-JRS-021-03.png",
+      "/assets/img/products/JRS-021-JRS-021-04.png"
+    ],
+    "league": "Saudi Pro League",
+    "team": "Al Hilal",
+    "season": "2023/24",
+    "variant": "Local",
+    "player_name": "Neymar Jr.",
+    "player_number": 10,
+    "patches": null,
+    "position": "DEL",
+    "country": "Arabia Saudita",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "saudi-pro-league",
+      "al-hilal"
+    ]
+  },
+  {
     "id": "JRS-FRANCIA-Retro (pre-2005)-H",
     "type": "jersey",
     "name": "Francia Local Retro (pre-2005) — Cantona",
