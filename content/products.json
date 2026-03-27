@@ -361,6 +361,37 @@
     ]
   },
   {
+    "id": "JRS-MANCITY-201112-H",
+    "type": "jersey",
+    "name": "Man City Local 2011/12 — Balotelli",
+    "description": "Camiseta del Manchester City temporada 2011/12. Versión local. Con nombre y número de Balotelli (#45).",
+    "price": 200,
+    "image": "/assets/img/products/JRS-026-JRS-026-01.png",
+    "images": [
+      "/assets/img/products/JRS-026-JRS-026-01.png",
+      "/assets/img/products/JRS-026-JRS-026-02.png",
+      "/assets/img/products/JRS-026-JRS-026-03.png"
+    ],
+    "league": "Premier League",
+    "team": "Man City",
+    "season": "2011/12",
+    "variant": "Local",
+    "player_name": "Balotelli",
+    "player_number": 45,
+    "patches": null,
+    "position": "DEL",
+    "country": "Inglaterra",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "premier-league",
+      "man-city"
+    ]
+  },
+  {
     "id": "JRS-MANUNITED-201314-H",
     "type": "jersey",
     "name": "Man United Local 2013/14 — Chicharito",
