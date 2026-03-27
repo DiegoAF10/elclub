@@ -169,6 +169,37 @@
     ]
   },
   {
+    "id": "JRS-LIVERPOOL-202324-H",
+    "type": "jersey",
+    "name": "Liverpool Local 2023/24 — Darwin Núñez",
+    "description": "Camiseta del Liverpool temporada 2023/24. Versión local. Con nombre y número de Darwin Núñez (#9). Parches de Europa League.",
+    "price": 200,
+    "image": "/assets/img/products/JRS-014-JRS-014-01.png",
+    "images": [
+      "/assets/img/products/JRS-014-JRS-014-01.png",
+      "/assets/img/products/JRS-014-JRS-014-02.png",
+      "/assets/img/products/JRS-014-JRS-014-03.png"
+    ],
+    "league": "Premier League",
+    "team": "Liverpool",
+    "season": "2023/24",
+    "variant": "Local",
+    "player_name": "Darwin Núñez",
+    "player_number": 9,
+    "patches": "Europa League",
+    "position": "DEL",
+    "country": "Inglaterra",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "premier-league",
+      "liverpool"
+    ]
+  },
+  {
     "id": "JRS-MANCITY-202324-H",
     "type": "jersey",
     "name": "Man City Local 2023/24 — J. Alvarez",
