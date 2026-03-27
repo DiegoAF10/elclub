@@ -200,6 +200,37 @@
     ]
   },
   {
+    "id": "JRS-ARSENAL-Retro (pre-2005)-H",
+    "type": "jersey",
+    "name": "Arsenal Local Retro (pre-2005) — Henry",
+    "description": "Camiseta del Arsenal temporada Retro (pre-2005). Versión local. Con nombre y número de Henry (#14).",
+    "price": 200,
+    "image": "/assets/img/products/JRS-024-JRS-024-01.png",
+    "images": [
+      "/assets/img/products/JRS-024-JRS-024-01.png",
+      "/assets/img/products/JRS-024-JRS-024-02.png",
+      "/assets/img/products/JRS-024-JRS-024-03.png"
+    ],
+    "league": "Premier League",
+    "team": "Arsenal",
+    "season": "Retro (pre-2005)",
+    "variant": "Local",
+    "player_name": "Henry",
+    "player_number": 14,
+    "patches": null,
+    "position": "DEL",
+    "country": "Inglaterra",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "premier-league",
+      "arsenal"
+    ]
+  },
+  {
     "id": "JRS-CHELSEA-202324-H",
     "type": "jersey",
     "name": "Chelsea Local 2023/24",
