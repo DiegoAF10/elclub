@@ -264,6 +264,37 @@
     ]
   },
   {
+    "id": "JRS-FRANCIA-Retro (pre-2005)-H",
+    "type": "jersey",
+    "name": "Francia Local Retro (pre-2005) — Cantona",
+    "description": "Camiseta del Selección de Francia temporada Retro (pre-2005). Versión local. Con nombre y número de Cantona (#18).",
+    "price": 200,
+    "image": "/assets/img/products/JRS-013-JRS-013-01.png",
+    "images": [
+      "/assets/img/products/JRS-013-JRS-013-01.png",
+      "/assets/img/products/JRS-013-JRS-013-02.png",
+      "/assets/img/products/JRS-013-JRS-013-03.png"
+    ],
+    "league": "Selecciones",
+    "team": "Francia",
+    "season": "Retro (pre-2005)",
+    "variant": "Local",
+    "player_name": "Cantona",
+    "player_number": 18,
+    "patches": null,
+    "position": "DEL",
+    "country": "Francia",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "selecciones",
+      "francia"
+    ]
+  },
+  {
     "id": "JRS-FRANCIA-200506-A",
     "type": "jersey",
     "name": "Francia Visita 2005/06 — Zidane",
