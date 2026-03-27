@@ -299,6 +299,37 @@
     ]
   },
   {
+    "id": "JRS-JUVENTUS-201112-A",
+    "type": "jersey",
+    "name": "Juventus Visita 2011/12 — Pirlo",
+    "description": "Camiseta del Juventus temporada 2011/12. Versión visita. Con nombre y número de Pirlo (#21).",
+    "price": 200,
+    "image": "/assets/img/products/JRS-010-JRS-010-01.png",
+    "images": [
+      "/assets/img/products/JRS-010-JRS-010-01.png",
+      "/assets/img/products/JRS-010-JRS-010-02.png",
+      "/assets/img/products/JRS-010-JRS-010-03.png"
+    ],
+    "league": "Serie A",
+    "team": "Juventus",
+    "season": "2011/12",
+    "variant": "Visita",
+    "player_name": "Pirlo",
+    "player_number": 21,
+    "patches": null,
+    "position": "MED",
+    "country": "Italia",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "serie-a",
+      "juventus"
+    ]
+  },
+  {
     "id": "JRS-NAPOLI-202324-H",
     "type": "jersey",
     "name": "Napoli Local 2023/24",
