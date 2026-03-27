@@ -63,10 +63,11 @@
     "position": "MED",
     "country": "España",
     "sizes": [
+      "M",
       "L"
     ],
-    "stock": 1,
-    "featured": false,
+    "stock": 2,
+    "featured": true,
     "tags": [
       "la-liga",
       "barcelona"
