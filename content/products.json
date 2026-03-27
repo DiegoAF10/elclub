@@ -272,7 +272,11 @@
       "/assets/img/products/JRS-006-JRS-006-01.png",
       "/assets/img/products/JRS-006-JRS-006-02.png",
       "/assets/img/products/JRS-006-JRS-006-03.png",
-      "/assets/img/products/JRS-006-JRS-006-04.png"
+      "/assets/img/products/JRS-006-JRS-006-04.png",
+      "/assets/img/products/JRS-020-JRS-020-01.png",
+      "/assets/img/products/JRS-020-JRS-020-02.png",
+      "/assets/img/products/JRS-020-JRS-020-03.png",
+      "/assets/img/products/JRS-020-JRS-020-04.png"
     ],
     "league": "Premier League",
     "team": "Man City",
@@ -286,8 +290,8 @@
     "sizes": [
       "M"
     ],
-    "stock": 1,
-    "featured": false,
+    "stock": 2,
+    "featured": true,
     "tags": [
       "premier-league",
       "man-city"
