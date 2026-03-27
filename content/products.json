@@ -73,6 +73,37 @@
     ]
   },
   {
+    "id": "JRS-REALMADRID-202324-A",
+    "type": "jersey",
+    "name": "Real Madrid Visita 2023/24 — Rodrygo",
+    "description": "Camiseta del Real Madrid temporada 2023/24. Versión visita. Con nombre y número de Rodrygo (#11). Parches de Champions League.",
+    "price": 200,
+    "image": "/assets/img/products/JRS-016-JRS-016-01.png",
+    "images": [
+      "/assets/img/products/JRS-016-JRS-016-01.png",
+      "/assets/img/products/JRS-016-JRS-016-02.png",
+      "/assets/img/products/JRS-016-JRS-016-03.png"
+    ],
+    "league": "La Liga",
+    "team": "Real Madrid",
+    "season": "2023/24",
+    "variant": "Visita",
+    "player_name": "Rodrygo",
+    "player_number": 11,
+    "patches": "Champions League",
+    "position": "DEL",
+    "country": "España",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "la-liga",
+      "real-madrid"
+    ]
+  },
+  {
     "id": "JRS-SEVILLA-202324-H",
     "type": "jersey",
     "name": "Sevilla Local 2023/24 — Sergio Ramos",
