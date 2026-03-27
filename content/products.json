@@ -169,6 +169,37 @@
     ]
   },
   {
+    "id": "JRS-CHELSEA-202324-H",
+    "type": "jersey",
+    "name": "Chelsea Local 2023/24",
+    "description": "Camiseta del Chelsea temporada 2023/24. Versión local. Parches de Premier League.",
+    "price": 200,
+    "image": "/assets/img/products/JRS-018-JRS-018-01.png",
+    "images": [
+      "/assets/img/products/JRS-018-JRS-018-01.png",
+      "/assets/img/products/JRS-018-JRS-018-02.png",
+      "/assets/img/products/JRS-018-JRS-018-03.png"
+    ],
+    "league": "Premier League",
+    "team": "Chelsea",
+    "season": "2023/24",
+    "variant": "Local",
+    "player_name": null,
+    "player_number": null,
+    "patches": "Premier League",
+    "position": null,
+    "country": "Inglaterra",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "premier-league",
+      "chelsea"
+    ]
+  },
+  {
     "id": "JRS-LEICESTER-201516-H",
     "type": "jersey",
     "name": "Leicester Local 2015/16 — Vardy",
