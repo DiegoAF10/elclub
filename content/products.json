@@ -390,6 +390,38 @@
     ]
   },
   {
+    "id": "JRS-MILAN-202324-H",
+    "type": "jersey",
+    "name": "Milan Local 2023/24 — Rafael Leao",
+    "description": "Camiseta del AC Milan temporada 2023/24. Versión local. Con nombre y número de Rafael Leao (#10). Parches de Serie A.",
+    "price": 200,
+    "image": "/assets/img/products/JRS-015-JRS-015-01.png",
+    "images": [
+      "/assets/img/products/JRS-015-JRS-015-01.png",
+      "/assets/img/products/JRS-015-JRS-015-02.png",
+      "/assets/img/products/JRS-015-JRS-015-03.png",
+      "/assets/img/products/JRS-015-JRS-015-04.png"
+    ],
+    "league": "Serie A",
+    "team": "Milan",
+    "season": "2023/24",
+    "variant": "Local",
+    "player_name": "Rafael Leao",
+    "player_number": 10,
+    "patches": "Serie A",
+    "position": "DEL",
+    "country": "Italia",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "serie-a",
+      "milan"
+    ]
+  },
+  {
     "id": "JRS-INTER-201011-H",
     "type": "jersey",
     "name": "Inter Local 2010/11 — J. Zanetti",
