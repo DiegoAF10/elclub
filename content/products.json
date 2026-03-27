@@ -74,6 +74,37 @@
     ]
   },
   {
+    "id": "JRS-BARCELONA-201415-H",
+    "type": "jersey",
+    "name": "Barcelona Local 2014/15 — Neymar Jr.",
+    "description": "Camiseta del FC Barcelona temporada 2014/15. Versión local. Con nombre y número de Neymar Jr. (#11).",
+    "price": 200,
+    "image": "/assets/img/products/JRS-028-JRS-028-01.png",
+    "images": [
+      "/assets/img/products/JRS-028-JRS-028-01.png",
+      "/assets/img/products/JRS-028-JRS-028-02.png",
+      "/assets/img/products/JRS-028-JRS-028-03.png"
+    ],
+    "league": "La Liga",
+    "team": "Barcelona",
+    "season": "2014/15",
+    "variant": "Local",
+    "player_name": "Neymar Jr.",
+    "player_number": 11,
+    "patches": null,
+    "position": "DEL",
+    "country": "España",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "la-liga",
+      "barcelona"
+    ]
+  },
+  {
     "id": "JRS-REALMADRID-202324-A",
     "type": "jersey",
     "name": "Real Madrid Visita 2023/24 — Rodrygo",
