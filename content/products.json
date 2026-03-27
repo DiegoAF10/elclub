@@ -650,6 +650,37 @@
     ]
   },
   {
+    "id": "JRS-PORTUGAL-201516-H",
+    "type": "jersey",
+    "name": "Portugal Local 2015/16 — Cristiano Ronaldo",
+    "description": "Camiseta del Selección de Portugal temporada 2015/16. Versión local. Con nombre y número de Cristiano Ronaldo (#7).",
+    "price": 200,
+    "image": "/assets/img/products/JRS-030-JRS-030-01.png",
+    "images": [
+      "/assets/img/products/JRS-030-JRS-030-01.png",
+      "/assets/img/products/JRS-030-JRS-030-02.png",
+      "/assets/img/products/JRS-030-JRS-030-03.png"
+    ],
+    "league": "Selecciones",
+    "team": "Portugal",
+    "season": "2015/16",
+    "variant": "Local",
+    "player_name": "Cristiano Ronaldo",
+    "player_number": 7,
+    "patches": null,
+    "position": "DEL",
+    "country": "Portugal",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "selecciones",
+      "portugal"
+    ]
+  },
+  {
     "id": "JRS-MILAN-202324-H",
     "type": "jersey",
     "name": "Milan Local 2023/24 — Rafael Leao",
