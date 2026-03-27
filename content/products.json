@@ -455,6 +455,38 @@
     ]
   },
   {
+    "id": "JRS-BOCA-202324-H",
+    "type": "jersey",
+    "name": "Boca Local 2023/24",
+    "description": "Camiseta del Boca Juniors temporada 2023/24. Versión local. Parches de Libertadores.",
+    "price": 200,
+    "image": "/assets/img/products/JRS-027-JRS-027-01.png",
+    "images": [
+      "/assets/img/products/JRS-027-JRS-027-01.png",
+      "/assets/img/products/JRS-027-JRS-027-02.png",
+      "/assets/img/products/JRS-027-JRS-027-03.png",
+      "/assets/img/products/JRS-027-JRS-027-04.png"
+    ],
+    "league": "Primera División Argentina",
+    "team": "Boca",
+    "season": "2023/24",
+    "variant": "Local",
+    "player_name": null,
+    "player_number": null,
+    "patches": "Libertadores",
+    "position": null,
+    "country": "Argentina",
+    "sizes": [
+      "M"
+    ],
+    "stock": 1,
+    "featured": false,
+    "tags": [
+      "primera-división-argentina",
+      "boca"
+    ]
+  },
+  {
     "id": "JRS-ALHILAL-202324-H",
     "type": "jersey",
     "name": "Al Hilal Local 2023/24 — Neymar Jr.",
