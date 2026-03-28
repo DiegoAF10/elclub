@@ -39,15 +39,28 @@ function saveCart(cart) {
 }
 
 // ── Add item ──
-function addToCart(id, name, price, size, image) {
+function addToCart(id, name, price, size, image, stock) {
   var cart = getCart();
   var key = id + '-' + size;
+  var maxQty = stock || 1;
   var existing = null;
   for (var i = 0; i < cart.items.length; i++) {
     if (cart.items[i].key === key) { existing = cart.items[i]; break; }
   }
+
+  // Also count other sizes of same product in cart
+  var totalInCart = 0;
+  for (var j = 0; j < cart.items.length; j++) {
+    if (cart.items[j].id === id) totalInCart += cart.items[j].quantity;
+  }
+
+  if (totalInCart >= maxQty) {
+    showStockAlert(maxQty);
+    return;
+  }
+
   if (existing) {
-    existing.quantity = Math.min(5, existing.quantity + 1);
+    existing.quantity = Math.min(maxQty - (totalInCart - existing.quantity), existing.quantity + 1);
   } else {
     cart.items.push({
       key: key,
@@ -56,7 +69,8 @@ function addToCart(id, name, price, size, image) {
       price: price,
       size: size,
       image: image,
-      quantity: 1
+      quantity: 1,
+      stock: maxQty
     });
   }
   saveCart(cart);
@@ -95,12 +109,46 @@ function updateQuantity(key, qty) {
       if (qty <= 0) {
         cart.items.splice(i, 1);
       } else {
-        cart.items[i].quantity = Math.min(5, qty);
+        var maxStock = cart.items[i].stock || 99;
+        // Count total of same product (other sizes) in cart
+        var othersQty = 0;
+        for (var j = 0; j < cart.items.length; j++) {
+          if (cart.items[j].id === cart.items[i].id && j !== i) {
+            othersQty += cart.items[j].quantity;
+          }
+        }
+        var limit = maxStock - othersQty;
+        if (qty > limit) {
+          showStockAlert(maxStock);
+          qty = limit;
+        }
+        cart.items[i].quantity = Math.max(1, qty);
       }
       break;
     }
   }
   saveCart(cart);
+}
+
+// ── Stock alert ──
+function showStockAlert(maxStock) {
+  var msg = maxStock === 1
+    ? 'Solo queda 1 unidad disponible.'
+    : 'Solo quedan ' + maxStock + ' unidades disponibles.';
+  var existing = document.getElementById('stock-alert');
+  if (existing) existing.remove();
+  var alert = document.createElement('div');
+  alert.id = 'stock-alert';
+  alert.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:80;background:#dc2626;color:white;text-align:center;padding:12px;font-size:14px;font-weight:600;transform:translateY(-100%);transition:transform 0.3s ease;';
+  alert.textContent = msg;
+  document.body.appendChild(alert);
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() { alert.style.transform = 'translateY(0)'; });
+  });
+  setTimeout(function() {
+    alert.style.transform = 'translateY(-100%)';
+    setTimeout(function() { if (alert.parentNode) alert.remove(); }, 300);
+  }, 3000);
 }
 
 // ── Clear ──

@@ -36,7 +36,7 @@ function renderProductCard(product, isHero) {
     for (var i = 0; i < product.sizes.length; i++) {
       pills += '<button class="quick-add-btn" onclick="event.preventDefault(); event.stopPropagation(); addToCart(\'' +
         product.id + '\', \'' + product.name.replace(/'/g, "\\'") + '\', ' + product.price + ', \'' +
-        product.sizes[i] + '\', \'' + (product.image || '') + '\')">' +
+        product.sizes[i] + '\', \'' + (product.image || '') + '\', ' + (product.stock || 1) + ')">' +
         product.sizes[i] + '</button>';
     }
     quickAddHtml = '<div class="quick-add mt-2">' + pills + '</div>';
