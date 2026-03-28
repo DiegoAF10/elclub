@@ -164,21 +164,21 @@ function showCartToast(name, price, size) {
   toast.className = 'fixed top-0 left-0 right-0 z-[70] transform -translate-y-full';
   toast.style.transition = 'transform 0.35s cubic-bezier(0.4,0,0.2,1)';
   toast.innerHTML =
-    '<div class="bg-white shadow-lg border-b border-sand">' +
-      '<div class="max-w-lg mx-auto px-4 py-3">' +
-        '<div class="flex items-center gap-2 mb-2">' +
-          '<div class="w-5 h-5 bg-success rounded-full flex items-center justify-center flex-shrink-0">' +
-            '<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' +
+    '<div style="background:#111;border-bottom:1px solid #333;">' +
+      '<div style="max-width:32rem;margin:0 auto;padding:12px 16px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+          '<div style="width:20px;height:20px;background:#22c55e;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' +
+            '<svg style="width:12px;height:12px;color:white;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>' +
           '</div>' +
-          '<p class="text-sm font-semibold flex-1">Agregado al carrito</p>' +
-          '<button onclick="dismissCartToast()" class="text-gray-400 hover:text-gray-600 p-1 cursor-pointer">' +
-            '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>' +
+          '<p style="font-size:14px;font-weight:600;color:white;flex:1;margin:0;">Agregado al carrito</p>' +
+          '<button onclick="dismissCartToast()" style="color:#888;background:none;border:none;padding:4px;cursor:pointer;">' +
+            '<svg style="width:20px;height:20px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>' +
           '</button>' +
         '</div>' +
-        '<p class="text-sm text-warm">' + name + ' — Talla ' + size + ' — Q' + price + '</p>' +
-        '<div class="flex gap-2 mt-3">' +
-          '<button onclick="openCartDrawer(); dismissCartToast();" class="flex-1 text-center text-sm font-bold text-white bg-carbon rounded py-2.5 hover:bg-gold hover:text-carbon transition-colors cursor-pointer uppercase tracking-wider">Ver carrito (' + count + ')</button>' +
-          '<button onclick="dismissCartToast()" class="flex-1 text-center text-sm font-bold text-carbon border border-sand rounded py-2.5 hover:bg-sand-light transition-colors cursor-pointer uppercase tracking-wider">Seguir viendo</button>' +
+        '<p style="font-size:14px;color:#aaa;margin:0 0 12px;">' + name + ' — Talla ' + size + ' — Q' + price + '</p>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button onclick="openCartDrawer(); dismissCartToast();" style="flex:1;text-align:center;font-size:13px;font-weight:700;color:#111;background:#4DA8FF;border:none;border-radius:6px;padding:10px;cursor:pointer;text-transform:uppercase;letter-spacing:0.05em;">Ver carrito (' + count + ')</button>' +
+          '<button onclick="dismissCartToast()" style="flex:1;text-align:center;font-size:13px;font-weight:700;color:white;background:none;border:1px solid #333;border-radius:6px;padding:10px;cursor:pointer;text-transform:uppercase;letter-spacing:0.05em;">Seguir viendo</button>' +
         '</div>' +
       '</div>' +
     '</div>';
