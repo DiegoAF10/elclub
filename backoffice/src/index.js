@@ -659,6 +659,30 @@ export default {
         return json(result, 200, cors);
       }
 
+      // Get order by checkout ID (public — no sensitive data exposed)
+      if (url.pathname.startsWith('/api/order/') && request.method === 'GET') {
+        const orderId = url.pathname.replace('/api/order/', '');
+        if (!orderId) return json({ error: 'ID requerido' }, 400, cors);
+
+        const raw = await env.DATA.get(`order:${orderId}`);
+        if (!raw) return json({ error: 'Orden no encontrada' }, 404, cors);
+
+        const order = JSON.parse(raw);
+        // Return only customer-safe fields
+        return json({
+          checkout_id: order.checkout_id,
+          items: (order.items || []).map(i => ({
+            name: i.name,
+            quantity: i.quantity,
+            amount: i.amount_in_cents ? i.amount_in_cents / 100 : 0
+          })),
+          total: order.amount_cents ? order.amount_cents / 100 : 0,
+          receipt_number: order.receipt_number || null,
+          customer_name: order.customer?.name || '',
+          paid_at: order.paid_at,
+        }, 200, cors);
+      }
+
       // Validate coupon
       if (url.pathname === '/api/coupons/validate' && request.method === 'GET') {
         const result = await handleCouponValidate(url, env);
