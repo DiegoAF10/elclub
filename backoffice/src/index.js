@@ -753,6 +753,66 @@ export default {
         return json({ status: 'ok', service: 'elclub-backoffice' }, 200, cors);
       }
 
+      // Cash on delivery order
+      if (url.pathname === '/api/order/cod' && request.method === 'POST') {
+        let data;
+        try { data = await request.json(); } catch {
+          return json({ error: 'JSON invalido' }, 400, cors);
+        }
+
+        if (!data.items || !data.items.length) {
+          return json({ error: 'Se requiere al menos un producto' }, 400, cors);
+        }
+
+        // Generate order number
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let orderCode = 'CE-';
+        for (let i = 0; i < 4; i++) orderCode += chars[Math.floor(Math.random() * chars.length)];
+
+        const totalCents = data.items.reduce((sum, i) => sum + (i.amount_in_cents * i.quantity), 0);
+
+        const order = {
+          checkout_id: orderCode,
+          payment_id: null,
+          payment_method: 'contra_entrega',
+          amount_cents: totalCents,
+          items: data.items,
+          product_ids: data.product_ids || [],
+          product_quantities: data.product_quantities || {},
+          coupon_code: data.coupon_code || null,
+          customer: data.customer || {},
+          receipt_number: orderCode,
+          paid_at: null,
+          created_at: new Date().toISOString(),
+        };
+
+        // Store order in KV (90 days)
+        await env.DATA.put(`order:${orderCode}`, JSON.stringify(order), { expirationTtl: 7776000 });
+
+        // Run tasks in parallel
+        const tasks = [];
+
+        // Email to Diego
+        if (env.RESEND_API_KEY) {
+          tasks.push(sendDiegoAlert(env, order).catch(err => console.error('Diego alert failed:', err)));
+        }
+
+        // WhatsApp confirmation to customer via ManyChat
+        if (env.MANYCHAT_API_KEY && order.customer.phone) {
+          tasks.push(sendManyChatConfirmation(env, order).catch(err => console.error('ManyChat failed:', err)));
+        }
+
+        // Reserve stock on GitHub
+        if (data.product_ids?.length > 0 && env.GITHUB_TOKEN) {
+          tasks.push(updateStock(env, data.product_ids, data.product_quantities).catch(err => console.error('Stock failed:', err)));
+        }
+
+        await Promise.allSettled(tasks);
+
+        console.log(`COD order created: ${orderCode} — Q${totalCents / 100}`);
+        return json({ order_id: orderCode, status: 'reserved' }, 200, cors);
+      }
+
       // Create Recurrente checkout
       if (url.pathname === '/api/checkout' && request.method === 'POST') {
         let data;

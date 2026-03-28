@@ -559,7 +559,113 @@ function payWithCard() {
 
 // ── Payment: Contra Entrega ──
 function payContraEntrega() {
-  sendOrderWhatsApp('contra_entrega');
+  var totals = getCartTotals();
+  if (totals.count === 0) return;
+
+  var shipping = JSON.parse(localStorage.getItem(SHIPPING_KEY) || '{}');
+
+  // Build items with SKU IDs
+  var items = [];
+  var productIds = [];
+  var productQuantities = {};
+  for (var i = 0; i < totals.items.length; i++) {
+    var item = totals.items[i];
+    items.push({
+      name: item.name + ' (Talla ' + item.size + ')',
+      amount_in_cents: item.price * 100,
+      currency: 'GTQ',
+      quantity: item.quantity,
+      sku: item.id
+    });
+    if (productIds.indexOf(item.id) === -1) productIds.push(item.id);
+    productQuantities[item.id] = (productQuantities[item.id] || 0) + item.quantity;
+  }
+
+  // Apply coupon discount
+  var discount = getDiscountAmount(totals.subtotal);
+  if (appliedCoupon && discount > 0) {
+    var remainingCents = discount * 100;
+    for (var d = 0; d < items.length && remainingCents > 0; d++) {
+      var unitPrice = items[d].amount_in_cents;
+      var qty = items[d].quantity;
+      var maxReduction = (unitPrice - 100) * qty;
+      if (maxReduction <= 0) continue;
+      var take = Math.min(remainingCents, maxReduction);
+      items[d].amount_in_cents = unitPrice - Math.floor(take / qty);
+      remainingCents -= Math.floor(take / qty) * qty;
+    }
+  }
+
+  // Show loading
+  var btn = document.querySelector('[onclick="payContraEntrega()"]');
+  var btnText = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+  }
+
+  fetch(ELCLUB_API_URL + '/api/order/cod', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      items: items,
+      product_ids: productIds,
+      product_quantities: productQuantities,
+      coupon_code: appliedCoupon ? appliedCoupon.code : null,
+      customer: {
+        name: shipping.name || '',
+        email: shipping.email || '',
+        phone: shipping.phone || '',
+        address: shipping.address || '',
+        department: shipping.department || '',
+        municipality: shipping.municipality || '',
+        zone: shipping.zone || '',
+        reference: shipping.reference || '',
+        notes: shipping.reference || ''
+      }
+    })
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (data.order_id) {
+      // Save order for gracias.html
+      var orderItems = [];
+      for (var k = 0; k < totals.items.length; k++) {
+        var ci = totals.items[k];
+        orderItems.push({
+          id: ci.id, name: ci.name, size: ci.size,
+          price: ci.price, quantity: ci.quantity, image: ci.image || ''
+        });
+      }
+      localStorage.setItem('elclub_pending_order', JSON.stringify({
+        checkout_id: data.order_id,
+        order_number: data.order_id,
+        items: orderItems,
+        subtotal: totals.subtotal,
+        discount: discount,
+        coupon_code: appliedCoupon ? appliedCoupon.code : null,
+        shipping: SHIPPING_COST,
+        total: totals.total + SHIPPING_COST - discount,
+        customer_name: shipping.name || '',
+        payment_method: 'contra_entrega',
+        saved_at: new Date().toISOString()
+      }));
+
+      clearCart();
+      localStorage.removeItem(SHIPPING_KEY);
+      window.location.href = '/gracias.html';
+    } else {
+      throw new Error(data.error || 'Error al crear la orden');
+    }
+  })
+  .catch(function(err) {
+    console.error('COD order error:', err);
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = '';
+    }
+    alert('No se pudo procesar tu pedido. Por favor intentá de nuevo.');
+  });
 }
 
 // ── WhatsApp Order Message ──
