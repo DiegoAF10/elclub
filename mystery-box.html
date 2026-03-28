@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mystery Box — El Club</title>
 
-  <meta name="description" content="No elegís. Descubrís. Mystery boxes de camisetas de fútbol seleccionadas por El Club. Clásica Q400, Premium Q600.">
+  <meta name="description" content="No elegis. Descubris. Mystery box de camiseta de futbol curada por El Club. Q350 oferta de relanzamiento.">
   <link rel="canonical" href="https://elclub.club/mystery-box.html">
   <meta property="og:title" content="Mystery Box — El Club">
-  <meta property="og:description" content="No elegís. Descubrís. Mystery boxes con historia del fútbol mundial.">
+  <meta property="og:description" content="No elegis. Descubris. Una camiseta con historia, seleccionada para vos.">
   <meta property="og:image" content="https://elclub.club/assets/img/brand/og-image.png">
   <link rel="icon" type="image/png" href="/assets/img/brand/favicon.png">
 
@@ -16,67 +16,316 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-  <link rel="stylesheet" href="/assets/css/elclub.css?v=2">
+  <link rel="stylesheet" href="/assets/css/elclub.css?v=3">
 
-  <!-- JSON-LD Structured Data: FAQPage -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "FAQPage",
     "mainEntity": [
-      {
-        "@type": "Question",
-        "name": "Puedo elegir que camiseta me toca?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "No. Ese es el punto. Confiá en la caja — cada pieza es seleccionada especialmente para vos."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Son camisetas originales?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Son replicas AAA de altisima calidad. Mismos materiales, misma atencion al detalle. La diferencia con una original es el precio — no la calidad."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Cuanto tarda en llegar?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "2-4 dias habiles en Ciudad de Guatemala. Interior: 4-7 dias. Q25 de envio."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Que pasa si no me gusta lo que me toca?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Esa es la magia de la mystery box. Pero si hay un problema real con la calidad, escribinos por WhatsApp y lo resolvemos."
-        }
-      },
-      {
-        "@type": "Question",
-        "name": "Como pago?",
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": "Con tarjeta a traves de Recurrente (plataforma segura). Tambien podes coordinar pago en efectivo contra entrega por WhatsApp."
-        }
-      }
+      {"@type":"Question","name":"Cuantas camisetas vienen en la mystery box?","acceptedAnswer":{"@type":"Answer","text":"Una. Una pieza seleccionada con historia del futbol mundial."}},
+      {"@type":"Question","name":"Puedo elegir que camiseta me toca?","acceptedAnswer":{"@type":"Answer","text":"No. Pero podes decirnos que equipos, jugadores o colores preferis evitar."}},
+      {"@type":"Question","name":"Son camisetas originales?","acceptedAnswer":{"@type":"Answer","text":"Son replicas AAA de altisima calidad. Mismos materiales, misma atencion al detalle."}},
+      {"@type":"Question","name":"Cuanto tarda en llegar?","acceptedAnswer":{"@type":"Answer","text":"2-4 dias habiles en Ciudad de Guatemala. Interior: 4-7 dias. Envio gratis."}},
+      {"@type":"Question","name":"Como pago?","acceptedAnswer":{"@type":"Answer","text":"Con tarjeta (Recurrente) o contra entrega en efectivo."}}
     ]
   }
   </script>
 
-  <!-- GA4 -->
-  <!-- TODO: Replace G-XXXXXXXXXX with actual GA4 measurement ID -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-XXXXXXXXXX');
-  </script>
+  <style>
+    /* ── Smoke effects ── */
+    .smoke-bg {
+      position: relative;
+      overflow: hidden;
+    }
+    .smoke-layer-1, .smoke-layer-2, .smoke-layer-3 {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .smoke-layer-1 {
+      background: radial-gradient(ellipse at 20% 90%, rgba(77,168,255,0.07) 0%, transparent 55%);
+      animation: smoke1 18s ease-in-out infinite alternate;
+    }
+    .smoke-layer-2 {
+      background: radial-gradient(ellipse at 80% 10%, rgba(77,168,255,0.05) 0%, transparent 50%);
+      animation: smoke2 22s ease-in-out infinite alternate;
+    }
+    .smoke-layer-3 {
+      background: radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.02) 0%, transparent 60%);
+      animation: smoke3 15s ease-in-out infinite alternate;
+    }
+    @keyframes smoke1 {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(30px, -20px) scale(1.1); }
+    }
+    @keyframes smoke2 {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(-25px, 15px) scale(1.15); }
+    }
+    @keyframes smoke3 {
+      0% { transform: translate(0, 0) scale(1); opacity: 0.5; }
+      100% { transform: translate(15px, -30px) scale(1.2); opacity: 1; }
+    }
+
+    /* ── Particles ── */
+    .particle {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(77,168,255,0.15);
+      pointer-events: none;
+      animation: particleFloat linear infinite;
+    }
+    @keyframes particleFloat {
+      0% { transform: translateY(0) translateX(0); opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { transform: translateY(-100vh) translateX(30px); opacity: 0; }
+    }
+
+    /* ── Wizard overlay ── */
+    .wizard-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      background: #0a0a0a;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.4s ease;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    .wizard-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .wizard-overlay .smoke-layer-1,
+    .wizard-overlay .smoke-layer-2 {
+      position: fixed;
+    }
+
+    /* ── Wizard step transitions ── */
+    .wizard-step {
+      display: none;
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    .wizard-step.active {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      animation: stepIn 0.35s ease forwards;
+    }
+    .wizard-step.exiting {
+      display: flex;
+      animation: stepOut 0.25s ease forwards;
+    }
+    @keyframes stepIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes stepOut {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(-20px); }
+    }
+
+    /* ── Progress dots ── */
+    .wiz-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #2A2A2A;
+      transition: all 0.3s ease;
+    }
+    .wiz-dot.active {
+      background: #4DA8FF;
+      transform: scale(1.4);
+      box-shadow: 0 0 8px rgba(77,168,255,0.4);
+    }
+    .wiz-dot.done {
+      background: #22C55E;
+    }
+
+    /* ── Team badge ── */
+    .team-badge {
+      padding: 6px 12px;
+      border: 1px solid #2A2A2A;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #999;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .team-badge:hover {
+      border-color: #4DA8FF;
+      color: white;
+    }
+    .team-badge.avoided {
+      border-color: #ef4444;
+      background: rgba(239,68,68,0.1);
+      color: #ef4444;
+    }
+
+    /* ── Color swatch ── */
+    .color-swatch {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      border: 3px solid #2A2A2A;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    .color-swatch:hover { transform: scale(1.1); }
+    .color-swatch.selected {
+      border-color: #4DA8FF;
+      box-shadow: 0 0 12px rgba(77,168,255,0.4);
+    }
+    .color-swatch.selected::after {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.8);
+    }
+
+    /* ── Era card ── */
+    .era-card {
+      flex: 1;
+      padding: 32px 20px;
+      border: 2px solid #2A2A2A;
+      border-radius: 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .era-card:hover { border-color: #4DA8FF; }
+    .era-card.selected {
+      border-color: #4DA8FF;
+      background: rgba(77,168,255,0.05);
+      box-shadow: 0 0 20px rgba(77,168,255,0.15);
+    }
+
+    /* ── Size pill (wizard) ── */
+    .wiz-size {
+      width: 72px;
+      height: 72px;
+      border: 2px solid #2A2A2A;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Oswald', sans-serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: #999;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .wiz-size:hover { border-color: #4DA8FF; color: white; }
+    .wiz-size.selected {
+      border-color: #4DA8FF;
+      background: #4DA8FF;
+      color: #0a0a0a;
+      box-shadow: 0 0 20px rgba(77,168,255,0.3);
+    }
+
+    /* ── League tab ── */
+    .league-tab {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+    .league-tab:hover { color: white; }
+    .league-tab.active {
+      background: rgba(77,168,255,0.1);
+      color: #4DA8FF;
+      border-color: rgba(77,168,255,0.3);
+    }
+
+    /* ── Countdown ── */
+    .countdown-box {
+      display: inline-flex;
+      gap: 4px;
+      align-items: baseline;
+    }
+    .countdown-num {
+      font-family: 'Oswald', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: white;
+      min-width: 28px;
+      text-align: center;
+    }
+    .countdown-label {
+      font-size: 10px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-right: 8px;
+    }
+    .countdown-sep {
+      color: #333;
+      font-size: 16px;
+    }
+
+    /* ── Price badge ── */
+    .price-old {
+      text-decoration: line-through;
+      color: #666;
+      font-size: 18px;
+    }
+    .price-offer {
+      color: #4DA8FF;
+      font-family: 'Oswald', sans-serif;
+      font-size: 48px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .offer-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #4DA8FF, #3B82B0);
+      color: #0a0a0a;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 4px 12px;
+      border-radius: 20px;
+    }
+
+    /* ── Wizard search ── */
+    .wiz-search {
+      background: #1C1C1C;
+      border: 1px solid #2A2A2A;
+      border-radius: 10px;
+      padding: 10px 16px 10px 40px;
+      color: white;
+      font-size: 14px;
+      width: 100%;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .wiz-search:focus { border-color: #4DA8FF; }
+    .wiz-search::placeholder { color: #555; }
+
+    @media (max-width: 640px) {
+      .particle { display: none; }
+      .color-swatch { width: 44px; height: 44px; }
+      .wiz-size { width: 64px; height: 64px; font-size: 20px; }
+      .price-offer { font-size: 40px; }
+    }
+  </style>
 </head>
 <body class="bg-midnight text-white">
 
@@ -111,196 +360,290 @@
         </button>
       </div>
       <nav class="flex flex-col gap-8">
-        <a href="/explora.html" onclick="closeMobileMenu()" class="text-2xl">Catálogo</a>
-        <a href="/mystery-box.html" onclick="closeMobileMenu()" class="text-2xl text-ice">Mystery Box</a>
-        <a href="/personaliza.html" onclick="closeMobileMenu()" class="text-2xl">Pedí tu Camiseta</a>
-        <a href="/nosotros.html" onclick="closeMobileMenu()" class="text-2xl">Nosotros</a>
-        <a href="/contacto.html" onclick="closeMobileMenu()" class="text-2xl">Contacto</a>
+        <a href="/explora.html" class="text-2xl">Catálogo</a>
+        <a href="/mystery-box.html" class="text-2xl text-ice">Mystery Box</a>
+        <a href="/personaliza.html" class="text-2xl">Pedí tu Camiseta</a>
+        <a href="/nosotros.html" class="text-2xl">Nosotros</a>
+        <a href="/contacto.html" class="text-2xl">Contacto</a>
       </nav>
     </div>
   </div>
 
-  <!-- Breadcrumb -->
-  <div class="pt-16 bg-midnight">
-    <div class="max-w-6xl mx-auto px-4 py-3">
-      <a href="/" class="text-smoke text-sm hover:text-ice transition-colors">&larr; Volver</a>
+  <!-- ═══════════════════════════════════════ -->
+  <!-- HERO -->
+  <!-- ═══════════════════════════════════════ -->
+  <section class="smoke-bg relative min-h-screen flex items-center justify-center pt-16">
+    <div class="smoke-layer-1"></div>
+    <div class="smoke-layer-2"></div>
+    <div class="smoke-layer-3"></div>
+
+    <!-- Particles -->
+    <div class="particle" style="width:3px;height:3px;left:10%;animation-duration:12s;animation-delay:0s;"></div>
+    <div class="particle" style="width:2px;height:2px;left:25%;animation-duration:16s;animation-delay:2s;"></div>
+    <div class="particle" style="width:4px;height:4px;left:45%;animation-duration:14s;animation-delay:4s;"></div>
+    <div class="particle" style="width:2px;height:2px;left:65%;animation-duration:18s;animation-delay:1s;"></div>
+    <div class="particle" style="width:3px;height:3px;left:80%;animation-duration:13s;animation-delay:3s;"></div>
+    <div class="particle" style="width:2px;height:2px;left:90%;animation-duration:15s;animation-delay:5s;"></div>
+    <div class="particle" style="width:3px;height:3px;left:35%;animation-duration:17s;animation-delay:6s;"></div>
+    <div class="particle" style="width:2px;height:2px;left:55%;animation-duration:11s;animation-delay:7s;"></div>
+
+    <div class="relative z-10 max-w-3xl mx-auto px-6 text-center">
+      <span class="offer-badge mb-6 inline-block animate-fade-in-up">Oferta de relanzamiento</span>
+
+      <h1 class="font-display text-5xl sm:text-6xl md:text-7xl text-white leading-[0.95] mb-4" style="animation: fadeInUp 0.6s ease 0.15s forwards; opacity: 0;">
+        No elegís.<br><span class="text-ice">Descubrís.</span>
+      </h1>
+
+      <p class="text-smoke text-base md:text-lg max-w-md mx-auto leading-relaxed mb-8" style="animation: fadeInUp 0.6s ease 0.3s forwards; opacity: 0;">
+        Una camiseta con historia del fútbol mundial, seleccionada especialmente para vos.
+      </p>
+
+      <!-- Price -->
+      <div class="mb-6" style="animation: fadeInUp 0.6s ease 0.4s forwards; opacity: 0;">
+        <span class="price-old">Q400</span>
+        <div class="price-offer" id="hero-price">Q350</div>
+        <p class="text-smoke text-xs mt-2">Envío gratis a todo Guatemala</p>
+      </div>
+
+      <!-- Countdown -->
+      <div class="mb-10" style="animation: fadeInUp 0.6s ease 0.5s forwards; opacity: 0;">
+        <p class="text-ash text-xs uppercase tracking-widest mb-3">La oferta termina en</p>
+        <div id="hero-countdown" class="countdown-box justify-center"></div>
+      </div>
+
+      <!-- CTAs -->
+      <div class="flex flex-col sm:flex-row gap-4 justify-center" style="animation: fadeInUp 0.6s ease 0.6s forwards; opacity: 0;">
+        <button onclick="openWizard(1)" class="btn-primary text-base px-10 py-4 cursor-pointer">Empezar el ritual</button>
+        <button onclick="openWizard(5)" class="btn-ghost text-base px-10 py-4 cursor-pointer border border-chalk">Sorpréndeme</button>
+      </div>
+    </div>
+
+    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 opacity-40">
+      <div class="w-px h-16 bg-gradient-to-b from-transparent to-ice/30"></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- WIZARD OVERLAY -->
+  <!-- ═══════════════════════════════════════ -->
+  <div id="wizard" class="wizard-overlay">
+    <div class="smoke-layer-1"></div>
+    <div class="smoke-layer-2"></div>
+
+    <!-- Close + Progress -->
+    <div class="fixed top-0 left-0 right-0 z-110 px-4 py-4 flex items-center justify-between">
+      <div class="flex gap-2" id="wiz-dots"></div>
+      <button onclick="closeWizard()" class="w-10 h-10 flex items-center justify-center rounded-full border border-chalk text-smoke hover:text-white hover:border-ice transition-all cursor-pointer" style="background:rgba(10,10,10,0.8);">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+
+    <!-- Wizard container -->
+    <div class="min-h-screen flex items-center justify-center px-4 py-20">
+      <div class="w-full max-w-2xl">
+
+        <!-- STEP 1: Equipos a evitar -->
+        <div id="wiz-step-1" class="wizard-step">
+          <p class="text-ice text-xs font-bold uppercase tracking-[0.2em] mb-3">Paso 1 de 5</p>
+          <h2 class="font-display text-3xl sm:text-4xl text-white text-center mb-2">¿Qué equipos NO querés?</h2>
+          <p class="text-smoke text-sm text-center mb-6 max-w-md">Tocá los equipos que preferís evitar. No te preocupés, es solo una guía.</p>
+
+          <!-- Search -->
+          <div class="relative w-full max-w-sm mb-4">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ash" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+            <input type="text" class="wiz-search" placeholder="Buscar equipo..." oninput="filterTeams(this.value)">
+          </div>
+
+          <!-- League tabs -->
+          <div class="flex flex-wrap gap-2 mb-4 justify-center" id="league-tabs"></div>
+
+          <!-- Teams grid -->
+          <div class="w-full max-h-[40vh] overflow-y-auto rounded-lg p-2" style="scrollbar-width:thin;scrollbar-color:#2A2A2A #0a0a0a;">
+            <div id="teams-grid" class="flex flex-wrap gap-2 justify-center"></div>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-3 mt-6 w-full max-w-sm">
+            <button onclick="wizNext()" class="btn-primary flex-1 py-3 cursor-pointer">Siguiente</button>
+            <button onclick="skipTeams(); wizNext()" class="btn-ghost flex-1 py-3 cursor-pointer text-sm">Estoy abierto a todos</button>
+          </div>
+        </div>
+
+        <!-- STEP 2: Jugadores a evitar -->
+        <div id="wiz-step-2" class="wizard-step">
+          <p class="text-ice text-xs font-bold uppercase tracking-[0.2em] mb-3">Paso 2 de 5</p>
+          <h2 class="font-display text-3xl sm:text-4xl text-white text-center mb-2">¿Qué jugadores NO querés?</h2>
+          <p class="text-smoke text-sm text-center mb-8 max-w-md">Si hay alguien que preferís que no te toque, escribilo acá.</p>
+
+          <textarea id="wiz-players" class="wiz-search w-full max-w-sm" rows="3" style="padding-left:16px;resize:none;" placeholder="Ej: Cristiano Ronaldo, Messi..."></textarea>
+
+          <div class="flex flex-col sm:flex-row gap-3 mt-6 w-full max-w-sm">
+            <button onclick="wizNext()" class="btn-primary flex-1 py-3 cursor-pointer">Siguiente</button>
+            <button onclick="document.getElementById('wiz-players').value=''; wizNext()" class="btn-ghost flex-1 py-3 cursor-pointer text-sm">Ninguno</button>
+          </div>
+          <button onclick="wizPrev()" class="mt-4 text-ash text-sm hover:text-smoke cursor-pointer bg-transparent border-none">&larr; Volver</button>
+        </div>
+
+        <!-- STEP 3: Colores -->
+        <div id="wiz-step-3" class="wizard-step">
+          <p class="text-ice text-xs font-bold uppercase tracking-[0.2em] mb-3">Paso 3 de 5</p>
+          <h2 class="font-display text-3xl sm:text-4xl text-white text-center mb-2">¿Qué colores preferís?</h2>
+          <p class="text-smoke text-sm text-center mb-8 max-w-md">Seleccioná los colores que más te gustan.</p>
+
+          <div class="flex flex-wrap gap-4 justify-center mb-8" id="color-swatches">
+            <button class="color-swatch" data-color="blanco" style="background:#f0f0f0;" onclick="toggleColor(this)" title="Blanco"></button>
+            <button class="color-swatch" data-color="negro" style="background:#111111;" onclick="toggleColor(this)" title="Negro"></button>
+            <button class="color-swatch" data-color="rojo" style="background:#dc2626;" onclick="toggleColor(this)" title="Rojo"></button>
+            <button class="color-swatch" data-color="azul" style="background:#2563eb;" onclick="toggleColor(this)" title="Azul"></button>
+            <button class="color-swatch" data-color="celeste" style="background:#4DA8FF;" onclick="toggleColor(this)" title="Celeste"></button>
+            <button class="color-swatch" data-color="amarillo" style="background:#eab308;" onclick="toggleColor(this)" title="Amarillo"></button>
+            <button class="color-swatch" data-color="verde" style="background:#16a34a;" onclick="toggleColor(this)" title="Verde"></button>
+            <button class="color-swatch" data-color="naranja" style="background:#ea580c;" onclick="toggleColor(this)" title="Naranja"></button>
+            <button class="color-swatch" data-color="morado" style="background:#7c3aed;" onclick="toggleColor(this)" title="Morado"></button>
+            <button class="color-swatch" data-color="rosa" style="background:#ec4899;" onclick="toggleColor(this)" title="Rosa"></button>
+          </div>
+
+          <div class="flex flex-col sm:flex-row gap-3 w-full max-w-sm">
+            <button onclick="wizNext()" class="btn-primary flex-1 py-3 cursor-pointer">Siguiente</button>
+            <button onclick="clearColors(); wizNext()" class="btn-ghost flex-1 py-3 cursor-pointer text-sm">Sin preferencia</button>
+          </div>
+          <button onclick="wizPrev()" class="mt-4 text-ash text-sm hover:text-smoke cursor-pointer bg-transparent border-none">&larr; Volver</button>
+        </div>
+
+        <!-- STEP 4: Retro o actual -->
+        <div id="wiz-step-4" class="wizard-step">
+          <p class="text-ice text-xs font-bold uppercase tracking-[0.2em] mb-3">Paso 4 de 5</p>
+          <h2 class="font-display text-3xl sm:text-4xl text-white text-center mb-2">¿Retro o actual?</h2>
+          <p class="text-smoke text-sm text-center mb-8 max-w-md">¿Preferís una pieza clásica o de temporadas recientes?</p>
+
+          <div class="flex gap-4 w-full max-w-md">
+            <button class="era-card" data-era="retro" onclick="selectEra(this)">
+              <div class="text-4xl mb-3">&#9917;</div>
+              <h3 class="font-display text-xl text-white mb-1">Retro</h3>
+              <p class="text-smoke text-xs">Piezas clásicas con historia</p>
+            </button>
+            <button class="era-card" data-era="actual" onclick="selectEra(this)">
+              <div class="text-4xl mb-3">&#128293;</div>
+              <h3 class="font-display text-xl text-white mb-1">Actual</h3>
+              <p class="text-smoke text-xs">Temporadas recientes</p>
+            </button>
+          </div>
+          <button class="era-card mt-4 w-full max-w-md" data-era="cualquiera" onclick="selectEra(this)" style="padding:16px 20px;">
+            <h3 class="font-display text-lg text-white">Cualquiera</h3>
+            <p class="text-smoke text-xs">Sorpréndeme con lo que sea</p>
+          </button>
+
+          <button onclick="wizPrev()" class="mt-6 text-ash text-sm hover:text-smoke cursor-pointer bg-transparent border-none">&larr; Volver</button>
+        </div>
+
+        <!-- STEP 5: Talla -->
+        <div id="wiz-step-5" class="wizard-step">
+          <p class="text-ice text-xs font-bold uppercase tracking-[0.2em] mb-3">Paso 5 de 5</p>
+          <h2 class="font-display text-3xl sm:text-4xl text-white text-center mb-2">Tu talla</h2>
+          <p class="text-smoke text-sm text-center mb-8">Seleccioná tu talla para la camiseta.</p>
+
+          <div class="flex gap-4 justify-center mb-6">
+            <button class="wiz-size" onclick="selectWizSize(this)" data-size="S">S</button>
+            <button class="wiz-size" onclick="selectWizSize(this)" data-size="M">M</button>
+            <button class="wiz-size" onclick="selectWizSize(this)" data-size="L">L</button>
+            <button class="wiz-size" onclick="selectWizSize(this)" data-size="XL">XL</button>
+          </div>
+
+          <button onclick="wizPrev()" class="mt-4 text-ash text-sm hover:text-smoke cursor-pointer bg-transparent border-none">&larr; Volver</button>
+        </div>
+
+        <!-- STEP 6: Resumen -->
+        <div id="wiz-step-6" class="wizard-step">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-full border-2 border-ice flex items-center justify-center" style="animation: pulseIce 2s infinite;">
+            <svg class="w-8 h-8 text-ice" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <h2 class="font-display text-3xl sm:text-4xl text-white text-center mb-2">Tu perfil está listo</h2>
+          <p class="text-smoke text-sm text-center mb-6">Los Dioses del Fútbol ya saben qué buscás.</p>
+
+          <!-- Summary -->
+          <div class="w-full max-w-sm bg-pitch rounded-xl border border-chalk p-5 mb-6">
+            <div id="wiz-summary" class="space-y-2 text-sm"></div>
+          </div>
+
+          <!-- Price -->
+          <div class="text-center mb-6">
+            <span class="price-old">Q400</span>
+            <div class="price-offer" id="wiz-price">Q350</div>
+            <p class="text-smoke text-xs mt-1">Envío gratis incluido</p>
+          </div>
+
+          <button id="wiz-add-btn" onclick="addMysteryToCart()" class="btn-primary w-full max-w-sm py-4 cursor-pointer text-base">
+            Agregar al carrito
+          </button>
+          <button onclick="wizPrev()" class="mt-4 text-ash text-sm hover:text-smoke cursor-pointer bg-transparent border-none">&larr; Cambiar algo</button>
+        </div>
+
+      </div>
     </div>
   </div>
 
-  <!-- HERO -->
-  <section class="hero-smoke relative min-h-[40vh] flex items-center justify-center bg-midnight">
-    <div class="absolute inset-0 bg-gradient-to-b from-pitch/30 via-midnight to-midnight"></div>
-    <div class="relative z-10 max-w-3xl mx-auto px-6 text-center">
-      <p class="text-ice text-xs font-bold uppercase tracking-[0.3em] mb-6 animate-fade-in-up">La experiencia</p>
-      <h1 class="font-display text-5xl sm:text-6xl md:text-7xl text-white leading-[0.95] mb-6" style="animation: fadeInUp 0.6s ease 0.15s forwards; opacity: 0;">
-        No elegís.<br><span class="text-ice">Descubrís.</span>
-      </h1>
-      <p class="text-smoke text-base md:text-lg max-w-md mx-auto leading-relaxed" style="animation: fadeInUp 0.6s ease 0.3s forwards; opacity: 0;">
-        Cada box viene armada a mano con piezas de historia del fútbol mundial.
-      </p>
-    </div>
-    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 opacity-40">
-      <div class="w-px h-12 bg-gradient-to-b from-transparent to-smoke/50"></div>
-    </div>
-  </section>
-
-  <!-- HOW IT WORKS -->
-  <section class="py-20 px-4 bg-midnight">
-    <div class="max-w-4xl mx-auto">
-      <div class="grid md:grid-cols-3 gap-12 reveal">
-        <div class="text-center">
-          <div class="w-16 h-16 mx-auto mb-5 rounded-full border-2 border-chalk flex items-center justify-center">
-            <span class="text-ice font-display text-2xl">1</span>
-          </div>
-          <h3 class="font-bold text-lg mb-2">Elegí tu box</h3>
-          <p class="text-smoke text-sm leading-relaxed">Clasica o Premium. Nos decis tu talla y nosotros hacemos el resto.</p>
-        </div>
-        <div class="text-center">
-          <div class="w-16 h-16 mx-auto mb-5 rounded-full border-2 border-chalk flex items-center justify-center">
-            <span class="text-ice font-display text-2xl">2</span>
-          </div>
-          <h3 class="font-bold text-lg mb-2">Elegí tu talla</h3>
-          <p class="text-smoke text-sm leading-relaxed">S, M, L o XL. Todas las piezas de tu box van en la misma talla.</p>
-        </div>
-        <div class="text-center">
-          <div class="w-16 h-16 mx-auto mb-5 rounded-full border-2 border-chalk flex items-center justify-center">
-            <span class="text-ice font-display text-2xl">3</span>
-          </div>
-          <h3 class="font-bold text-lg mb-2">Recibi la sorpresa</h3>
-          <p class="text-smoke text-sm leading-relaxed">Abris tu box y descubrís piezas que no sabias que necesitabas.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- TIERS -->
-  <section id="tiers" class="py-20 px-4 bg-pitch">
-    <div class="max-w-5xl mx-auto">
-      <div class="text-center mb-12 reveal">
-        <h2 class="font-display text-3xl md:text-4xl text-white">Elegí tu box</h2>
-      </div>
-      <div class="grid md:grid-cols-2 gap-6 reveal">
-
-        <!-- CLASICA -->
-        <div class="tier-card rounded-lg p-8 flex flex-col">
-          <div class="mb-6">
-            <p class="text-smoke text-xs font-bold uppercase tracking-[0.15em] mb-2">Mystery Box</p>
-            <h3 class="font-display text-3xl text-white mb-1">Clasica</h3>
-            <p class="text-ice text-3xl font-bold">Q400</p>
-          </div>
-          <ul class="flex-1 space-y-3 mb-8">
-            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-ice flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span class="text-smoke text-sm">2 camisetas seleccionadas con historia</span></li>
-            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-ice flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span class="text-smoke text-sm">De ligas top europeas</span></li>
-            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-ice flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span class="text-smoke text-sm">Empaque premium El Club</span></li>
-            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-ice flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span class="text-smoke text-sm">Envio a todo Guatemala</span></li>
-          </ul>
-          <div class="mb-6">
-            <div class="flex items-center justify-between mb-3">
-              <p class="text-sm text-smoke font-semibold uppercase tracking-wider">Talla</p>
-              <button onclick="openSizeGuide()" class="text-ice text-sm underline hover:text-ice-dim transition-colors cursor-pointer bg-transparent border-none p-0">Guía de tallas</button>
-            </div>
-            <div class="flex gap-2" id="clasica-sizes">
-              <button class="size-btn" onclick="selectSize('clasica', 'S', this)">S</button>
-              <button class="size-btn" onclick="selectSize('clasica', 'M', this)">M</button>
-              <button class="size-btn" onclick="selectSize('clasica', 'L', this)">L</button>
-              <button class="size-btn" onclick="selectSize('clasica', 'XL', this)">XL</button>
-            </div>
-          </div>
-          <button id="clasica-btn" class="btn-primary w-full py-4 opacity-50 cursor-not-allowed" disabled onclick="addMysteryBox('clasica')">Selecciona talla</button>
-        </div>
-
-        <!-- PREMIUM -->
-        <div class="tier-card tier-premium rounded-lg p-8 flex flex-col relative">
-          <div class="absolute top-4 right-4">
-            <span class="bg-ice text-midnight text-xs font-bold uppercase tracking-wider px-3 py-1 rounded-full">Premium</span>
-          </div>
-          <div class="mb-6">
-            <p class="text-smoke text-xs font-bold uppercase tracking-[0.15em] mb-2">Mystery Box</p>
-            <h3 class="font-display text-3xl text-white mb-1">Premium</h3>
-            <p class="text-ice text-3xl font-bold">Q600</p>
-          </div>
-          <ul class="flex-1 space-y-3 mb-8">
-            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-ice flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span class="text-smoke text-sm"><strong class="text-white">3 camisetas</strong> seleccionadas con historia</span></li>
-            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-ice flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span class="text-smoke text-sm"><strong class="text-white">Bonus sorpresa</strong> exclusivo</span></li>
-            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-ice flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span class="text-smoke text-sm">De ligas top europeas y selecciones</span></li>
-            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-ice flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span class="text-smoke text-sm">Empaque premium El Club</span></li>
-            <li class="flex items-start gap-3"><svg class="w-5 h-5 text-ice flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg><span class="text-smoke text-sm">Envio a todo Guatemala</span></li>
-          </ul>
-          <div class="mb-6">
-            <div class="flex items-center justify-between mb-3">
-              <p class="text-sm text-smoke font-semibold uppercase tracking-wider">Talla</p>
-              <button onclick="openSizeGuide()" class="text-ice text-sm underline hover:text-ice-dim transition-colors cursor-pointer bg-transparent border-none p-0">Guía de tallas</button>
-            </div>
-            <div class="flex gap-2" id="premium-sizes">
-              <button class="size-btn" onclick="selectSize('premium', 'S', this)">S</button>
-              <button class="size-btn" onclick="selectSize('premium', 'M', this)">M</button>
-              <button class="size-btn" onclick="selectSize('premium', 'L', this)">L</button>
-              <button class="size-btn" onclick="selectSize('premium', 'XL', this)">XL</button>
-            </div>
-          </div>
-          <button id="premium-btn" class="btn-primary w-full py-4 opacity-50 cursor-not-allowed" disabled onclick="addMysteryBox('premium')">Selecciona talla</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- SAMPLE JERSEYS -->
+  <!-- ═══════════════════════════════════════ -->
+  <!-- QUE PUEDE VENIR -->
+  <!-- ═══════════════════════════════════════ -->
   <section class="py-20 px-4 bg-midnight">
     <div class="max-w-5xl mx-auto">
       <div class="text-center mb-12 reveal">
-        <h2 class="font-display text-3xl md:text-4xl text-white mb-3">Que puede venir en tu box?</h2>
-        <p class="text-smoke text-sm">Estas son piezas de ejemplo. Tu box sera unica.</p>
+        <h2 class="font-display text-3xl md:text-4xl text-white mb-3">Qué puede venir en tu box?</h2>
+        <p class="text-smoke text-sm">Estas son piezas de ejemplo. Tu box será única.</p>
       </div>
       <div id="sample-jerseys" class="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 reveal"></div>
     </div>
   </section>
 
+  <!-- ═══════════════════════════════════════ -->
   <!-- FAQ -->
+  <!-- ═══════════════════════════════════════ -->
   <section class="py-20 px-4 bg-pitch">
     <div class="max-w-2xl mx-auto">
       <div class="text-center mb-12 reveal"><h2 class="font-display text-3xl md:text-4xl text-white">Preguntas frecuentes</h2></div>
       <div class="reveal">
         <div class="faq-item">
-          <button class="faq-trigger" onclick="toggleFaq(this)">Puedo elegir que camiseta me toca?<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></button>
-          <div class="faq-answer"><p class="text-smoke text-sm leading-relaxed">No. Ese es el punto. Confiá en la caja — cada pieza es seleccionada especialmente para vos.</p></div>
+          <button class="faq-trigger" onclick="toggleFaq(this)">Cuántas camisetas vienen?<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></button>
+          <div class="faq-answer"><p class="text-smoke text-sm leading-relaxed">Una. Una pieza seleccionada con historia del fútbol mundial, curada especialmente para vos.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-trigger" onclick="toggleFaq(this)">Puedo elegir qué camiseta me toca?<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></button>
+          <div class="faq-answer"><p class="text-smoke text-sm leading-relaxed">No. Ese es el punto. Pero podés decirnos qué equipos, jugadores o colores preferís evitar — eso guía la selección.</p></div>
         </div>
         <div class="faq-item">
           <button class="faq-trigger" onclick="toggleFaq(this)">Son camisetas originales?<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></button>
-          <div class="faq-answer"><p class="text-smoke text-sm leading-relaxed">Son replicas AAA de altisima calidad. Mismos materiales, misma atencion al detalle. La diferencia con una original es el precio — no la calidad.</p></div>
+          <div class="faq-answer"><p class="text-smoke text-sm leading-relaxed">Son réplicas AAA de altísima calidad. Mismos materiales, misma atención al detalle. La diferencia con una original es el precio — no la calidad.</p></div>
         </div>
         <div class="faq-item">
-          <button class="faq-trigger" onclick="toggleFaq(this)">Cuanto tarda en llegar?<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></button>
-          <div class="faq-answer"><p class="text-smoke text-sm leading-relaxed">2-4 dias habiles en Ciudad de Guatemala. Interior: 4-7 dias. Q25 de envio.</p></div>
+          <button class="faq-trigger" onclick="toggleFaq(this)">Cuánto tarda en llegar?<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></button>
+          <div class="faq-answer"><p class="text-smoke text-sm leading-relaxed">2-4 días hábiles en Ciudad de Guatemala. Interior: 4-7 días. Envío gratis.</p></div>
         </div>
         <div class="faq-item">
-          <button class="faq-trigger" onclick="toggleFaq(this)">Que pasa si no me gusta lo que me toca?<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></button>
-          <div class="faq-answer"><p class="text-smoke text-sm leading-relaxed">Esa es la magia de la mystery box. Pero si hay un problema real con la calidad, escribinos por WhatsApp y lo resolvemos.</p></div>
+          <button class="faq-trigger" onclick="toggleFaq(this)">Cómo pago?<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></button>
+          <div class="faq-answer"><p class="text-smoke text-sm leading-relaxed">Con tarjeta a través de Recurrente (plataforma segura) o contra entrega en efectivo. Todo se coordina en el checkout.</p></div>
         </div>
         <div class="faq-item">
-          <button class="faq-trigger" onclick="toggleFaq(this)">Como pago?<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></button>
-          <div class="faq-answer"><p class="text-smoke text-sm leading-relaxed">Con tarjeta a traves de Recurrente (plataforma segura). Tambien podes coordinar pago en efectivo contra entrega por WhatsApp.</p></div>
+          <button class="faq-trigger" onclick="toggleFaq(this)">Por qué Q350 y no Q400?<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></button>
+          <div class="faq-answer"><p class="text-smoke text-sm leading-relaxed">Q350 es el precio especial de relanzamiento. Cuando termine la oferta, vuelve a Q400. Aprovechá mientras podás.</p></div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-trigger" onclick="toggleFaq(this)">Qué pasa si no me gusta lo que me toca?<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg></button>
+          <div class="faq-answer"><p class="text-smoke text-sm leading-relaxed">Esa es la magia. Pero si hay un problema real con la calidad, escribinos por WhatsApp y lo resolvemos.</p></div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- FINAL CTA -->
-  <section class="py-20 px-4 bg-midnight">
-    <div class="max-w-3xl mx-auto text-center reveal">
+  <!-- ═══════════════════════════════════════ -->
+  <!-- CTA FINAL -->
+  <!-- ═══════════════════════════════════════ -->
+  <section class="smoke-bg relative py-20 px-4 bg-midnight">
+    <div class="smoke-layer-1"></div>
+    <div class="smoke-layer-2"></div>
+    <div class="relative z-10 max-w-3xl mx-auto text-center reveal">
       <h2 class="font-display text-4xl md:text-5xl text-white leading-tight mb-4">Tu camiseta ya sabe<br><span class="text-ice">quién sos.</span></h2>
-      <p class="text-smoke text-base md:text-lg mb-10 max-w-lg mx-auto">Confiá en la caja. Lo que hay adentro ya tiene tu nombre.</p>
-      <a href="#tiers" class="btn-primary text-base px-12 py-4">Elegí tu box</a>
-    </div>
-  </section>
-
-  <!-- OTHER PATHS -->
-  <section class="py-12 px-4 border-t border-chalk">
-    <div class="max-w-4xl mx-auto text-center">
-      <p class="text-smoke text-sm mb-6">¿Preferís elegir vos mismo?</p>
-      <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="/explora.html" class="btn-ghost text-sm px-6 py-2.5">Ver el Catálogo</a>
-        <a href="/personaliza.html" class="btn-ghost text-sm px-6 py-2.5">Pedí tu Camiseta</a>
-      </div>
+      <p class="text-smoke text-base md:text-lg mb-6 max-w-lg mx-auto">Confiá en la caja. Lo que hay adentro ya tiene tu nombre.</p>
+      <div id="footer-countdown" class="countdown-box justify-center mb-8"></div>
+      <button onclick="openWizard(1)" class="btn-primary text-base px-12 py-4 cursor-pointer">Empezar el ritual</button>
     </div>
   </section>
 
@@ -309,18 +652,7 @@
     <div class="max-w-6xl mx-auto flex flex-col items-center gap-4">
       <div class="w-full flex flex-col sm:flex-row items-center justify-between gap-4">
         <a href="/"><img src="/assets/img/brand/logo.svg" alt="El Club" class="h-8"></a>
-        <nav class="flex items-center gap-6 text-sm text-smoke">
-          <a href="/explora.html" class="hover:text-ice transition-colors">Catálogo</a>
-          <a href="/mystery-box.html" class="hover:text-ice transition-colors">Mystery Box</a>
-          <a href="/personaliza.html" class="hover:text-ice transition-colors">Pedí tu Camiseta</a>
-          <a href="/nosotros.html" class="hover:text-ice transition-colors">Nosotros</a>
-          <a href="/contacto.html" class="hover:text-ice transition-colors">Contacto</a>
-        </nav>
-        <div class="flex items-center gap-4">
-          <a href="https://www.instagram.com/club.gt" target="_blank" rel="noopener" class="text-smoke hover:text-ice transition-colors" aria-label="Instagram"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg></a>
-          <a href="https://www.tiktok.com/@club.gtm" target="_blank" rel="noopener" class="text-smoke hover:text-ice transition-colors" aria-label="TikTok"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.15V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/></svg></a>
-        </div>
-        <p class="text-ash text-xs">El Club 2026</p>
+        <p class="text-ash text-xs">El Club 2026. Pagos seguros con Recurrente.</p>
       </div>
       <div class="flex gap-4 text-ash text-xs">
         <a href="/politicas.html#privacidad" class="hover:text-smoke transition-colors">Privacidad</a>
@@ -334,134 +666,412 @@
   <div id="cart-overlay" class="cart-overlay" onclick="closeCartDrawer()"></div>
   <div id="cart-drawer" class="cart-drawer">
     <div class="flex items-center justify-between px-5 py-4 border-b border-chalk">
-      <h2 class="font-bold text-lg uppercase tracking-wider">Tu carrito</h2>
-      <button onclick="closeCartDrawer()" class="text-ash hover:text-white transition-colors cursor-pointer" aria-label="Cerrar"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>
+      <h2 class="font-display text-xl uppercase tracking-wider">Tu carrito</h2>
+      <button onclick="closeCartDrawer()" class="text-smoke hover:text-white transition-colors cursor-pointer">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
     </div>
     <div id="cart-empty" class="flex-1 flex flex-col items-center justify-center px-5 text-center">
-      <svg class="w-16 h-16 text-chalk mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
-      <p class="text-smoke font-semibold mb-1">Tu carrito está vacío</p>
-      <p class="text-ash text-sm mb-6">Elegí tu box arriba.</p>
+      <p class="text-warm font-semibold mb-1">Tu carrito está vacío</p>
+      <p class="text-warm/60 text-sm mb-6">Agrega algo increíble para empezar.</p>
     </div>
     <div id="cart-filled" class="hidden flex-1 flex flex-col">
       <div id="cart-items" class="flex-1 overflow-y-auto px-5"></div>
       <div class="border-t border-chalk px-5 py-4">
         <div class="flex items-center justify-between mb-4">
           <span class="font-bold text-sm uppercase tracking-wider">Total</span>
-          <span id="cart-total" class="font-extrabold text-xl text-ice">Q0</span>
+          <span id="cart-total" class="font-extrabold text-xl">Q0</span>
         </div>
-        <a href="/pedidos.html" onclick="closeCartDrawer()" class="btn-primary w-full text-center text-sm py-3.5 block">Ir a pedidos</a>
-        <button onclick="closeCartDrawer()" class="btn-ghost w-full text-sm py-2 mt-2 cursor-pointer">Seguir comprando</button>
+        <p class="text-warm/60 text-xs mb-4">Envío gratis incluido en todos los productos.</p>
+        <a href="/pedidos.html" onclick="closeCartDrawer()" class="btn-primary w-full flex items-center justify-center gap-2 text-sm py-3.5 no-underline">
+          Completar pedido
+        </a>
       </div>
     </div>
   </div>
 
-  <!-- WhatsApp Float -->
-  <a href="https://wa.me/502XXXXXXXX?text=Hola%21%20Quiero%20saber%20mas%20sobre%20las%20Mystery%20Boxes." target="_blank" rel="noopener" class="whatsapp-float" aria-label="WhatsApp">
-    <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-  </a>
-
-  <!-- Size Guide Modal -->
-  <div id="size-guide-modal" class="fixed inset-0 z-50 hidden items-center justify-center">
-    <div class="absolute inset-0 bg-black/70" onclick="closeSizeGuide()"></div>
-    <div class="relative bg-pitch border border-chalk rounded-xl p-6 md:p-8 max-w-md mx-4 z-10">
-      <button onclick="closeSizeGuide()" class="absolute top-4 right-4 text-ash hover:text-white transition-colors cursor-pointer bg-transparent border-none p-0">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-      </button>
-      <h3 class="font-display text-2xl text-white mb-1 uppercase tracking-wider">Guía de Tallas</h3>
-      <p class="text-ash text-sm mb-4">Medidas aproximadas para camisetas réplica</p>
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-chalk">
-            <th class="text-left text-smoke font-semibold uppercase tracking-wider text-xs py-3 pr-4">Talla</th>
-            <th class="text-left text-smoke font-semibold uppercase tracking-wider text-xs py-3 pr-4">Pecho (cm)</th>
-            <th class="text-left text-smoke font-semibold uppercase tracking-wider text-xs py-3">Largo (cm)</th>
-          </tr>
-        </thead>
-        <tbody class="text-white">
-          <tr class="border-b border-chalk/50">
-            <td class="py-3 pr-4 font-semibold">S</td>
-            <td class="py-3 pr-4">48–50</td>
-            <td class="py-3">68–70</td>
-          </tr>
-          <tr class="border-b border-chalk/50">
-            <td class="py-3 pr-4 font-semibold">M</td>
-            <td class="py-3 pr-4">50–52</td>
-            <td class="py-3">70–72</td>
-          </tr>
-          <tr class="border-b border-chalk/50">
-            <td class="py-3 pr-4 font-semibold">L</td>
-            <td class="py-3 pr-4">52–54</td>
-            <td class="py-3">72–74</td>
-          </tr>
-          <tr>
-            <td class="py-3 pr-4 font-semibold">XL</td>
-            <td class="py-3 pr-4">54–56</td>
-            <td class="py-3">74–76</td>
-          </tr>
-        </tbody>
-      </table>
-      <p class="text-ash text-xs mt-4">Medidas en centímetros. Tallas de réplica deportiva estándar.</p>
-    </div>
-  </div>
-
   <!-- Scripts -->
-  <script src="/assets/js/cart.js?v=2"></script>
-  <script src="/assets/js/app.js?v=2"></script>
-
+  <script src="/assets/js/cart.js?v=3"></script>
+  <script src="/assets/js/app.js?v=3"></script>
   <script>
-    var selectedSizes = { clasica: null, premium: null };
+  // ═══════════════════════════════════════
+  // TEAMS DATA
+  // ═══════════════════════════════════════
+  var TEAMS_BY_LEAGUE = {"Brasileirão":["Atlético MG","Botafogo","Corinthians","Flamengo","Fluminense","Grêmio","Internacional","Palmeiras","Santos","São Paulo"],"Bundesliga":["Augsburg","Bayern","Bochum","Bremen","Darmstadt","Dortmund","Frankfurt","Freiburg","Gladbach","Heidenheim","Hoffenheim","Köln","Leipzig","Leverkusen","Mainz","Stuttgart","Union Berlin","Wolfsburg"],"La Liga":["Alavés","Athletic","Atlético","Barcelona","Betis","Celta","Espanyol","Getafe","Girona","Las Palmas","Leganés","Mallorca","Osasuna","Rayo","Real Madrid","Real Sociedad","Sevilla","Valencia","Valladolid","Villarreal"],"Liga BetPlay":["América de Cali","Deportivo Cali","Junior","Millonarios","Nacional","Santa Fe"],"Liga MX":["América","Atlas","Chivas","Cruz Azul","Juárez","León","Mazatlán","Monterrey","Necaxa","Pachuca","Puebla","Pumas","Querétaro","San Luis","Santos","Tigres","Tijuana","Toluca"],"Liga Nacional GT":["Antigua","Cobán","Comunicaciones","Municipal","Santa Lucía","Xelajú"],"Ligue 1":["Brest","Clermont","Le Havre","Lens","Lille","Lorient","Lyon","Marseille","Metz","Monaco","Montpellier","Nantes","Nice","PSG","Reims","Rennes","Strasbourg","Toulouse"],"Premier League":["Arsenal","Aston Villa","Bournemouth","Brentford","Brighton","Chelsea","Crystal Palace","Everton","Fulham","Ipswich","Leicester","Liverpool","Man City","Man United","Newcastle","Nottingham","Southampton","Tottenham","West Ham","Wolves"],"Argentina":["Boca","Estudiantes","Huracán","Independiente","Racing","River","Rosario Central","San Lorenzo","Talleres","Vélez"],"Saudi Pro League":["Al Ahli","Al Akhdoud","Al Ettifaq","Al Fateh","Al Fayha","Al Hilal","Al Ittihad","Al Khaleej","Al Nassr","Al Orubah","Al Qadsiah","Al Raed","Al Riyadh","Al Shabab","Al Taawoun","Al Wehda","Damac"],"Selecciones":["Alemania","Arabia Saudita","Argentina","Australia","Austria","Brasil","Bélgica","Camerún","Canadá","Chile","Colombia","Corea del Sur","Costa Rica","Croacia","Dinamarca","Ecuador","El Salvador","España","Estados Unidos","Francia","Gales","Ghana","Guatemala","Honduras","Inglaterra","Irán","Italia","Japón","Marruecos","México","Nigeria","Panamá","Paraguay","Países Bajos","Perú","Polonia","Portugal","Qatar","Senegal","Serbia","Suecia","Suiza","Turquía","Ucrania","Uruguay"],"Serie A":["Atalanta","Bologna","Cagliari","Como","Empoli","Fiorentina","Genoa","Inter","Juventus","Lazio","Lecce","Milan","Monza","Napoli","Parma","Roma","Torino","Udinese","Venezia","Verona"]};
 
-    function selectSize(tier, size, el) {
-      selectedSizes[tier] = size;
-      var btns = el.parentElement.querySelectorAll('.size-btn');
-      for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
-      el.classList.add('active');
-      var btn = document.getElementById(tier + '-btn');
-      if (btn) {
-        btn.disabled = false;
-        btn.classList.remove('opacity-50', 'cursor-not-allowed');
-        btn.textContent = 'Agregar al carrito';
+  var LEAGUE_ORDER = ["Premier League","La Liga","Serie A","Bundesliga","Ligue 1","Liga MX","Selecciones","Argentina","Brasileirão","Saudi Pro League","Liga BetPlay","Liga Nacional GT"];
+
+  // ═══════════════════════════════════════
+  // OFFER CONFIG
+  // ═══════════════════════════════════════
+  var OFFER_END = new Date('2026-05-01T06:00:00Z'); // May 1 00:00 CST
+  var OFFER_PRICE = 350;
+  var NORMAL_PRICE = 400;
+
+  function getCurrentPrice() {
+    return new Date() < OFFER_END ? OFFER_PRICE : NORMAL_PRICE;
+  }
+
+  function isOfferActive() {
+    return new Date() < OFFER_END;
+  }
+
+  // ═══════════════════════════════════════
+  // COUNTDOWN
+  // ═══════════════════════════════════════
+  function renderCountdown(el) {
+    if (!el) return;
+    var now = new Date();
+    var diff = OFFER_END - now;
+    if (diff <= 0) {
+      el.innerHTML = '<span class="text-smoke text-sm">La oferta ha terminado</span>';
+      return;
+    }
+    var d = Math.floor(diff / 86400000);
+    var h = Math.floor((diff % 86400000) / 3600000);
+    var m = Math.floor((diff % 3600000) / 60000);
+    var s = Math.floor((diff % 60000) / 1000);
+    el.innerHTML =
+      '<span class="countdown-num">' + d + '</span><span class="countdown-label">días</span>' +
+      '<span class="countdown-sep">:</span>' +
+      '<span class="countdown-num">' + String(h).padStart(2,'0') + '</span><span class="countdown-label">hrs</span>' +
+      '<span class="countdown-sep">:</span>' +
+      '<span class="countdown-num">' + String(m).padStart(2,'0') + '</span><span class="countdown-label">min</span>' +
+      '<span class="countdown-sep">:</span>' +
+      '<span class="countdown-num">' + String(s).padStart(2,'0') + '</span><span class="countdown-label">seg</span>';
+  }
+
+  function updateCountdowns() {
+    renderCountdown(document.getElementById('hero-countdown'));
+    renderCountdown(document.getElementById('footer-countdown'));
+    if (!isOfferActive()) {
+      var prices = document.querySelectorAll('.price-offer');
+      for (var i = 0; i < prices.length; i++) prices[i].textContent = 'Q' + NORMAL_PRICE;
+      var olds = document.querySelectorAll('.price-old');
+      for (var j = 0; j < olds.length; j++) olds[j].style.display = 'none';
+      var badges = document.querySelectorAll('.offer-badge');
+      for (var k = 0; k < badges.length; k++) badges[k].style.display = 'none';
+    }
+  }
+
+  // ═══════════════════════════════════════
+  // WIZARD STATE
+  // ═══════════════════════════════════════
+  var wizStep = 1;
+  var wizTotalSteps = 6;
+  var wizState = {
+    avoided_teams: [],
+    avoided_players: '',
+    preferred_colors: [],
+    era: '',
+    size: '',
+    aleatorio: false
+  };
+
+  function openWizard(startStep) {
+    wizStep = startStep || 1;
+    if (startStep === 5) wizState.aleatorio = true;
+    document.getElementById('wizard').classList.add('active');
+    document.body.style.overflow = 'hidden';
+    showStep(wizStep);
+    renderDots();
+  }
+
+  function closeWizard() {
+    document.getElementById('wizard').classList.remove('active');
+    document.body.style.overflow = '';
+  }
+
+  function showStep(n) {
+    for (var i = 1; i <= wizTotalSteps; i++) {
+      var el = document.getElementById('wiz-step-' + i);
+      el.classList.remove('active', 'exiting');
+    }
+    var target = document.getElementById('wiz-step-' + n);
+    target.classList.add('active');
+    renderDots();
+    if (n === 6) renderSummary();
+  }
+
+  function wizNext() {
+    if (wizStep >= wizTotalSteps) return;
+    var current = document.getElementById('wiz-step-' + wizStep);
+    current.classList.add('exiting');
+    current.classList.remove('active');
+    setTimeout(function() {
+      current.classList.remove('exiting');
+      wizStep++;
+      showStep(wizStep);
+    }, 250);
+  }
+
+  function wizPrev() {
+    if (wizStep <= 1) return;
+    var current = document.getElementById('wiz-step-' + wizStep);
+    current.classList.remove('active');
+    wizStep--;
+    showStep(wizStep);
+  }
+
+  function renderDots() {
+    var container = document.getElementById('wiz-dots');
+    var html = '';
+    var steps = wizState.aleatorio ? 2 : 6; // aleatorio only shows step 5+6
+    for (var i = 1; i <= wizTotalSteps; i++) {
+      var cls = 'wiz-dot';
+      if (i < wizStep) cls += ' done';
+      if (i === wizStep) cls += ' active';
+      html += '<div class="' + cls + '"></div>';
+    }
+    container.innerHTML = html;
+  }
+
+  // ═══════════════════════════════════════
+  // STEP 1: TEAMS
+  // ═══════════════════════════════════════
+  var currentLeagueFilter = 'all';
+
+  function renderTeams(filter) {
+    var grid = document.getElementById('teams-grid');
+    var html = '';
+    var leagues = filter === 'all' ? LEAGUE_ORDER : [filter];
+    for (var l = 0; l < leagues.length; l++) {
+      var teams = TEAMS_BY_LEAGUE[leagues[l]];
+      if (!teams) continue;
+      for (var t = 0; t < teams.length; t++) {
+        var name = teams[t];
+        var avoided = wizState.avoided_teams.indexOf(name) !== -1;
+        html += '<button class="team-badge' + (avoided ? ' avoided' : '') + '" data-team="' + name + '" onclick="toggleTeam(this)">' +
+          (avoided ? '&#10005; ' : '') + name + '</button>';
       }
     }
+    grid.innerHTML = html;
+  }
 
-    function addMysteryBox(tier) {
-      var size = selectedSizes[tier];
-      if (!size) return;
-      if (tier === 'clasica') {
-        addToCart('mb-clasica', 'Mystery Box Clasica', 400, size, '/assets/img/products/mystery-box-clasica.jpg', 10);
-      } else {
-        addToCart('mb-premium', 'Mystery Box Premium', 600, size, '/assets/img/products/mystery-box-premium.jpg', 5);
+  function renderLeagueTabs() {
+    var tabs = document.getElementById('league-tabs');
+    var html = '<button class="league-tab active" onclick="setLeagueFilter(\'all\', this)">Todas</button>';
+    for (var i = 0; i < LEAGUE_ORDER.length; i++) {
+      html += '<button class="league-tab" onclick="setLeagueFilter(\'' + LEAGUE_ORDER[i] + '\', this)">' + LEAGUE_ORDER[i] + '</button>';
+    }
+    tabs.innerHTML = html;
+  }
+
+  function setLeagueFilter(league, el) {
+    currentLeagueFilter = league;
+    var tabs = document.querySelectorAll('.league-tab');
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove('active');
+    if (el) el.classList.add('active');
+    renderTeams(league);
+  }
+
+  function toggleTeam(el) {
+    var name = el.getAttribute('data-team');
+    var idx = wizState.avoided_teams.indexOf(name);
+    if (idx === -1) {
+      wizState.avoided_teams.push(name);
+      el.classList.add('avoided');
+      el.innerHTML = '&#10005; ' + name;
+    } else {
+      wizState.avoided_teams.splice(idx, 1);
+      el.classList.remove('avoided');
+      el.innerHTML = name;
+    }
+  }
+
+  function filterTeams(query) {
+    var badges = document.querySelectorAll('.team-badge');
+    var q = query.toLowerCase();
+    for (var i = 0; i < badges.length; i++) {
+      var name = badges[i].getAttribute('data-team').toLowerCase();
+      badges[i].style.display = name.indexOf(q) !== -1 ? '' : 'none';
+    }
+  }
+
+  function skipTeams() {
+    wizState.avoided_teams = [];
+  }
+
+  // ═══════════════════════════════════════
+  // STEP 3: COLORS
+  // ═══════════════════════════════════════
+  function toggleColor(el) {
+    var color = el.getAttribute('data-color');
+    el.classList.toggle('selected');
+    var idx = wizState.preferred_colors.indexOf(color);
+    if (idx === -1) {
+      wizState.preferred_colors.push(color);
+    } else {
+      wizState.preferred_colors.splice(idx, 1);
+    }
+  }
+
+  function clearColors() {
+    wizState.preferred_colors = [];
+    var swatches = document.querySelectorAll('.color-swatch');
+    for (var i = 0; i < swatches.length; i++) swatches[i].classList.remove('selected');
+  }
+
+  // ═══════════════════════════════════════
+  // STEP 4: ERA
+  // ═══════════════════════════════════════
+  function selectEra(el) {
+    wizState.era = el.getAttribute('data-era');
+    var cards = document.querySelectorAll('.era-card');
+    for (var i = 0; i < cards.length; i++) cards[i].classList.remove('selected');
+    el.classList.add('selected');
+    // Auto-advance after short delay
+    setTimeout(function() { wizNext(); }, 400);
+  }
+
+  // ═══════════════════════════════════════
+  // STEP 5: SIZE
+  // ═══════════════════════════════════════
+  function selectWizSize(el) {
+    wizState.size = el.getAttribute('data-size');
+    var sizes = document.querySelectorAll('.wiz-size');
+    for (var i = 0; i < sizes.length; i++) sizes[i].classList.remove('selected');
+    el.classList.add('selected');
+    setTimeout(function() { wizNext(); }, 300);
+  }
+
+  // ═══════════════════════════════════════
+  // STEP 6: SUMMARY + ADD TO CART
+  // ═══════════════════════════════════════
+  function renderSummary() {
+    // Collect players from step 2
+    var playersEl = document.getElementById('wiz-players');
+    if (playersEl) wizState.avoided_players = playersEl.value.trim();
+
+    var html = '';
+    if (wizState.aleatorio) {
+      html += '<div class="flex justify-between"><span class="text-smoke">Modo</span><span class="text-ice font-bold">ALEATORIO</span></div>';
+    } else {
+      if (wizState.avoided_teams.length > 0) {
+        html += '<div class="flex justify-between"><span class="text-smoke">Equipos a evitar</span><span class="text-white text-right" style="max-width:60%">' + wizState.avoided_teams.slice(0, 5).join(', ') + (wizState.avoided_teams.length > 5 ? ' +' + (wizState.avoided_teams.length - 5) + ' más' : '') + '</span></div>';
+      }
+      if (wizState.avoided_players) {
+        html += '<div class="flex justify-between"><span class="text-smoke">Jugadores a evitar</span><span class="text-white text-right" style="max-width:60%">' + wizState.avoided_players + '</span></div>';
+      }
+      if (wizState.preferred_colors.length > 0) {
+        html += '<div class="flex justify-between"><span class="text-smoke">Colores</span><span class="text-white">' + wizState.preferred_colors.join(', ') + '</span></div>';
+      }
+      if (wizState.era) {
+        html += '<div class="flex justify-between"><span class="text-smoke">Estilo</span><span class="text-white capitalize">' + wizState.era + '</span></div>';
       }
     }
+    html += '<div class="flex justify-between pt-2 mt-2 border-t border-chalk"><span class="text-smoke">Talla</span><span class="text-white font-bold">' + (wizState.size || '—') + '</span></div>';
 
-    document.addEventListener('DOMContentLoaded', function() {
-      loadProducts(function(products) {
+    document.getElementById('wiz-summary').innerHTML = html;
+    document.getElementById('wiz-price').textContent = 'Q' + getCurrentPrice();
+  }
+
+  function addMysteryToCart() {
+    if (!wizState.size) {
+      alert('Seleccioná una talla');
+      return;
+    }
+
+    var price = getCurrentPrice();
+
+    // Save preferences to localStorage
+    wizState.saved_at = new Date().toISOString();
+    localStorage.setItem('elclub_mystery_preferences', JSON.stringify(wizState));
+
+    // Add to cart
+    addToCart('MB-CLASICA', 'Mystery Box', price, wizState.size, '/assets/img/products/mystery-box-clasica.jpg', 99);
+
+    // Close wizard
+    closeWizard();
+  }
+
+  // ═══════════════════════════════════════
+  // SAMPLE JERSEYS
+  // ═══════════════════════════════════════
+  function loadSampleJerseys() {
+    fetch('/content/products.json')
+      .then(function(r) { return r.json(); })
+      .then(function(products) {
         var jerseys = products.filter(function(p) { return p.type === 'jersey' && p.stock > 0; });
-        var samples = jerseys.slice(0, 6);
-        if (samples.length === 0) return;
+        // Shuffle and take 6
+        for (var i = jerseys.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var temp = jerseys[i];
+          jerseys[i] = jerseys[j];
+          jerseys[j] = temp;
+        }
+        var sample = jerseys.slice(0, 6);
         var container = document.getElementById('sample-jerseys');
         if (!container) return;
         var html = '';
-        for (var i = 0; i < samples.length; i++) {
-          html += '<div class="bg-pitch rounded-lg overflow-hidden border border-chalk">' +
-            '<img src="' + (samples[i].image || '/assets/img/products/placeholder.svg') + '" alt="' + samples[i].name + '" class="w-full aspect-square object-cover" loading="lazy">' +
-            '<div class="p-3"><p class="text-xs text-smoke uppercase tracking-wider">' + (samples[i].team || samples[i].league || '') + '</p>' +
-            '<p class="text-sm font-semibold text-white mt-1">' + samples[i].name + '</p></div></div>';
+        for (var k = 0; k < sample.length; k++) {
+          var p = sample[k];
+          html += '<a href="/producto.html?id=' + p.id + '" class="product-card block rounded-lg overflow-hidden border border-chalk hover:border-ice transition-all">' +
+            '<div class="aspect-square bg-pitch overflow-hidden">' +
+              '<img src="' + p.image + '" alt="' + p.name + '" class="w-full h-full object-cover" loading="lazy">' +
+            '</div>' +
+            '<div class="p-3">' +
+              '<p class="text-xs text-ice uppercase tracking-wider mb-1">' + (p.league || '') + '</p>' +
+              '<p class="text-sm font-bold text-white truncate">' + p.name + '</p>' +
+            '</div>' +
+          '</a>';
         }
         container.innerHTML = html;
       });
-    });
+  }
+
+  // ═══════════════════════════════════════
+  // REVEAL ON SCROLL
+  // ═══════════════════════════════════════
+  function initReveal() {
+    var reveals = document.querySelectorAll('.reveal');
+    var observer = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.1 });
+    reveals.forEach(function(el) { observer.observe(el); });
+  }
+
+  // ═══════════════════════════════════════
+  // FAQ
+  // ═══════════════════════════════════════
+  function toggleFaq(btn) {
+    var item = btn.parentElement;
+    var isOpen = item.classList.contains('open');
+    // Close all
+    var items = document.querySelectorAll('.faq-item');
+    for (var i = 0; i < items.length; i++) items[i].classList.remove('open');
+    if (!isOpen) item.classList.add('open');
+  }
+
+  // ═══════════════════════════════════════
+  // MOBILE MENU
+  // ═══════════════════════════════════════
+  function toggleMobileMenu() {
+    document.getElementById('mobile-menu').classList.toggle('open');
+    document.body.style.overflow = document.getElementById('mobile-menu').classList.contains('open') ? 'hidden' : '';
+  }
+  function closeMobileMenu() {
+    document.getElementById('mobile-menu').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  // ═══════════════════════════════════════
+  // INIT
+  // ═══════════════════════════════════════
+  document.addEventListener('DOMContentLoaded', function() {
+    updateCountdowns();
+    setInterval(updateCountdowns, 1000);
+    renderLeagueTabs();
+    renderTeams('all');
+    loadSampleJerseys();
+    initReveal();
+    updateCartBadge();
+  });
   </script>
 
-  <script>
-    function openSizeGuide() {
-      document.getElementById('size-guide-modal').classList.remove('hidden');
-      document.getElementById('size-guide-modal').classList.add('flex');
-    }
-    function closeSizeGuide() {
-      document.getElementById('size-guide-modal').classList.add('hidden');
-      document.getElementById('size-guide-modal').classList.remove('flex');
-    }
-  </script>
 </body>
 </html>
