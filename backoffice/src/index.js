@@ -263,6 +263,7 @@ async function handleWebhook(request, env) {
       address: shippingCustomer.address || '',
       notes: shippingCustomer.notes || '',
     },
+    payment_method: 'tarjeta',
     receipt_number: pi.receipt_number || null,
     paid_at: new Date().toISOString(),
   };
@@ -404,7 +405,8 @@ async function sendDiegoAlert(env, order) {
 
   const html = `
 <div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; color: #333;">
-  <h2 style="margin: 0 0 16px; color: #111;">NUEVA VENTA — El Club</h2>
+  <h2 style="margin: 0 0 4px; color: #111;">NUEVA VENTA — El Club</h2>
+  <p style="margin: 0 0 16px; font-size: 14px; font-weight: 700; color: ${order.payment_method === 'contra_entrega' ? '#e67e22' : '#27ae60'};">${order.payment_method === 'contra_entrega' ? 'CONTRA ENTREGA — PENDIENTE DE COBRO' : 'PAGADO CON TARJETA'}</p>
 
   <div style="background: #f4f4f4; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
     <p style="margin: 0 0 8px; font-size: 14px; white-space: pre-line;">${itemLines}</p>
@@ -416,8 +418,9 @@ async function sendDiegoAlert(env, order) {
     <tr><td style="padding: 4px 8px 4px 0; color: #888;">Email</td><td style="padding: 4px 0;">${order.customer.email}</td></tr>
     <tr><td style="padding: 4px 8px 4px 0; color: #888;">Teléfono</td><td style="padding: 4px 0;">${order.customer.phone || '(no proporcionado)'}</td></tr>
     <tr><td style="padding: 4px 8px 4px 0; color: #888;">Dirección</td><td style="padding: 4px 0;">${order.customer.address || '(coordinar por WA)'}</td></tr>
-    <tr><td style="padding: 4px 8px 4px 0; color: #888;">Notas</td><td style="padding: 4px 0;">${order.customer.notes || '(ninguna)'}</td></tr>
+    <tr><td style="padding: 4px 8px 4px 0; color: #888;">Referencia</td><td style="padding: 4px 0;">${order.customer.reference || order.customer.notes || '(ninguna)'}</td></tr>
     <tr><td style="padding: 4px 8px 4px 0; color: #888;">Recibo</td><td style="padding: 4px 0;">${order.receipt_number || order.checkout_id}</td></tr>
+    <tr><td style="padding: 4px 8px 4px 0; color: #888;">Pago</td><td style="padding: 4px 0; font-weight: 700;">${order.payment_method === 'contra_entrega' ? 'Contra entrega' : 'Tarjeta (Recurrente)'}</td></tr>
   </table>
 
   ${customerPhone ? `<a href="${waLink}" style="display: inline-block; background: #25D366; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; font-size: 14px;">Confirmar por WhatsApp</a>` : '<p style="color: #c00;">Sin teléfono — confirmar por email</p>'}
@@ -434,7 +437,7 @@ async function sendDiegoAlert(env, order) {
     body: JSON.stringify({
       from: 'El Club Bot <noreply@tiendaventus.com>',
       to: diegoEmail,
-      subject: `Venta Q${order.amount_cents / 100} — ${order.customer.name || 'Cliente'}`,
+      subject: `${order.payment_method === 'contra_entrega' ? 'CE' : 'PAGADO'} Q${order.amount_cents / 100} — ${order.customer.name || 'Cliente'}`,
       html,
     }),
   });
@@ -671,17 +674,21 @@ async function sendManyChatConfirmation(env, order) {
   // Format phone with country code
   const fullPhone = phone.startsWith('502') ? `+${phone}` : `+502${phone}`;
 
-  // 1. Find or create subscriber by phone
+  // 1. Find or create subscriber by phone (try phone first, then whatsapp_phone)
   let subscriberId;
-  const found = await mcApi(env, 'GET', `/subscriber/findBySystemField?phone=${encodeURIComponent(fullPhone)}`);
+  let found = await mcApi(env, 'GET', `/subscriber/findBySystemField?phone=${encodeURIComponent(fullPhone)}`);
+  if (found.status !== 'success' || !found.data?.id) {
+    found = await mcApi(env, 'GET', `/subscriber/findBySystemField?whatsapp_phone=${encodeURIComponent(fullPhone)}`);
+  }
 
   if (found.status === 'success' && found.data?.id) {
     subscriberId = found.data.id;
     console.log(`ManyChat: found subscriber ${subscriberId} for ${fullPhone}`);
   } else {
-    // Create new subscriber
+    // Create new subscriber with WhatsApp opt-in
     const created = await mcApi(env, 'POST', '/subscriber/createSubscriber', {
       phone: fullPhone,
+      whatsapp_phone: fullPhone,
       first_name: order.customer.name?.split(' ')[0] || '',
       last_name: order.customer.name?.split(' ').slice(1).join(' ') || '',
       email: order.customer.email || undefined,
@@ -689,6 +696,7 @@ async function sendManyChatConfirmation(env, order) {
       has_opt_in_email: !!order.customer.email,
       consent_phrase: 'Checkout El Club',
     });
+    console.log('ManyChat createSubscriber response:', JSON.stringify(created));
 
     if (created.status === 'success' && created.data?.id) {
       subscriberId = created.data.id;
