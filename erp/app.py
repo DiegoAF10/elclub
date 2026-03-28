@@ -634,8 +634,8 @@ def page_register():
                 "Tipo *", list(VARIANT_MAP.values()), horizontal=True,
             )
 
-        # Row 2: Size(s) + Tier
-        r2c1, r2c2 = st.columns(2)
+        # Row 2: Size(s) + Quantity + Tier
+        r2c1, r2c2, r2c3 = st.columns([3, 1, 1])
         with r2c1:
             sizes_selected = st.multiselect(
                 "Talla(s) *  — seleccioná todas las que tengas",
@@ -644,15 +644,26 @@ def page_register():
                 placeholder="S, M, L, XL...",
             )
         with r2c2:
+            quantity = st.number_input(
+                "Cantidad (por talla)", min_value=1, max_value=20, value=1, step=1,
+            )
+        with r2c3:
             tier = st.selectbox("Tier", ["A", "B", "C"], index=default_tier_idx)
 
-        # Row 3: Player + Number
-        r3c1, r3c2 = st.columns(2)
+        # Row 3: Player + Number + Position
+        r3c1, r3c2, r3c3 = st.columns(3)
         with r3c1:
             player_name = st.text_input("Jugador (opcional)")
         with r3c2:
             player_number = st.number_input(
                 "Número (opcional)", min_value=0, max_value=99, value=None, step=1,
+            )
+        with r3c3:
+            pos_options = ["—"] + POSITIONS
+            position_sel = st.selectbox(
+                "Posición (opcional)",
+                pos_options,
+                format_func=lambda p: POSITION_LABELS.get(p, "Sin posición"),
             )
 
         # Row 4: Patches + Notes
@@ -692,26 +703,28 @@ def page_register():
 
             created_ids = []
             for sz in sorted(sizes_selected, key=lambda s: SIZE_ORDER.get(s, 99)):
-                jersey_id = insert_jersey(
-                    conn,
-                    team_id=team["team_id"],
-                    season=season,
-                    variant=variant_key,
-                    size=sz,
-                    tier=tier,
-                    player_name=player_name.strip() if player_name else None,
-                    player_number=int(player_number) if player_number else None,
-                    patches=patches.strip() if patches else None,
-                    notes=notes.strip() if notes else None,
-                )
-                created_ids.append((jersey_id, sz))
+                for _q in range(quantity):
+                    jersey_id = insert_jersey(
+                        conn,
+                        team_id=team["team_id"],
+                        season=season,
+                        variant=variant_key,
+                        size=sz,
+                        tier=tier,
+                        player_name=player_name.strip() if player_name else None,
+                        player_number=int(player_number) if player_number else None,
+                        patches=patches.strip() if patches else None,
+                        notes=notes.strip() if notes else None,
+                        position=position_sel if position_sel != "—" else None,
+                    )
+                    created_ids.append((jersey_id, sz))
 
-                # Save photos only to first jersey (avoid duplicates)
-                if photos_uploaded and len(created_ids) == 1:
-                    for idx, pfile in enumerate(photos_uploaded[:7]):
-                        seq = idx + 1
-                        rel_path = save_photo_file(jersey_id, pfile, seq)
-                        insert_photo(conn, jersey_id, f"{seq:02d}", rel_path)
+                    # Save photos only to first jersey (avoid duplicates)
+                    if photos_uploaded and len(created_ids) == 1:
+                        for idx, pfile in enumerate(photos_uploaded[:7]):
+                            seq = idx + 1
+                            rel_path = save_photo_file(jersey_id, pfile, seq)
+                            insert_photo(conn, jersey_id, f"{seq:02d}", rel_path)
 
             st.session_state.reg_count += len(created_ids)
             sizes_str = ", ".join(sz for _, sz in created_ids)
@@ -1044,6 +1057,58 @@ def page_inventory():
                         st.success(f"✅ {selected_id} actualizado")
                         st.rerun()
 
+            # Add units (same or different size)
+            with st.expander("➕ Agregar unidades"):
+                # Show current stock per size for this design
+                size_counts = conn.execute(
+                    """SELECT size, COUNT(*) as cnt FROM jerseys
+                       WHERE team_id = ? AND season = ? AND variant = ? AND status = 'available'
+                       GROUP BY size ORDER BY size""",
+                    (jersey["team_id"], jersey["season"], jersey["variant"]),
+                ).fetchall()
+                if size_counts:
+                    stock_str = " · ".join(f"{r['size']}: {r['cnt']}" for r in size_counts)
+                    st.caption(f"Stock actual: {stock_str}")
+
+                ac1, ac2 = st.columns([3, 1])
+                with ac1:
+                    new_sizes = st.multiselect(
+                        "Talla(s)",
+                        SIZES,
+                        key=f"newsize_{selected_id}",
+                    )
+                with ac2:
+                    add_qty = st.number_input(
+                        "Cantidad",
+                        min_value=1, max_value=20, value=1, step=1,
+                        key=f"addqty_{selected_id}",
+                    )
+                if st.button("Crear", key=f"addsize_{selected_id}", type="primary"):
+                    if new_sizes:
+                        created = []
+                        for sz in sorted(new_sizes, key=lambda s: SIZE_ORDER.get(s, 99)):
+                            for _q in range(add_qty):
+                                new_id = insert_jersey(
+                                    conn,
+                                    team_id=jersey["team_id"],
+                                    season=jersey["season"],
+                                    variant=jersey["variant"],
+                                    size=sz,
+                                    tier=jersey["tier"],
+                                    player_name=jersey["player_name"],
+                                    player_number=jersey["player_number"],
+                                    patches=jersey["patches"],
+                                    notes=jersey["notes"],
+                                    position=jersey["position"],
+                                )
+                                if jersey["story"]:
+                                    update_jersey(conn, new_id, story=jersey["story"])
+                                created.append(f"{new_id} ({sz})")
+                        st.success(f"✅ Creadas: {', '.join(created)}")
+                        st.rerun()
+                    else:
+                        st.warning("Seleccioná al menos una talla.")
+
             # Delete jersey
             with st.expander("⚠️ Eliminar camiseta"):
                 st.warning("Esta acción no se puede deshacer.")
@@ -1060,7 +1125,30 @@ def page_inventory():
         with dc2:
             inv_photos = render_photo_grid_with_reorder(conn, selected_id, key_prefix="inv_")
             if not inv_photos:
-                st.info("📸 Sin fotos. Usá **Agregar Fotos** para subir.")
+                st.info("📸 Sin fotos todavía.")
+
+            # Inline photo upload
+            total_photos = len(inv_photos) if inv_photos else 0
+            remaining = 7 - total_photos
+            if remaining > 0:
+                with st.form(f"inv_photo_upload_{selected_id}", clear_on_submit=True):
+                    new_photos = st.file_uploader(
+                        f"Subir fotos ({remaining} disponibles)",
+                        type=["jpg", "jpeg", "png"],
+                        accept_multiple_files=True,
+                        key=f"inv_up_{selected_id}",
+                    )
+                    if st.form_submit_button("📸 Subir", type="primary", use_container_width=True):
+                        if new_photos:
+                            start_seq = next_photo_seq(conn, selected_id)
+                            saved = 0
+                            for idx, pfile in enumerate(new_photos[:remaining]):
+                                seq = start_seq + idx
+                                rel_path = save_photo_file(selected_id, pfile, seq)
+                                insert_photo(conn, selected_id, f"{seq:02d}", rel_path)
+                                saved += 1
+                            st.success(f"✅ {saved} foto(s) guardada(s)")
+                            st.rerun()
 
     conn.close()
 

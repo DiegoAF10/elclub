@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+Disallow: /gracias.html
+Disallow: /pedidos.html
+
+Sitemap: https://elclub.club/sitemap.xml

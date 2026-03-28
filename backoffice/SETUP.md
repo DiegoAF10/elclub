@@ -30,11 +30,31 @@ npx wrangler secret put RECURRENTE_SECRET_KEY
 npx wrangler deploy
 ```
 
-## Despues del deploy
+## Secrets opcionales (para funcionalidad completa)
+
+```bash
+# Email de confirmación al cliente (Resend.com — gratis hasta 3k emails/mes)
+npx wrangler secret put RESEND_API_KEY
+
+# Email de Diego para alertas de venta
+npx wrangler secret put DIEGO_EMAIL
+
+# GitHub PAT para actualizar stock en products.json automáticamente
+npx wrangler secret put GITHUB_TOKEN
+
+# Svix webhook secret para verificar pagos (Recurrente → Desarrolladores → Webhooks)
+npx wrangler secret put WEBHOOK_SECRET
+
+# Admin key para crear cupones
+npx wrangler secret put ADMIN_KEY
+```
+
+## Después del deploy
 
 1. Anotar la URL del Worker (ej: `https://elclub-backoffice.diegoaf10.workers.dev`)
-2. Actualizar `ELCLUB_API_URL` en `assets/js/checkout.js` con esa URL
-3. Probar con tarjeta de prueba: `4242 4242 4242 4242`
+2. Actualizar `BACKOFFICE_URL` en `assets/js/cart.js` con esa URL
+3. Configurar webhook en Recurrente: Dashboard → Desarrolladores → Webhooks → URL: `https://elclub-backoffice.diegoaf10.workers.dev/webhook/recurrente`
+4. Probar con tarjeta de prueba: `4242 4242 4242 4242`
 
 ## Desarrollo local
 
@@ -46,5 +66,7 @@ npx wrangler dev
 ## Notas
 
 - El Club tiene su propia cuenta de Recurrente (SEPARADA de VENTUS). Keys en app.recurrente.com → Desarrolladores → API
-- El Worker solo crea checkout sessions — no maneja webhooks (Diego monitorea en dashboard de Recurrente)
+- El Worker crea checkout sessions + recibe webhooks de pago + actualiza stock + envía emails
 - CORS configurado para elclub.club + localhost (desarrollo)
+- Si `BACKOFFICE_URL` está vacío en cart.js, el botón "Pagar con tarjeta" no se muestra — solo WhatsApp
+- Fallback automático: si Recurrente falla, ofrece continuar por WhatsApp

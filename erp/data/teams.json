@@ -1335,5 +1335,124 @@
     "league": "Selecciones",
     "country": "Austria",
     "tier": "B"
+  },
+  {
+    "name": "Al Hilal",
+    "short_name": "Al Hilal",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "A"
+  },
+  {
+    "name": "Al Nassr",
+    "short_name": "Al Nassr",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "A"
+  },
+  {
+    "name": "Al Ittihad",
+    "short_name": "Al Ittihad",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "A"
+  },
+  {
+    "name": "Al Ahli",
+    "short_name": "Al Ahli",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "A"
+  },
+  {
+    "name": "Al Shabab",
+    "short_name": "Al Shabab",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "B"
+  },
+  {
+    "name": "Al Ettifaq",
+    "short_name": "Al Ettifaq",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "B"
+  },
+  {
+    "name": "Al Fateh",
+    "short_name": "Al Fateh",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "B"
+  },
+  {
+    "name": "Al Taawoun",
+    "short_name": "Al Taawoun",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "B"
+  },
+  {
+    "name": "Al Raed",
+    "short_name": "Al Raed",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "C"
+  },
+  {
+    "name": "Al Fayha",
+    "short_name": "Al Fayha",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "C"
+  },
+  {
+    "name": "Al Riyadh",
+    "short_name": "Al Riyadh",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "C"
+  },
+  {
+    "name": "Al Khaleej",
+    "short_name": "Al Khaleej",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "C"
+  },
+  {
+    "name": "Al Wehda",
+    "short_name": "Al Wehda",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "C"
+  },
+  {
+    "name": "Damac FC",
+    "short_name": "Damac",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "C"
+  },
+  {
+    "name": "Al Akhdoud",
+    "short_name": "Al Akhdoud",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "C"
+  },
+  {
+    "name": "Al Qadsiah",
+    "short_name": "Al Qadsiah",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "B"
+  },
+  {
+    "name": "Al Orubah",
+    "short_name": "Al Orubah",
+    "league": "Saudi Pro League",
+    "country": "Arabia Saudita",
+    "tier": "C"
   }
 ]

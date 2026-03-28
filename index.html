@@ -41,6 +41,24 @@
   <!-- Custom Design System -->
   <link rel="stylesheet" href="/assets/css/elclub.css?v=2">
 
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Store",
+    "name": "El Club",
+    "url": "https://elclub.club",
+    "description": "Mystery boxes y camisetas de fútbol en Guatemala",
+    "priceRange": "Q200 - Q600",
+    "paymentAccepted": "Visa, Mastercard, Efectivo",
+    "currenciesAccepted": "GTQ",
+    "address": {
+      "@type": "PostalAddress",
+      "addressCountry": "GT"
+    }
+  }
+  </script>
+
   <!-- GA4 -->
   <!-- TODO: Replace G-XXXXXXXXXX with actual GA4 measurement ID -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
@@ -232,9 +250,16 @@
           </div>
         </div>
       </div>
-      <div class="border-t border-chalk pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <p class="text-ash text-xs">El Club 2026. Todos los derechos reservados.</p>
-        <p class="text-ash text-xs">Guatemala</p>
+      <div class="border-t border-chalk pt-6 flex flex-col items-center gap-4">
+        <div class="w-full flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p class="text-ash text-xs">El Club 2026. Todos los derechos reservados.</p>
+          <p class="text-ash text-xs">Guatemala</p>
+        </div>
+        <div class="flex gap-4 text-ash text-xs">
+          <a href="/politicas.html#privacidad" class="hover:text-smoke transition-colors">Privacidad</a>
+          <a href="/politicas.html#terminos" class="hover:text-smoke transition-colors">Términos</a>
+          <a href="/politicas.html#devoluciones" class="hover:text-smoke transition-colors">Devoluciones</a>
+        </div>
       </div>
     </div>
   </footer>

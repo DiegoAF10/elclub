@@ -14,6 +14,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <link rel="stylesheet" href="/assets/css/elclub.css?v=2">
+
+  <!-- GA4 -->
+  <!-- TODO: Replace G-XXXXXXXXXX with actual GA4 measurement ID -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX');
+  </script>
 </head>
 <body class="bg-midnight text-white">
 
@@ -46,6 +56,18 @@
       <p class="text-smoke text-lg mb-2">Tu pedido está en camino.</p>
       <p class="text-ash text-sm mb-10">Recibís confirmación por WhatsApp con los detalles de entrega. Si tenés alguna duda, escribinos.</p>
 
+      <!-- Order Summary (populated by JS) -->
+      <div id="order-summary" class="hidden text-left bg-pitch border border-chalk rounded-xl p-6 mb-10">
+        <p class="text-sm text-ash mb-1">Número de pedido</p>
+        <p id="order-number" class="font-display text-2xl text-gold mb-4"></p>
+        <div id="order-items" class="space-y-3 mb-4"></div>
+        <div class="border-t border-chalk pt-3 space-y-1">
+          <div class="flex justify-between text-sm text-smoke"><span>Subtotal</span><span id="order-subtotal"></span></div>
+          <div class="flex justify-between text-sm text-smoke"><span>Envío</span><span id="order-shipping"></span></div>
+          <div class="flex justify-between font-display text-lg text-white"><span>Total</span><span id="order-total"></span></div>
+        </div>
+      </div>
+
       <!-- Actions -->
       <div class="flex flex-col sm:flex-row gap-4 justify-center">
         <a href="https://wa.me/502XXXXXXXX" target="_blank" class="btn-whatsapp justify-center py-3 px-6">
@@ -60,18 +82,96 @@
 
   <!-- FOOTER -->
   <footer class="border-t border-chalk py-8 px-4">
-    <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-      <a href="/"><img src="/assets/img/brand/logo.svg" alt="El Club" class="h-8"></a>
-      <p class="text-ash text-xs">El Club 2026. Pagos seguros con Recurrente.</p>
+    <div class="max-w-6xl mx-auto flex flex-col items-center gap-4">
+      <div class="w-full flex flex-col sm:flex-row items-center justify-between gap-4">
+        <a href="/"><img src="/assets/img/brand/logo.svg" alt="El Club" class="h-8"></a>
+        <p class="text-ash text-xs">El Club 2026. Pagos seguros con Recurrente.</p>
+      </div>
+      <div class="flex gap-4 text-ash text-xs">
+        <a href="/politicas.html#privacidad" class="hover:text-smoke transition-colors">Privacidad</a>
+        <a href="/politicas.html#terminos" class="hover:text-smoke transition-colors">Términos</a>
+        <a href="/politicas.html#devoluciones" class="hover:text-smoke transition-colors">Devoluciones</a>
+      </div>
     </div>
   </footer>
 
-  <!-- Clear cart after successful payment -->
+  <!-- Clear cart only if valid order exists -->
   <script src="/assets/js/cart.js?v=2"></script>
   <script>
-    // Clear the cart since payment was successful
-    clearCart();
-    localStorage.removeItem('elclub_shipping');
+    (function() {
+      var raw = localStorage.getItem('elclub_pending_order');
+      if (!raw) { window.location.href = '/'; return; }
+
+      var order;
+      try {
+        order = JSON.parse(raw);
+        var age = Date.now() - new Date(order.saved_at).getTime();
+        if (age > 30 * 60 * 1000) { window.location.href = '/'; return; }
+      } catch (e) { window.location.href = '/'; return; }
+
+      // Valid order — clear cart
+      clearCart();
+      localStorage.removeItem('elclub_shipping');
+
+      // --- Populate order summary ---
+      var summary = document.getElementById('order-summary');
+      if (summary && order.order_number) {
+        // Order number
+        document.getElementById('order-number').textContent = order.order_number;
+
+        // Items list
+        var itemsContainer = document.getElementById('order-items');
+        if (order.items && order.items.length) {
+          order.items.forEach(function(item) {
+            var row = document.createElement('div');
+            row.className = 'flex justify-between items-start text-sm';
+            var desc = document.createElement('span');
+            desc.className = 'text-smoke';
+            var parts = [item.name];
+            if (item.size) parts.push('Talla ' + item.size);
+            if (item.quantity && item.quantity > 1) parts.push('x' + item.quantity);
+            desc.textContent = parts.join(' — ');
+            var price = document.createElement('span');
+            price.className = 'text-white font-medium whitespace-nowrap ml-4';
+            price.textContent = 'Q' + (item.price * (item.quantity || 1));
+            row.appendChild(desc);
+            row.appendChild(price);
+            itemsContainer.appendChild(row);
+          });
+        }
+
+        // Totals
+        document.getElementById('order-subtotal').textContent = 'Q' + (order.subtotal || 0);
+        document.getElementById('order-shipping').textContent = order.shipping ? 'Q' + order.shipping : 'Gratis';
+        document.getElementById('order-total').textContent = 'Q' + (order.total || 0);
+
+        // Reveal the summary
+        summary.classList.remove('hidden');
+      }
+
+      // --- GA4 purchase event ---
+      if (typeof gtag === 'function') {
+        var ga4Items = (order.items || []).map(function(item) {
+          return {
+            item_id: item.id,
+            item_name: item.name,
+            item_variant: item.size || '',
+            price: item.price,
+            quantity: item.quantity || 1
+          };
+        });
+        gtag('event', 'purchase', {
+          transaction_id: order.order_number || order.checkout_id,
+          value: order.total || 0,
+          currency: 'GTQ',
+          shipping: order.shipping || 0,
+          items: ga4Items
+        });
+      }
+
+      // --- Clean up order data (summary already rendered) ---
+      localStorage.removeItem('elclub_pending_order');
+    })();
   </script>
 
 </body>

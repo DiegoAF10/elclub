@@ -10,6 +10,10 @@ var CART_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
 // DIEGO: Cuando tengas tu número WA Business, cambiá solo los dígitos acá:
 var WHATSAPP_NUMBER = '502XXXXXXXX';
 
+// Backoffice worker URL for Recurrente checkout
+// DIEGO: Cambiá esto cuando el worker esté deployed
+var BACKOFFICE_URL = 'https://elclub-backoffice.ventusgt.workers.dev';
+
 // ── Read ──
 function getCart() {
   try {
@@ -56,6 +60,23 @@ function addToCart(id, name, price, size, image) {
     });
   }
   saveCart(cart);
+
+  // GA4: add_to_cart event
+  if (typeof gtag === 'function') {
+    var qty = existing ? existing.quantity : 1;
+    gtag('event', 'add_to_cart', {
+      currency: 'GTQ',
+      value: price * qty,
+      items: [{
+        item_id: id,
+        item_name: name,
+        item_variant: size,
+        price: price,
+        quantity: qty
+      }]
+    });
+  }
+
   showCartToast(name, price, size);
 }
 
@@ -254,6 +275,71 @@ function checkoutWhatsApp() {
   window.open(url, '_blank');
 }
 
+// ── Recurrente Checkout ──
+function checkoutRecurrente() {
+  if (!BACKOFFICE_URL) {
+    // Fallback to WhatsApp if worker not configured
+    checkoutWhatsApp();
+    return;
+  }
+
+  var totals = getCartTotals();
+  if (totals.count === 0) return;
+
+  // Build items array for the worker API
+  var items = [];
+  var productIds = [];
+  var productQuantities = {};
+  for (var i = 0; i < totals.items.length; i++) {
+    var item = totals.items[i];
+    items.push({
+      name: item.name + ' (Talla ' + item.size + ')',
+      amount_in_cents: item.price * 100,
+      currency: 'GTQ',
+      quantity: item.quantity
+    });
+    productIds.push(item.id);
+    productQuantities[item.id] = (productQuantities[item.id] || 0) + item.quantity;
+  }
+
+  // Show loading state
+  var btn = document.getElementById('btn-checkout-card');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Procesando...';
+  }
+
+  fetch(BACKOFFICE_URL + '/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      items: items,
+      product_ids: productIds,
+      product_quantities: productQuantities
+    })
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (data.checkout_url) {
+      clearCart();
+      window.location.href = data.checkout_url;
+    } else {
+      throw new Error(data.error || 'Error al crear checkout');
+    }
+  })
+  .catch(function(err) {
+    console.error('Checkout error:', err);
+    // Fallback to WhatsApp on error
+    if (confirm('Hubo un error con el pago en línea. ¿Querés continuar por WhatsApp?')) {
+      checkoutWhatsApp();
+    }
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Pagar con tarjeta';
+    }
+  });
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', function() {
   updateCartBadge();
@@ -261,6 +347,11 @@ document.addEventListener('DOMContentLoaded', function() {
   var overlay = document.getElementById('cart-overlay');
   if (overlay) {
     overlay.addEventListener('click', closeCartDrawer);
+  }
+  // Show card checkout button if backoffice is configured
+  if (BACKOFFICE_URL) {
+    var cardBtn = document.getElementById('btn-checkout-card');
+    if (cardBtn) cardBtn.style.display = '';
   }
 });
 

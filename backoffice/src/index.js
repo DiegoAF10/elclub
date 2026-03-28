@@ -2,15 +2,18 @@
  * El Club Backoffice — Cloudflare Worker
  *
  * Endpoints:
- *   POST /api/checkout         — Create Recurrente checkout session
- *   POST /webhook/recurrente   — Receive payment webhook (Svix)
- *   GET  /health               — Health check
+ *   POST /api/checkout              — Create Recurrente checkout session
+ *   GET  /api/coupons/validate      — Validate a coupon code
+ *   POST /api/coupons/admin         — Create a coupon (admin, X-Admin-Key)
+ *   POST /webhook/recurrente        — Receive payment webhook (Svix)
+ *   GET  /health                    — Health check
  *
  * Secrets:
  *   RECURRENTE_PUBLIC_KEY, RECURRENTE_SECRET_KEY — Recurrente API
  *   RESEND_API_KEY          — Email sending
  *   GITHUB_TOKEN            — Update products.json stock
  *   WEBHOOK_SECRET          — Svix signature verification
+ *   ADMIN_KEY               — Admin endpoint authentication
  */
 
 const ALLOWED_ORIGINS = [
@@ -25,8 +28,8 @@ function getCorsHeaders(request) {
   const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     'Access-Control-Allow-Origin': allowed,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Key',
   };
 }
 
@@ -97,7 +100,9 @@ async function createCheckout(env, data) {
   const pendingData = {
     items: data.items,
     product_ids: data.product_ids || [],
+    product_quantities: data.product_quantities || {},
     customer: data.customer || {},
+    coupon_code: data.coupon_code || null,
     created_at: new Date().toISOString(),
   };
   await env.DATA.put(
@@ -109,10 +114,90 @@ async function createCheckout(env, data) {
   return { checkout_id: checkout.id, checkout_url: checkout.checkout_url };
 }
 
+// ── Svix signature verification ──────────────────────────────
+
+async function validateSvixSignature(body, headers, secret) {
+  if (!secret) {
+    console.warn('⚠ WEBHOOK_SECRET not configured — skipping signature verification');
+    return { valid: false, reason: 'no_secret' };
+  }
+
+  const msgId = headers.get('svix-id') || headers.get('webhook-id');
+  const timestamp = headers.get('svix-timestamp') || headers.get('webhook-timestamp');
+  const signature = headers.get('svix-signature') || headers.get('webhook-signature');
+
+  if (!msgId || !timestamp || !signature) {
+    console.warn('Missing Svix headers for signature verification');
+    return { valid: false, reason: 'missing_headers' };
+  }
+
+  // Reject requests with timestamps older than 5 minutes (replay protection)
+  const now = Math.floor(Date.now() / 1000);
+  const ts = parseInt(timestamp, 10);
+  if (isNaN(ts) || Math.abs(now - ts) > 300) {
+    console.warn(`Svix timestamp too old or invalid: ${timestamp}`);
+    return { valid: false, reason: 'timestamp_expired' };
+  }
+
+  try {
+    // Remove whsec_ prefix and base64-decode the secret
+    const secretBase64 = secret.startsWith('whsec_') ? secret.slice(6) : secret;
+    const secretBytes = Uint8Array.from(atob(secretBase64), c => c.charCodeAt(0));
+
+    // Sign: msg_id.timestamp.body
+    const toSign = `${msgId}.${timestamp}.${body}`;
+    const encoder = new TextEncoder();
+
+    const key = await crypto.subtle.importKey(
+      'raw',
+      secretBytes,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(toSign));
+    const computed = btoa(String.fromCharCode(...new Uint8Array(sig)));
+
+    // Svix sends multiple signatures: "v1,sig1 v1,sig2" — check if any match
+    const signatures = signature.split(' ');
+    for (const s of signatures) {
+      const [version, sigValue] = s.split(',');
+      if (version === 'v1' && sigValue === computed) {
+        return { valid: true };
+      }
+    }
+
+    console.warn(`Svix signature mismatch — msgId=${msgId} ts=${timestamp}`);
+    return { valid: false, reason: 'signature_mismatch' };
+  } catch (err) {
+    console.error('Signature validation error:', err.message);
+    return { valid: false, reason: 'crypto_error' };
+  }
+}
+
 // ── Webhook handler ──────────────────────────────────────────
 
 async function handleWebhook(request, env) {
+  // Read body as text first (needed for signature verification before JSON parse)
   const body = await request.text();
+
+  // Validate Svix signature
+  const sigResult = await validateSvixSignature(body, request.headers, env.WEBHOOK_SECRET);
+
+  if (!sigResult.valid) {
+    if (sigResult.reason === 'no_secret') {
+      // Graceful fallback: no secret configured yet, process anyway with a warning
+      console.warn('Processing webhook WITHOUT signature verification — configure WEBHOOK_SECRET to secure this endpoint');
+    } else {
+      // Secret IS configured but signature is invalid — reject
+      console.error(`Webhook rejected: ${sigResult.reason}`);
+      return new Response(JSON.stringify({ error: 'Invalid signature' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
   let payload;
   try {
     payload = JSON.parse(body);
@@ -130,15 +215,18 @@ async function handleWebhook(request, env) {
     });
   }
 
-  const pi = payload.payment_intent;
+  // Recurrente sends the payment intent as the root object
+  const pi = payload.payment_intent || payload;
   const checkout = pi.checkout || {};
   const checkoutId = checkout.id;
   const amountCents = pi.amount_in_cents;
 
-  // Customer data from Recurrente checkout form
-  const customerEmail = checkout.customer_email || '';
-  const customerName = checkout.customer_name || '';
-  const customerPhone = checkout.customer_phone || '';
+  // Customer data from Recurrente payload
+  const customer = pi.customer || {};
+  const customerEmail = customer.email || checkout.customer_email || '';
+  const customerName = customer.full_name || checkout.customer_name || '';
+  const paymentMethod = checkout.payment_method || {};
+  const customerPhone = paymentMethod.phone_number || checkout.customer_phone || '';
 
   // Look up pending checkout data from KV
   let pendingData = null;
@@ -153,7 +241,10 @@ async function handleWebhook(request, env) {
 
   const items = pendingData?.items || [{ name: checkout.product_name || 'Producto', amount_in_cents: amountCents, quantity: 1 }];
   const productIds = pendingData?.product_ids || [];
+  const productQuantities = pendingData?.product_quantities || {};
   const shippingCustomer = pendingData?.customer || {};
+
+  const couponCode = pendingData?.coupon_code || null;
 
   // Build order record
   const order = {
@@ -162,6 +253,8 @@ async function handleWebhook(request, env) {
     amount_cents: amountCents,
     items,
     product_ids: productIds,
+    product_quantities: productQuantities,
+    coupon_code: couponCode,
     customer: {
       name: customerName || shippingCustomer.name || '',
       email: customerEmail,
@@ -169,6 +262,7 @@ async function handleWebhook(request, env) {
       address: shippingCustomer.address || '',
       notes: shippingCustomer.notes || '',
     },
+    receipt_number: pi.receipt_number || null,
     paid_at: new Date().toISOString(),
   };
 
@@ -184,15 +278,8 @@ async function handleWebhook(request, env) {
   // Run post-payment tasks in parallel
   const tasks = [];
 
-  // Email to customer
-  if (customerEmail && env.RESEND_API_KEY) {
-    tasks.push(
-      sendCustomerEmail(env, customerEmail, customerName, items, amountCents)
-        .catch(err => console.error('Customer email failed:', err))
-    );
-  }
-
-  // Email to Diego
+  // Email to Diego (via tiendaventus.com domain — already verified in Resend)
+  // Customer confirmation handled via WhatsApp
   if (env.RESEND_API_KEY) {
     tasks.push(
       sendDiegoAlert(env, order)
@@ -200,11 +287,19 @@ async function handleWebhook(request, env) {
     );
   }
 
-  // Update stock on GitHub
+  // Update stock on GitHub (quantity-aware)
   if (productIds.length > 0 && env.GITHUB_TOKEN) {
     tasks.push(
-      updateStock(env, productIds)
+      updateStock(env, productIds, productQuantities)
         .catch(err => console.error('Stock update failed:', err))
+    );
+  }
+
+  // Increment coupon usage
+  if (couponCode) {
+    tasks.push(
+      incrementCouponUsage(env, couponCode)
+        .catch(err => console.error('Coupon usage increment failed:', err))
     );
   }
 
@@ -282,26 +377,39 @@ async function sendDiegoAlert(env, order) {
   }
 
   const itemLines = order.items
-    .map(i => `• ${i.name} x${i.quantity} — Q${(i.amount_in_cents * i.quantity) / 100}`)
+    .map(i => `${i.name} x${i.quantity} — Q${(i.amount_in_cents * i.quantity) / 100}`)
     .join('\n');
 
-  const text = `NUEVA VENTA — El Club
+  // Build WhatsApp confirmation link for customer
+  const customerPhone = (order.customer.phone || '').replace(/\D/g, '');
+  const customerFirst = (order.customer.name || 'cliente').split(' ')[0];
+  const waMessage = `Hola ${customerFirst}! Soy Diego de El Club. Tu pago de Q${order.amount_cents / 100} fue confirmado. Ya estoy preparando tu pedido. Te aviso cuando esté listo para entrega.`;
+  const waLink = customerPhone
+    ? `https://wa.me/${customerPhone}?text=${encodeURIComponent(waMessage)}`
+    : '(sin teléfono)';
 
-${itemLines}
+  const html = `
+<div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; color: #333;">
+  <h2 style="margin: 0 0 16px; color: #111;">NUEVA VENTA — El Club</h2>
 
-Total: Q${order.amount_cents / 100}
-Checkout: ${order.checkout_id}
+  <div style="background: #f4f4f4; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+    <p style="margin: 0 0 8px; font-size: 14px; white-space: pre-line;">${itemLines}</p>
+    <p style="margin: 0; font-size: 18px; font-weight: 700;">Total: Q${order.amount_cents / 100}</p>
+  </div>
 
-Cliente:
-  Nombre: ${order.customer.name}
-  Email: ${order.customer.email}
-  Teléfono: ${order.customer.phone}
-  Dirección: ${order.customer.address}
-  Notas: ${order.customer.notes || '(ninguna)'}
+  <table style="font-size: 14px; border-collapse: collapse; width: 100%; margin-bottom: 16px;">
+    <tr><td style="padding: 4px 8px 4px 0; color: #888;">Cliente</td><td style="padding: 4px 0;">${order.customer.name}</td></tr>
+    <tr><td style="padding: 4px 8px 4px 0; color: #888;">Email</td><td style="padding: 4px 0;">${order.customer.email}</td></tr>
+    <tr><td style="padding: 4px 8px 4px 0; color: #888;">Teléfono</td><td style="padding: 4px 0;">${order.customer.phone || '(no proporcionado)'}</td></tr>
+    <tr><td style="padding: 4px 8px 4px 0; color: #888;">Dirección</td><td style="padding: 4px 0;">${order.customer.address || '(coordinar por WA)'}</td></tr>
+    <tr><td style="padding: 4px 8px 4px 0; color: #888;">Notas</td><td style="padding: 4px 0;">${order.customer.notes || '(ninguna)'}</td></tr>
+    <tr><td style="padding: 4px 8px 4px 0; color: #888;">Recibo</td><td style="padding: 4px 0;">${order.receipt_number || order.checkout_id}</td></tr>
+  </table>
 
-Pagado: ${order.paid_at}
+  ${customerPhone ? `<a href="${waLink}" style="display: inline-block; background: #25D366; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; font-size: 14px;">Confirmar por WhatsApp</a>` : '<p style="color: #c00;">Sin teléfono — confirmar por email</p>'}
 
-SKUs a actualizar: ${order.product_ids.join(', ') || '(no especificados)'}`;
+  <p style="color: #aaa; font-size: 12px; margin-top: 24px;">Checkout: ${order.checkout_id} · ${order.paid_at}</p>
+</div>`;
 
   await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -310,10 +418,10 @@ SKUs a actualizar: ${order.product_ids.join(', ') || '(no especificados)'}`;
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'El Club Bot <noreply@elclub.club>',
+      from: 'El Club Bot <noreply@tiendaventus.com>',
       to: diegoEmail,
       subject: `Venta Q${order.amount_cents / 100} — ${order.customer.name || 'Cliente'}`,
-      text,
+      html,
     }),
   });
 
@@ -322,7 +430,7 @@ SKUs a actualizar: ${order.product_ids.join(', ') || '(no especificados)'}`;
 
 // ── Stock update via GitHub API ──────────────────────────────
 
-async function updateStock(env, productIds) {
+async function updateStock(env, productIds, productQuantities = {}) {
   const repo = env.GITHUB_REPO || 'DiegoAF10/elclub';
   const branch = env.GITHUB_BRANCH || 'main';
   const path = 'content/products.json';
@@ -350,7 +458,7 @@ async function updateStock(env, productIds) {
   const content = atob(fileData.content.replace(/\n/g, ''));
   const products = JSON.parse(content);
 
-  // 2. Decrement stock for each product ID sold
+  // 2. Decrement stock for each product ID sold (quantity-aware)
   let changed = false;
   for (const pid of productIds) {
     const product = products.find(p => p.id === pid);
@@ -359,10 +467,13 @@ async function updateStock(env, productIds) {
       continue;
     }
 
-    if (product.stock > 0) {
-      product.stock -= 1;
+    const qty = productQuantities[pid] || 1;
+    const prevStock = product.stock;
+    product.stock = Math.max(0, product.stock - qty);
+
+    if (product.stock !== prevStock) {
       changed = true;
-      console.log(`Stock updated: ${pid} → ${product.stock}`);
+      console.log(`Stock updated: ${pid} ${prevStock} → ${product.stock} (sold ${qty})`);
     }
 
     if (product.stock <= 0) {
@@ -387,7 +498,7 @@ async function updateStock(env, productIds) {
       'User-Agent': 'elclub-backoffice',
     },
     body: JSON.stringify({
-      message: `stock: ${productIds.join(', ')} vendido (webhook)`,
+      message: `stock: ${productIds.map(pid => `${pid} x${productQuantities[pid] || 1}`).join(', ')} vendido (webhook)`,
       content: updatedContent,
       sha: fileData.sha,
       branch,
@@ -400,6 +511,120 @@ async function updateStock(env, productIds) {
   }
 
   console.log(`products.json updated on GitHub for: ${productIds.join(', ')}`);
+}
+
+// ── Coupon: Validate ─────────────────────────────────────────
+
+async function handleCouponValidate(url, env) {
+  const code = (url.searchParams.get('code') || '').trim().toUpperCase();
+
+  if (!code) {
+    return { valid: false, reason: 'Ingresá un código' };
+  }
+
+  const raw = await env.DATA.get(`coupon:${code}`);
+  if (!raw) {
+    return { valid: false, reason: 'Código no válido' };
+  }
+
+  const coupon = JSON.parse(raw);
+
+  if (!coupon.active) {
+    return { valid: false, reason: 'Código inactivo' };
+  }
+
+  if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+    return { valid: false, reason: 'Código expirado' };
+  }
+
+  if (typeof coupon.max_uses === 'number' && coupon.used >= coupon.max_uses) {
+    return { valid: false, reason: 'Código agotado' };
+  }
+
+  return { valid: true, code: coupon.code, type: coupon.type, value: coupon.value };
+}
+
+// ── Coupon: Admin Create ─────────────────────────────────────
+
+async function handleCouponAdmin(request, env) {
+  // Auth check
+  const adminKey = request.headers.get('X-Admin-Key');
+  if (!env.ADMIN_KEY || adminKey !== env.ADMIN_KEY) {
+    return { _status: 401, error: 'Unauthorized' };
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return { _status: 400, error: 'JSON inválido' };
+  }
+
+  const code = (body.code || '').trim().toUpperCase();
+  if (!code || code.length < 3) {
+    return { _status: 400, error: 'Código debe tener al menos 3 caracteres' };
+  }
+
+  const type = (body.type || 'percent').toLowerCase();
+  if (type !== 'percent' && type !== 'fixed') {
+    return { _status: 400, error: 'Tipo debe ser "percent" o "fixed"' };
+  }
+
+  const value = Number(body.value);
+  if (!Number.isFinite(value) || value <= 0) {
+    return { _status: 400, error: 'Valor debe ser un número positivo' };
+  }
+
+  const maxUses = Number(body.max_uses) || null;
+  const expiresAt = body.expires_at || null;
+
+  const couponData = {
+    code,
+    type,
+    value,
+    active: true,
+    max_uses: maxUses,
+    used: 0,
+    expires_at: expiresAt,
+    created_at: new Date().toISOString(),
+  };
+
+  // Calculate TTL if expiration is set
+  const putOptions = {};
+  if (expiresAt) {
+    const ttl = Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000);
+    if (ttl > 0) putOptions.expirationTtl = ttl;
+  }
+
+  await env.DATA.put(`coupon:${code}`, JSON.stringify(couponData), putOptions);
+
+  console.log(`Admin coupon created: ${code} (${type} ${value}) max_uses=${maxUses}`);
+
+  return couponData;
+}
+
+// ── Coupon: Increment usage after payment ────────────────────
+
+async function incrementCouponUsage(env, couponCode) {
+  if (!couponCode) return;
+
+  const code = couponCode.trim().toUpperCase();
+  const raw = await env.DATA.get(`coupon:${code}`);
+  if (!raw) return;
+
+  const coupon = JSON.parse(raw);
+  coupon.used = (coupon.used || 0) + 1;
+
+  // Preserve original TTL by re-calculating from expires_at
+  const putOptions = {};
+  if (coupon.expires_at) {
+    const ttl = Math.floor((new Date(coupon.expires_at).getTime() - Date.now()) / 1000);
+    if (ttl > 0) putOptions.expirationTtl = ttl;
+  }
+
+  await env.DATA.put(`coupon:${code}`, JSON.stringify(coupon), putOptions);
+
+  console.log(`Coupon ${code} usage incremented to ${coupon.used}`);
 }
 
 // ── Router ───────────────────────────────────────────────────
@@ -432,6 +657,20 @@ export default {
         const result = await createCheckout(env, data);
         console.log(`Checkout created: ${result.checkout_id} — ${data.items.length} items`);
         return json(result, 200, cors);
+      }
+
+      // Validate coupon
+      if (url.pathname === '/api/coupons/validate' && request.method === 'GET') {
+        const result = await handleCouponValidate(url, env);
+        return json(result, 200, cors);
+      }
+
+      // Admin: create coupon
+      if (url.pathname === '/api/coupons/admin' && request.method === 'POST') {
+        const result = await handleCouponAdmin(request, env);
+        const status = result._status || 200;
+        if (result._status) delete result._status;
+        return json(result, status, cors);
       }
 
       // Recurrente webhook (Svix)

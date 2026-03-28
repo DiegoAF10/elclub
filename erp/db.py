@@ -41,16 +41,16 @@ def next_jersey_id(conn: sqlite3.Connection) -> str:
 
 def insert_jersey(conn, team_id, season, variant, size, tier,
                   player_name=None, player_number=None, patches=None,
-                  cost=100, price=None, notes=None) -> str:
+                  cost=100, price=None, notes=None, position=None) -> str:
     """Insert a jersey and return its ID."""
     jersey_id = next_jersey_id(conn)
     conn.execute(
         """INSERT INTO jerseys
            (jersey_id, team_id, season, variant, size, tier,
-            player_name, player_number, patches, cost, price, notes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            player_name, player_number, patches, cost, price, notes, position)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (jersey_id, team_id, season, variant, size, tier,
-         player_name, player_number, patches, cost, price, notes),
+         player_name, player_number, patches, cost, price, notes, position),
     )
     conn.commit()
     return jersey_id
