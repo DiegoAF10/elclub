@@ -506,9 +506,6 @@ function payWithCard() {
   .then(function(res) { return res.json(); })
   .then(function(data) {
     if (data.checkout_url) {
-      // Also send WhatsApp notification to Diego
-      sendOrderWhatsApp('tarjeta', true);
-
       // Save order snapshot before redirect so gracias.html can display it
       var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       var orderCode = '';
