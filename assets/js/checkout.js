@@ -281,7 +281,7 @@ function renderStep1() {
 
 // ── Step 2: Shipping Form ──
 function validateShippingForm() {
-  var fields = ['shipping-name', 'shipping-email', 'shipping-phone', 'shipping-address'];
+  var fields = ['shipping-name', 'shipping-email', 'shipping-phone', 'shipping-department', 'shipping-municipality', 'shipping-address'];
   var valid = true;
 
   for (var i = 0; i < fields.length; i++) {
@@ -315,12 +315,30 @@ function validateShippingForm() {
 }
 
 function saveShippingData() {
+  var zone = (document.getElementById('shipping-zone') || {}).value || '';
+  var dept = (document.getElementById('shipping-department') || {}).value || '';
+  var municipality = (document.getElementById('shipping-municipality') || {}).value || '';
+  var street = (document.getElementById('shipping-address') || {}).value || '';
+  var reference = (document.getElementById('shipping-reference') || {}).value || '';
+
+  // Build full address string for display and WhatsApp
+  var addressParts = [];
+  if (street.trim()) addressParts.push(street.trim());
+  if (zone.trim()) addressParts.push('Zona ' + zone.trim());
+  if (municipality.trim()) addressParts.push(municipality.trim());
+  if (dept.trim()) addressParts.push(dept.trim());
+
   var data = {
     name: document.getElementById('shipping-name').value.trim(),
     email: (document.getElementById('shipping-email') || {}).value ? document.getElementById('shipping-email').value.trim() : '',
     phone: document.getElementById('shipping-phone').value.trim(),
-    address: document.getElementById('shipping-address').value.trim(),
-    notes: (document.getElementById('shipping-notes') || {}).value || ''
+    department: dept.trim(),
+    municipality: municipality.trim(),
+    zone: zone.trim(),
+    address: addressParts.join(', '),
+    street: street.trim(),
+    reference: reference.trim(),
+    notes: reference.trim()
   };
   localStorage.setItem(SHIPPING_KEY, JSON.stringify(data));
 }
@@ -333,13 +351,19 @@ function loadShippingData() {
     var nameEl = document.getElementById('shipping-name');
     var emailEl = document.getElementById('shipping-email');
     var phoneEl = document.getElementById('shipping-phone');
+    var deptEl = document.getElementById('shipping-department');
+    var muniEl = document.getElementById('shipping-municipality');
+    var zoneEl = document.getElementById('shipping-zone');
     var addressEl = document.getElementById('shipping-address');
-    var notesEl = document.getElementById('shipping-notes');
+    var refEl = document.getElementById('shipping-reference');
     if (nameEl && data.name) nameEl.value = data.name;
     if (emailEl && data.email) emailEl.value = data.email;
     if (phoneEl && data.phone) phoneEl.value = data.phone;
-    if (addressEl && data.address) addressEl.value = data.address;
-    if (notesEl && data.notes) notesEl.value = data.notes;
+    if (deptEl && data.department) deptEl.value = data.department;
+    if (muniEl && data.municipality) muniEl.value = data.municipality;
+    if (zoneEl && data.zone) zoneEl.value = data.zone;
+    if (addressEl && data.street) addressEl.value = data.street;
+    if (refEl && data.reference) refEl.value = data.reference;
   } catch (e) {}
 }
 
@@ -378,8 +402,9 @@ function renderStep3() {
   html += '<div class="mt-4 pt-4 border-t border-chalk">' +
     '<p class="text-xs text-smoke mb-1">Enviar a:</p>' +
     '<p class="text-sm text-white font-semibold">' + (shipping.name || '') + '</p>' +
-    '<p class="text-xs text-smoke">' + (shipping.phone || '') + ' — ' + (shipping.address || '') + '</p>' +
-    (shipping.notes ? '<p class="text-xs text-ash mt-1">Nota: ' + shipping.notes + '</p>' : '') +
+    '<p class="text-xs text-smoke">' + (shipping.phone || '') + '</p>' +
+    '<p class="text-xs text-smoke">' + (shipping.address || '') + '</p>' +
+    (shipping.reference ? '<p class="text-xs text-ash mt-1">Ref: ' + shipping.reference + '</p>' : '') +
   '</div>';
 
   summaryEl.innerHTML = html;
