@@ -95,6 +95,7 @@ async function createCheckout(env, data) {
   }
 
   const checkout = await res.json();
+  console.log('Recurrente checkout response:', JSON.stringify(checkout));
 
   // Store pending checkout in KV (48h TTL)
   const pendingData = {
@@ -279,12 +280,25 @@ async function handleWebhook(request, env) {
   const tasks = [];
 
   // Email to Diego (via tiendaventus.com domain — already verified in Resend)
-  // Customer confirmation handled via WhatsApp
   if (env.RESEND_API_KEY) {
     tasks.push(
       sendDiegoAlert(env, order)
         .catch(err => console.error('Diego alert failed:', err))
     );
+  }
+
+  // WhatsApp confirmation to customer via ManyChat
+  // Use any available phone: from pending data, Recurrente payload, or payment method
+  const mcPhone = order.customer.phone || customerPhone;
+  if (env.MANYCHAT_API_KEY && mcPhone) {
+    // Ensure order has phone for ManyChat function
+    order.customer.phone = mcPhone;
+    tasks.push(
+      sendManyChatConfirmation(env, order)
+        .catch(err => console.error('ManyChat confirmation failed:', err))
+    );
+  } else {
+    console.log(`ManyChat skipped: key=${!!env.MANYCHAT_API_KEY}, phone=${mcPhone || 'none'}`);
   }
 
   // Update stock on GitHub (quantity-aware)
@@ -625,6 +639,101 @@ async function incrementCouponUsage(env, couponCode) {
   await env.DATA.put(`coupon:${code}`, JSON.stringify(coupon), putOptions);
 
   console.log(`Coupon ${code} usage incremented to ${coupon.used}`);
+}
+
+// ── ManyChat: WhatsApp order confirmation ────────────────────
+
+const MC_BASE = 'https://api.manychat.com/fb';
+const MC_TAG_ORDEN_CONFIRMADA = 84300143;
+const MC_TAG_CONFIRMACION_ENVIADA = 84300145;
+const MC_FIELD_ORDER_NUMBER = 14431602;
+const MC_FIELD_ORDER_TOTAL = 14431603;
+
+async function mcApi(env, method, endpoint, body) {
+  const res = await fetch(`${MC_BASE}${endpoint}`, {
+    method,
+    headers: {
+      'Authorization': `Bearer ${env.MANYCHAT_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return res.json();
+}
+
+async function sendManyChatConfirmation(env, order) {
+  const phone = (order.customer.phone || '').replace(/\D/g, '');
+  if (!phone || phone.length < 8) {
+    console.log('ManyChat: no valid phone, skipping');
+    return;
+  }
+
+  // Format phone with country code
+  const fullPhone = phone.startsWith('502') ? `+${phone}` : `+502${phone}`;
+
+  // 1. Find or create subscriber by phone
+  let subscriberId;
+  const found = await mcApi(env, 'GET', `/subscriber/findBySystemField?phone=${encodeURIComponent(fullPhone)}`);
+
+  if (found.status === 'success' && found.data?.id) {
+    subscriberId = found.data.id;
+    console.log(`ManyChat: found subscriber ${subscriberId} for ${fullPhone}`);
+  } else {
+    // Create new subscriber
+    const created = await mcApi(env, 'POST', '/subscriber/createSubscriber', {
+      phone: fullPhone,
+      first_name: order.customer.name?.split(' ')[0] || '',
+      last_name: order.customer.name?.split(' ').slice(1).join(' ') || '',
+      email: order.customer.email || undefined,
+      has_opt_in_sms: true,
+      has_opt_in_email: !!order.customer.email,
+      consent_phrase: 'Checkout El Club',
+    });
+
+    if (created.status === 'success' && created.data?.id) {
+      subscriberId = created.data.id;
+      console.log(`ManyChat: created subscriber ${subscriberId} for ${fullPhone}`);
+    } else {
+      console.error('ManyChat: failed to create subscriber', JSON.stringify(created));
+      return;
+    }
+  }
+
+  // 2. Set custom fields: order_number, order_total
+  const orderNum = order.receipt_number || order.checkout_id || 'N/A';
+  const orderTotal = order.amount_cents ? String(order.amount_cents / 100) : '0';
+
+  await mcApi(env, 'POST', '/subscriber/setCustomField', {
+    subscriber_id: subscriberId,
+    field_id: MC_FIELD_ORDER_NUMBER,
+    field_value: orderNum,
+  });
+
+  await mcApi(env, 'POST', '/subscriber/setCustomField', {
+    subscriber_id: subscriberId,
+    field_id: MC_FIELD_ORDER_TOTAL,
+    field_value: orderTotal,
+  });
+
+  console.log(`ManyChat: set fields — order=${orderNum}, total=Q${orderTotal}`);
+
+  // 3. Remove "confirmacion_enviada" tag (in case of repeat purchase)
+  await mcApi(env, 'POST', '/subscriber/removeTag', {
+    subscriber_id: subscriberId,
+    tag_id: MC_TAG_CONFIRMACION_ENVIADA,
+  });
+
+  // 4. Apply "orden_confirmada" tag → triggers ManyChat WhatsApp flow
+  const tagResult = await mcApi(env, 'POST', '/subscriber/addTag', {
+    subscriber_id: subscriberId,
+    tag_id: MC_TAG_ORDEN_CONFIRMADA,
+  });
+
+  if (tagResult.status === 'success') {
+    console.log(`ManyChat: tag orden_confirmada applied to ${subscriberId} — flow should trigger`);
+  } else {
+    console.error('ManyChat: failed to apply tag', JSON.stringify(tagResult));
+  }
 }
 
 // ── Router ───────────────────────────────────────────────────
