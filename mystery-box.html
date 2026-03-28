@@ -106,18 +106,25 @@
 
     /* ── Wizard step transitions ── */
     .wizard-step {
-      display: none;
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    .wizard-step.active {
       display: flex;
       flex-direction: column;
       align-items: center;
+      opacity: 0;
+      pointer-events: none;
+      position: absolute;
+      width: 100%;
+      transform: translateY(20px);
+    }
+    .wizard-step.active {
+      position: relative;
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
       animation: stepIn 0.35s ease forwards;
     }
     .wizard-step.exiting {
-      display: flex;
+      position: absolute;
+      pointer-events: none;
       animation: stepOut 0.25s ease forwards;
     }
     @keyframes stepIn {
@@ -446,7 +453,8 @@
         <div id="wiz-step-1" class="wizard-step">
           <p class="text-ice text-xs font-bold uppercase tracking-[0.2em] mb-3">Paso 1 de 5</p>
           <h2 class="font-display text-3xl sm:text-4xl text-white text-center mb-2">¿Qué equipos NO querés?</h2>
-          <p class="text-smoke text-sm text-center mb-6 max-w-md">Tocá los equipos que preferís evitar. No te preocupés, es solo una guía.</p>
+          <p class="text-smoke text-sm text-center mb-1 max-w-md">Tocá los equipos que preferís evitar (máximo 3). Es solo una guía.</p>
+          <p id="team-counter" class="text-ice text-xs font-bold mb-4 h-4"></p>
 
           <!-- Search -->
           <div class="relative w-full max-w-sm mb-4">
@@ -865,10 +873,16 @@
     renderTeams(league);
   }
 
+  var MAX_AVOIDED_TEAMS = 3;
+
   function toggleTeam(el) {
     var name = el.getAttribute('data-team');
     var idx = wizState.avoided_teams.indexOf(name);
     if (idx === -1) {
+      if (wizState.avoided_teams.length >= MAX_AVOIDED_TEAMS) {
+        showStockAlert(0, 'Máximo ' + MAX_AVOIDED_TEAMS + ' equipos a evitar.');
+        return;
+      }
       wizState.avoided_teams.push(name);
       el.classList.add('avoided');
       el.innerHTML = '&#10005; ' + name;
@@ -877,6 +891,30 @@
       el.classList.remove('avoided');
       el.innerHTML = name;
     }
+    updateTeamCounter();
+  }
+
+  function updateTeamCounter() {
+    var count = wizState.avoided_teams.length;
+    var label = document.getElementById('team-counter');
+    if (label) label.textContent = count > 0 ? count + '/' + MAX_AVOIDED_TEAMS + ' seleccionados' : '';
+  }
+
+  function showStockAlert(_, msg) {
+    var existing = document.getElementById('stock-alert');
+    if (existing) existing.remove();
+    var alert = document.createElement('div');
+    alert.id = 'stock-alert';
+    alert.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:120;background:#dc2626;color:white;text-align:center;padding:12px;font-size:14px;font-weight:600;transform:translateY(-100%);transition:transform 0.3s ease;';
+    alert.textContent = msg;
+    document.body.appendChild(alert);
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() { alert.style.transform = 'translateY(0)'; });
+    });
+    setTimeout(function() {
+      alert.style.transform = 'translateY(-100%)';
+      setTimeout(function() { if (alert.parentNode) alert.remove(); }, 300);
+    }, 2500);
   }
 
   function filterTeams(query) {
