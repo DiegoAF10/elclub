@@ -1,5 +1,17 @@
 [
   {
+    "id": "TEST-Q5",
+    "type": "jersey",
+    "name": "TEST — Producto de Prueba Q5",
+    "description": "Producto de prueba para verificar el flujo de checkout. BORRAR después.",
+    "price": 5,
+    "image": "/assets/img/products/placeholder.svg",
+    "sizes": ["M"],
+    "stock": 99,
+    "featured": false,
+    "tags": ["test"]
+  },
+  {
     "id": "MB-CLASICA",
     "type": "mystery-box",
     "name": "Mystery Box Clasica",

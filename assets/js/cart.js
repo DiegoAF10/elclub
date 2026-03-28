@@ -8,7 +8,7 @@ var CART_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // WhatsApp number for orders (Guatemala format, 502 + 8 dígitos)
 // DIEGO: Cuando tengas tu número WA Business, cambiá solo los dígitos acá:
-var WHATSAPP_NUMBER = '502XXXXXXXX';
+var WHATSAPP_NUMBER = '50237436510';
 
 // Backoffice worker URL for Recurrente checkout
 // DIEGO: Cambiá esto cuando el worker esté deployed
