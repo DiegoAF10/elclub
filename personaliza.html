@@ -122,7 +122,7 @@
         <div class="builder-line" id="line-2-3"></div>
         <div class="builder-step" data-step="3">
           <span class="builder-step-dot">3</span>
-          <span class="hidden sm:inline">Confirmar</span>
+          <span class="hidden sm:inline">Checkout</span>
         </div>
       </div>
 
@@ -291,106 +291,28 @@
                 </div>
               </div>
 
-              <button type="button" onclick="submitStep2()" class="btn-primary w-full text-sm py-3.5">Continuar</button>
+              <button type="button" onclick="addToCustomCart()" class="btn-primary w-full text-sm py-3.5">Agregar al Pedido</button>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- ── Step 3: Confirmar Pedido ────────────── -->
+      <!-- ── Step 3: Agregado — opciones ────────── -->
       <div id="step-3" class="builder-panel hidden">
-        <button type="button" onclick="goToStep(2)" class="text-smoke hover:text-ice text-sm mb-4 inline-flex items-center gap-1 transition-colors cursor-pointer">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
-          Volver
-        </button>
-        <h2 class="text-xl font-bold uppercase tracking-wider mb-6" style="font-family:'Oswald',system-ui,sans-serif;">Confirmar Pedido</h2>
+        <div class="text-center py-8">
+          <div class="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+          </div>
+          <h2 class="text-2xl font-bold uppercase tracking-wider mb-2" style="font-family:'Oswald',system-ui,sans-serif;">Agregado al pedido</h2>
+          <p id="added-summary" class="text-smoke text-sm mb-2"></p>
+          <p id="added-cart-count" class="text-ice text-sm font-semibold mb-8"></p>
 
-        <!-- Order Summary -->
-        <div class="bg-pitch border border-chalk rounded-xl p-5 mb-6">
-          <div class="flex items-start justify-between mb-3">
-            <div>
-              <p id="confirm-team" class="text-white font-bold text-lg" style="font-family:'Oswald',sans-serif; text-transform:uppercase;"></p>
-              <p id="confirm-details" class="text-smoke text-sm mt-1"></p>
-            </div>
-            <p id="confirm-total" class="text-ice font-bold text-2xl" style="font-family:'Oswald',sans-serif;"></p>
-          </div>
-          <div id="confirm-breakdown" class="text-ash text-xs border-t border-chalk pt-3"></div>
-        </div>
-
-        <!-- Shipping Form (same as pedidos.html) -->
-        <h3 class="text-sm font-semibold uppercase tracking-wider text-smoke mb-4">Datos de envío</h3>
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Nombre completo</label>
-            <input type="text" id="customer-name" required autocomplete="name" class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="Tu nombre">
-          </div>
-          <div>
-            <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Email</label>
-            <input type="email" id="customer-email" autocomplete="email" inputmode="email" class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="tu@email.com">
-          </div>
-          <div>
-            <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Teléfono (WhatsApp)</label>
-            <div class="flex items-center gap-2">
-              <span class="text-smoke text-sm font-semibold">+502</span>
-              <input type="tel" id="customer-whatsapp" required autocomplete="tel" inputmode="tel" class="flex-1 px-4 py-3 rounded-lg border border-chalk text-white" placeholder="1234 5678" maxlength="9">
-            </div>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Departamento</label>
-              <select id="customer-department" required class="w-full px-4 py-3 rounded-lg border border-chalk text-white bg-midnight appearance-none cursor-pointer">
-                <option value="" disabled selected>Seleccionar</option>
-                <option>Guatemala</option>
-                <option>Sacatepéquez</option>
-                <option>Escuintla</option>
-                <option>Chimaltenango</option>
-                <option>El Progreso</option>
-                <option>Santa Rosa</option>
-                <option>Sololá</option>
-                <option>Totonicapán</option>
-                <option>Quetzaltenango</option>
-                <option>Suchitepéquez</option>
-                <option>Retalhuleu</option>
-                <option>San Marcos</option>
-                <option>Huehuetenango</option>
-                <option>Quiché</option>
-                <option>Baja Verapaz</option>
-                <option>Alta Verapaz</option>
-                <option>Petén</option>
-                <option>Izabal</option>
-                <option>Zacapa</option>
-                <option>Chiquimula</option>
-                <option>Jalapa</option>
-                <option>Jutiapa</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Municipio</label>
-              <input type="text" id="customer-municipality" required class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="Ej: Guatemala, Mixco, Antigua...">
-            </div>
-          </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Zona</label>
-              <input type="text" id="customer-zone" inputmode="numeric" class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="Ej: 10" maxlength="3">
-            </div>
-            <div class="sm:col-span-2">
-              <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Dirección</label>
-              <input type="text" id="customer-address" required autocomplete="street-address" class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="Calle, avenida, número, colonia...">
-            </div>
-          </div>
-          <div>
-            <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Referencia <span class="text-ash font-normal normal-case">(opcional)</span></label>
-            <input type="text" id="customer-reference" class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="Ej: frente a la gasolinera, portón negro...">
+          <div class="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+            <button type="button" onclick="addAnother()" class="btn-secondary flex-1 text-sm py-3.5">Agregar otra camiseta</button>
+            <a href="/pedidos.html" class="btn-primary flex-1 text-sm py-3.5 text-center">Ir al checkout</a>
           </div>
 
-          <p id="form-error" class="text-red-400 text-sm hidden"></p>
-
-          <button type="button" onclick="submitOrder()" id="submit-btn" class="btn-primary w-full text-sm py-4 mt-2">
-            CONFIRMAR PEDIDO
-          </button>
-
-          <p class="text-ash text-xs text-center">Te contactamos por WhatsApp para confirmar disponibilidad y coordinar el pago.</p>
+          <button type="button" onclick="openCartDrawer()" class="btn-ghost text-sm mt-4 cursor-pointer">Ver mi carrito</button>
         </div>
       </div>
 
@@ -846,7 +768,7 @@
       document.getElementById('price-total').textContent = 'Q' + total;
     }
 
-    function submitStep2() {
+    function addToCustomCart() {
       if (!state.talla) {
         document.getElementById('talla-error').classList.remove('hidden');
         document.getElementById('talla-pills').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -854,112 +776,38 @@
       }
       state.dorsalName = document.getElementById('dorsal-name').value.trim();
       state.dorsalNumber = document.getElementById('dorsal-number').value.trim();
-      renderConfirmation();
-      goToStep(3);
-    }
-
-    /* ══════════════════════════════════════════════════════════════
-       Step 3: Confirm & Submit
-       ══════════════════════════════════════════════════════════════ */
-    function renderConfirmation() {
-      var base = 400, dorsal = state.dorsal ? 25 : 0, patches = state.patches * 15;
-      var total = base + dorsal + patches;
-
-      document.getElementById('confirm-team').textContent = state.team;
-      var parts = [state.version, 'Talla ' + state.talla];
-      if (state.mode === 'mundial') parts.unshift('Mundial 2026');
-      else { parts.push(state.temporada); parts.unshift(state.liga); }
-      if (state.dorsal) parts.push(state.dorsalName + (state.dorsalNumber ? ' #' + state.dorsalNumber : ''));
-      if (state.patches > 0) parts.push(state.patches + ' parche' + (state.patches > 1 ? 's' : ''));
-      document.getElementById('confirm-details').textContent = parts.join(' · ');
-      document.getElementById('confirm-total').textContent = 'Q' + total;
-
-      var breakdown = 'Camiseta Q400';
-      if (dorsal) breakdown += ' + Dorsal Q25';
-      if (patches) breakdown += ' + Parches Q' + patches;
-      document.getElementById('confirm-breakdown').textContent = breakdown;
-    }
-
-    function submitOrder() {
-      var name = document.getElementById('customer-name').value.trim();
-      var email = document.getElementById('customer-email').value.trim();
-      var wa = document.getElementById('customer-whatsapp').value.trim().replace(/\D/g, '');
-      var dept = document.getElementById('customer-department').value;
-      var muni = document.getElementById('customer-municipality').value.trim();
-      var zone = document.getElementById('customer-zone').value.trim();
-      var address = document.getElementById('customer-address').value.trim();
-      var reference = document.getElementById('customer-reference').value.trim();
-
-      // Validate
-      if (!name) { showFormError('Ingresá tu nombre.'); return; }
-      if (!wa || wa.length < 8) { showFormError('Ingresá un número de WhatsApp válido.'); return; }
-      if (!dept) { showFormError('Seleccioná tu departamento.'); return; }
-      if (!muni) { showFormError('Ingresá tu municipio.'); return; }
-      if (!address) { showFormError('Ingresá tu dirección.'); return; }
 
       var base = 400, dorsal = state.dorsal ? 25 : 0, patches = state.patches > 0 ? 15 : 0;
       var unitPrice = base + dorsal + patches;
-      var total = unitPrice * state.qty;
-      var fullAddress = (zone ? 'Zona ' + zone + ', ' : '') + address + ', ' + muni + ', ' + dept;
 
-      var body = {
-        type: 'custom',
-        source: state.mode || 'club',
+      addCustomToCart({
         team: state.team,
         league: state.liga,
-        season: state.mode === 'mundial' ? null : state.temporada,
+        source: state.mode || 'club',
+        season: state.mode === 'mundial' ? 'Mundial 2026' : state.temporada,
         version: state.version,
         dorsal: { enabled: state.dorsal, name: state.dorsalName, number: state.dorsalNumber },
         patches: state.patches,
         size: state.talla,
         quantity: state.qty,
-        price: { base: base, dorsal: dorsal, patches: patches, unit: unitPrice, total: total },
-        customer: { name: name, email: email, whatsapp: '502' + wa, zone: fullAddress, notes: reference }
-      };
-
-      // Disable button
-      var btn = document.getElementById('submit-btn');
-      btn.disabled = true;
-      btn.textContent = 'ENVIANDO...';
-      btn.style.opacity = '0.6';
-      hideFormError();
-
-      fetch(BACKOFFICE_URL + '/api/order/custom', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-      .then(function(r) {
-        if (!r.ok) throw new Error('Error del servidor');
-        return r.json();
-      })
-      .then(function(data) {
-        // Redirect to confirmation page
-        var params = new URLSearchParams({
-          code: data.order_code,
-          name: name,
-          team: state.team,
-          version: state.version,
-          total: total,
-          source: state.mode || 'club'
-        });
-        window.location.href = '/gracias-pedido.html?' + params.toString();
-      })
-      .catch(function(err) {
-        console.error('Order error:', err);
-        btn.disabled = false;
-        btn.textContent = 'CONFIRMAR PEDIDO';
-        btn.style.opacity = '1';
-        showFormError('Error al enviar. Intentá de nuevo o escribinos por WhatsApp.');
+        price: { base: base, dorsal: dorsal, patches: patches, unit: unitPrice, total: unitPrice * state.qty }
       });
+
+      // Show added summary
+      var desc = state.team + ' · ' + state.version + ' · Talla ' + state.talla;
+      if (state.dorsal && state.dorsalName) desc += ' · ' + state.dorsalName + (state.dorsalNumber ? ' #' + state.dorsalNumber : '');
+      document.getElementById('added-summary').textContent = desc + ' — Q' + unitPrice + (state.qty > 1 ? ' ×' + state.qty : '');
+
+      var totals = getCartTotals();
+      document.getElementById('added-cart-count').textContent = totals.count + ' camiseta' + (totals.count > 1 ? 's' : '') + ' en tu pedido · Q' + totals.total;
+
+      goToStep(3);
     }
 
-    function showFormError(msg) {
-      var el = document.getElementById('form-error');
-      el.textContent = msg;
-      el.classList.remove('hidden');
+    function addAnother() {
+      resetStep1();
+      goToStep(1);
     }
-    function hideFormError() { document.getElementById('form-error').classList.add('hidden'); }
 
     /* ── Init ── */
     (function() {

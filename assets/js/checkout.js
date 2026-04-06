@@ -367,8 +367,30 @@ function loadShippingData() {
   } catch (e) {}
 }
 
+// ── Custom order detection ──
+function isCustomOrder() {
+  return typeof cartHasCustomItems === 'function' && cartHasCustomItems();
+}
+
 // ── Step 3: Payment ──
 function renderStep3() {
+  // If cart has custom items, modify Step 3 for COD-only flow
+  var hasCustom = isCustomOrder();
+  var cardBtn = document.getElementById('btn-pay-card');
+  var trustNote = document.querySelector('#step-3 .text-center.text-ash');
+  if (hasCustom) {
+    if (cardBtn) cardBtn.style.display = 'none';
+    if (trustNote) trustNote.textContent = 'Pedidos personalizados: pago contra entrega. Te contactamos por WhatsApp para confirmar.';
+    // Change COD button text
+    var codBtns = document.querySelectorAll('[onclick="payContraEntrega()"]');
+    for (var b = 0; b < codBtns.length; b++) {
+      codBtns[b].setAttribute('onclick', 'confirmCustomOrder()');
+      var titleEl = codBtns[b].querySelector('.font-display');
+      if (titleEl) titleEl.textContent = 'Pago cuando reciba';
+      var descEl = codBtns[b].querySelector('.text-smoke');
+      if (descEl) descEl.textContent = 'Coordinamos entrega y pago por WhatsApp. Sin anticipos.';
+    }
+  }
   var summaryEl = document.getElementById('payment-summary');
   var totalEl = document.getElementById('payment-total');
   if (!summaryEl) return;
@@ -710,6 +732,114 @@ function sendOrderWhatsApp(paymentMethod, silent) {
   } else {
     window.open(url, '_blank');
   }
+}
+
+// ── Custom Order: Confirmation Modal + WhatsApp ──
+function confirmCustomOrder() {
+  var totals = getCartTotals();
+  if (totals.count === 0) return;
+  var shipping = JSON.parse(localStorage.getItem(SHIPPING_KEY) || '{}');
+
+  // Create modal overlay
+  var overlay = document.createElement('div');
+  overlay.id = 'confirm-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:100;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;padding:16px;';
+  overlay.innerHTML = '<div style="background:#1C1C1C;border:2px solid #2A2A2A;border-radius:12px;padding:32px;max-width:400px;width:100%;text-align:center;">' +
+    '<p style="font-family:Oswald,sans-serif;font-size:20px;font-weight:700;color:#F0F0F0;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;">Confirmar Pedido</p>' +
+    '<p style="color:#999;font-size:14px;margin-bottom:24px;">¿Estás seguro que querés confirmar tu pedido de ' + totals.count + ' camiseta' + (totals.count > 1 ? 's' : '') + ' por Q' + totals.total + '?</p>' +
+    '<p style="color:#666;font-size:12px;margin-bottom:24px;">Te contactamos por WhatsApp para coordinar entrega y pago.</p>' +
+    '<div style="display:flex;gap:12px;">' +
+      '<button onclick="closeConfirmModal()" style="flex:1;padding:14px;border:2px solid #2A2A2A;background:transparent;color:#999;border-radius:8px;cursor:pointer;font-family:Space Grotesk,sans-serif;font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:0.05em;">Cancelar</button>' +
+      '<button onclick="executeCustomOrder()" style="flex:1;padding:14px;border:none;background:#4DA8FF;color:#0D0D0D;border-radius:8px;cursor:pointer;font-family:Space Grotesk,sans-serif;font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:0.05em;">Sí, confirmar</button>' +
+    '</div>' +
+  '</div>';
+  document.body.appendChild(overlay);
+}
+
+function closeConfirmModal() {
+  var modal = document.getElementById('confirm-modal');
+  if (modal) modal.remove();
+}
+
+function executeCustomOrder() {
+  closeConfirmModal();
+
+  var totals = getCartTotals();
+  var shipping = JSON.parse(localStorage.getItem(SHIPPING_KEY) || '{}');
+
+  // Build order items for the worker
+  var items = [];
+  var customItems = [];
+  for (var i = 0; i < totals.items.length; i++) {
+    var item = totals.items[i];
+    items.push({
+      name: item.name + ' (Talla ' + item.size + ')',
+      amount_in_cents: item.price * 100,
+      currency: 'GTQ',
+      quantity: item.quantity,
+      sku: item.id
+    });
+    if (item.type === 'custom' && item.customData) {
+      customItems.push(item.customData);
+    }
+  }
+
+  // POST to worker as COD order
+  fetch(ELCLUB_API_URL + '/api/order/cod', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      items: items,
+      product_ids: [],
+      product_quantities: {},
+      coupon_code: appliedCoupon ? appliedCoupon.code : null,
+      customer: {
+        name: shipping.name || '',
+        email: shipping.email || '',
+        phone: shipping.phone || '',
+        address: shipping.address || '',
+        department: shipping.department || '',
+        municipality: shipping.municipality || '',
+        zone: shipping.zone || '',
+        reference: shipping.reference || '',
+        notes: 'PEDIDO PERSONALIZADO — ' + (customItems.length > 0 ? customItems.map(function(c) { return c.team + ' ' + c.version; }).join(', ') : 'custom')
+      }
+    })
+  })
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (data.order_id) {
+      // Save for gracias page
+      localStorage.setItem('elclub_pending_order', JSON.stringify({
+        checkout_id: data.order_id,
+        order_number: data.order_id,
+        items: totals.items.map(function(ci) {
+          return { id: ci.id, name: ci.name, size: ci.size, price: ci.price, quantity: ci.quantity, image: ci.image || '' };
+        }),
+        subtotal: totals.subtotal,
+        total: totals.total,
+        customer_name: shipping.name || '',
+        payment_method: 'contra_entrega',
+        saved_at: new Date().toISOString()
+      }));
+
+      clearCart();
+      localStorage.removeItem(SHIPPING_KEY);
+
+      // Open WhatsApp with notification opt-in message
+      var waMsg = 'Acabo de realizar un pedido personalizado en El Club (código: ' + data.order_id + '). Quiero recibir notificaciones y actualizaciones a este número.';
+      window.open('https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(waMsg), '_blank');
+
+      // Redirect to gracias
+      window.location.href = '/gracias.html';
+    } else {
+      throw new Error(data.error || 'Error');
+    }
+  })
+  .catch(function(err) {
+    console.error('Custom order error:', err);
+    alert('Error al procesar tu pedido. Por favor intentá de nuevo.');
+  });
 }
 
 // ── Inline validation on blur ──

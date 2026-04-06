@@ -94,6 +94,47 @@ function addToCart(id, name, price, size, image, stock) {
   showCartToast(name, price, size);
 }
 
+// ── Add custom jersey to cart ──
+function addCustomToCart(customData) {
+  var cart = getCart();
+  var ts = Date.now();
+  var key = 'CUSTOM-' + ts;
+
+  // Build descriptive name
+  var nameParts = [customData.team, customData.version];
+  if (customData.dorsal && customData.dorsal.enabled) {
+    var dorsalStr = customData.dorsal.name || '';
+    if (customData.dorsal.number) dorsalStr += ' #' + customData.dorsal.number;
+    if (dorsalStr) nameParts.push(dorsalStr.trim());
+  }
+  if (customData.patches > 0) nameParts.push('con parches');
+
+  cart.items.push({
+    key: key,
+    id: key,
+    name: nameParts.join(' · '),
+    price: customData.price.unit || customData.price.total,
+    size: customData.size,
+    image: null,
+    quantity: customData.quantity || 1,
+    stock: 99,
+    type: 'custom',
+    customData: customData
+  });
+  saveCart(cart);
+  showCartToast(customData.team + ' — ' + customData.version, customData.price.unit, customData.size);
+  return key;
+}
+
+// ── Check if cart has custom items ──
+function cartHasCustomItems() {
+  var cart = getCart();
+  for (var i = 0; i < cart.items.length; i++) {
+    if (cart.items[i].type === 'custom') return true;
+  }
+  return false;
+}
+
 // ── Remove item ──
 function removeFromCart(key) {
   var cart = getCart();
