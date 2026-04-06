@@ -765,7 +765,7 @@ async function sendCustomOrderAlert(env, order) {
     : 'Sin dorsal';
 
   const patchLine = order.patches > 0
-    ? `${order.patches} parche${order.patches > 1 ? 's' : ''} (Q${order.patches * 15})`
+    ? 'Con parches (Q15)'
     : 'Sin parches';
 
   const customerPhone = (order.customer.whatsapp || '').replace(/\D/g, '');

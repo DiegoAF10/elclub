@@ -210,6 +210,16 @@
               </div>
             </div>
 
+            <!-- Cantidad -->
+            <div>
+              <label class="block text-sm font-semibold uppercase tracking-wider text-smoke mb-2">Cantidad</label>
+              <div class="flex items-center gap-4">
+                <button type="button" onclick="changeQty(-1)" class="w-10 h-10 rounded-lg border-2 border-chalk text-smoke hover:border-ice hover:text-ice flex items-center justify-center cursor-pointer transition-colors text-xl font-bold">-</button>
+                <span id="qty-count" class="text-white text-2xl font-bold w-8 text-center" style="font-family:'Oswald',sans-serif;">1</span>
+                <button type="button" onclick="changeQty(1)" class="w-10 h-10 rounded-lg border-2 border-chalk text-smoke hover:border-ice hover:text-ice flex items-center justify-center cursor-pointer transition-colors text-xl font-bold">+</button>
+              </div>
+            </div>
+
             <!-- Talla -->
             <div>
               <label class="block text-sm font-semibold uppercase tracking-wider text-smoke mb-2">Talla</label>
@@ -241,13 +251,12 @@
             <!-- Parches (hidden for retro) -->
             <div id="parches-section">
               <label class="block text-sm font-semibold uppercase tracking-wider text-smoke mb-2">
-                Parches <span class="text-ice font-normal normal-case">(+Q15 c/u)</span>
+                Parches <span class="text-ice font-normal normal-case">(+Q15)</span>
               </label>
-              <p class="text-ash text-xs mb-3" id="parches-description">Parches de liga, torneo, etc. Ilimitados.</p>
-              <div class="flex items-center gap-4">
-                <button type="button" onclick="changePatches(-1)" class="w-10 h-10 rounded-lg border-2 border-chalk text-smoke hover:border-ice hover:text-ice flex items-center justify-center cursor-pointer transition-colors text-xl font-bold">-</button>
-                <span id="patches-count" class="text-white text-2xl font-bold w-8 text-center" style="font-family:'Oswald',sans-serif;">0</span>
-                <button type="button" onclick="changePatches(1)" class="w-10 h-10 rounded-lg border-2 border-chalk text-smoke hover:border-ice hover:text-ice flex items-center justify-center cursor-pointer transition-colors text-xl font-bold">+</button>
+              <p class="text-ash text-xs mb-3" id="parches-description">Parches oficiales del torneo incluidos.</p>
+              <div class="flex gap-2">
+                <button type="button" onclick="togglePatches(false)" id="parches-no" class="builder-option selected inline-flex px-5 py-2.5 text-sm">Sin parches</button>
+                <button type="button" onclick="togglePatches(true)" id="parches-si" class="builder-option inline-flex px-5 py-2.5 text-sm">Con parches (+Q15)</button>
               </div>
             </div>
           </div>
@@ -271,6 +280,10 @@
                 <div id="price-patches-row" class="hidden flex justify-between">
                   <span class="text-smoke" id="price-patches-label">Parches</span>
                   <span class="text-white font-semibold" id="price-patches-value">Q0</span>
+                </div>
+                <div id="price-qty-row" class="hidden flex justify-between">
+                  <span class="text-smoke" id="price-qty-label">Cantidad</span>
+                  <span class="text-white font-semibold" id="price-qty-value">×1</span>
                 </div>
                 <div class="border-t border-chalk pt-2 flex justify-between">
                   <span class="text-white font-bold uppercase tracking-wider text-xs">Total</span>
@@ -304,44 +317,71 @@
           <div id="confirm-breakdown" class="text-ash text-xs border-t border-chalk pt-3"></div>
         </div>
 
-        <!-- Contact Form -->
+        <!-- Shipping Form (same as pedidos.html) -->
+        <h3 class="text-sm font-semibold uppercase tracking-wider text-smoke mb-4">Datos de envío</h3>
         <div class="space-y-4">
           <div>
-            <label class="block text-sm font-semibold uppercase tracking-wider text-smoke mb-2">Nombre completo *</label>
-            <input type="text" id="customer-name" placeholder="Tu nombre" class="w-full px-4 py-3 rounded-lg text-sm" required>
+            <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Nombre completo</label>
+            <input type="text" id="customer-name" required autocomplete="name" class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="Tu nombre">
           </div>
           <div>
-            <label class="block text-sm font-semibold uppercase tracking-wider text-smoke mb-2">WhatsApp *</label>
-            <div class="flex gap-2">
-              <span class="flex items-center px-3 bg-pitch border border-chalk rounded-lg text-smoke text-sm">+502</span>
-              <input type="tel" id="customer-whatsapp" placeholder="1234 5678" class="flex-1 px-4 py-3 rounded-lg text-sm" inputmode="tel" maxlength="10" required>
+            <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Email</label>
+            <input type="email" id="customer-email" autocomplete="email" inputmode="email" class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="tu@email.com">
+          </div>
+          <div>
+            <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Teléfono (WhatsApp)</label>
+            <div class="flex items-center gap-2">
+              <span class="text-smoke text-sm font-semibold">+502</span>
+              <input type="tel" id="customer-whatsapp" required autocomplete="tel" inputmode="tel" class="flex-1 px-4 py-3 rounded-lg border border-chalk text-white" placeholder="1234 5678" maxlength="9">
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Departamento</label>
+              <select id="customer-department" required class="w-full px-4 py-3 rounded-lg border border-chalk text-white bg-midnight appearance-none cursor-pointer">
+                <option value="" disabled selected>Seleccionar</option>
+                <option>Guatemala</option>
+                <option>Sacatepéquez</option>
+                <option>Escuintla</option>
+                <option>Chimaltenango</option>
+                <option>El Progreso</option>
+                <option>Santa Rosa</option>
+                <option>Sololá</option>
+                <option>Totonicapán</option>
+                <option>Quetzaltenango</option>
+                <option>Suchitepéquez</option>
+                <option>Retalhuleu</option>
+                <option>San Marcos</option>
+                <option>Huehuetenango</option>
+                <option>Quiché</option>
+                <option>Baja Verapaz</option>
+                <option>Alta Verapaz</option>
+                <option>Petén</option>
+                <option>Izabal</option>
+                <option>Zacapa</option>
+                <option>Chiquimula</option>
+                <option>Jalapa</option>
+                <option>Jutiapa</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Municipio</label>
+              <input type="text" id="customer-municipality" required class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="Ej: Guatemala, Mixco, Antigua...">
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Zona</label>
+              <input type="text" id="customer-zone" inputmode="numeric" class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="Ej: 10" maxlength="3">
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Dirección</label>
+              <input type="text" id="customer-address" required autocomplete="street-address" class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="Calle, avenida, número, colonia...">
             </div>
           </div>
           <div>
-            <label class="block text-sm font-semibold uppercase tracking-wider text-smoke mb-2">Zona de entrega</label>
-            <select id="customer-zone" class="w-full px-4 py-3 rounded-lg text-sm cursor-pointer">
-              <option value="">Seleccioná una zona</option>
-              <optgroup label="Ciudad de Guatemala">
-                <option>Zona 1</option><option>Zona 2</option><option>Zona 3</option><option>Zona 4</option>
-                <option>Zona 5</option><option>Zona 6</option><option>Zona 7</option><option>Zona 8</option>
-                <option>Zona 9</option><option>Zona 10</option><option>Zona 11</option><option>Zona 12</option>
-                <option>Zona 13</option><option>Zona 14</option><option>Zona 15</option><option>Zona 16</option>
-                <option>Zona 17</option><option>Zona 18</option><option>Zona 19</option><option>Zona 21</option>
-                <option>Zona 25</option>
-              </optgroup>
-              <optgroup label="Municipios cercanos">
-                <option>Mixco</option><option>Villa Nueva</option><option>San Cristóbal</option>
-                <option>Carretera a El Salvador</option><option>Santa Catarina Pinula</option>
-              </optgroup>
-              <optgroup label="Otro">
-                <option>Envío por Guatex (Q25-50)</option>
-                <option>Recoger en punto de entrega</option>
-              </optgroup>
-            </select>
-          </div>
-          <div>
-            <label class="block text-sm font-semibold uppercase tracking-wider text-smoke mb-2">Notas <span class="text-ash font-normal normal-case">(opcional)</span></label>
-            <textarea id="customer-notes" placeholder="Algo que debamos saber..." class="w-full px-4 py-3 rounded-lg text-sm h-20 resize-none"></textarea>
+            <label class="block text-sm text-smoke font-semibold mb-2 uppercase tracking-wider">Referencia <span class="text-ash font-normal normal-case">(opcional)</span></label>
+            <input type="text" id="customer-reference" class="w-full px-4 py-3 rounded-lg border border-chalk text-white" placeholder="Ej: frente a la gasolinera, portón negro...">
           </div>
 
           <p id="form-error" class="text-red-400 text-sm hidden"></p>
@@ -459,14 +499,17 @@
     var WHATSAPP_NUMBER = '13185343283';
 
     var leaguesData = {};
-    var mundialTeams = [
-      'México','Corea del Sur','Sudáfrica','Canadá','Suiza','Qatar',
-      'Brasil','Marruecos','Haití','Escocia','Estados Unidos','Paraguay','Australia',
-      'Alemania','Curazao','Costa de Marfil','Ecuador','Países Bajos','Japón','Túnez',
-      'Bélgica','Egipto','Irán','Nueva Zelanda','España','Cabo Verde','Arabia Saudita','Uruguay',
-      'Francia','Senegal','Noruega','Argentina','Argelia','Austria','Jordania',
-      'Portugal','Colombia','Uzbekistán','Inglaterra','Croacia','Ghana','Panamá'
-    ];
+    var mundialByConfed = {
+      'CONMEBOL': ['Argentina','Brasil','Colombia','Uruguay','Paraguay','Ecuador'],
+      'UEFA': ['España','Francia','Alemania','Inglaterra','Portugal','Países Bajos','Bélgica','Croacia','Suiza','Austria','Noruega','Escocia'],
+      'CONCACAF': ['México','Estados Unidos','Canadá','Panamá','Haití','Curazao'],
+      'CAF': ['Marruecos','Egipto','Ghana','Senegal','Costa de Marfil','Sudáfrica','Cabo Verde','Argelia'],
+      'AFC': ['Japón','Corea del Sur','Qatar','Arabia Saudita','Irán','Australia','Jordania','Uzbekistán'],
+      'OFC': ['Nueva Zelanda']
+    };
+    // Flat list for lookups
+    var mundialTeams = [];
+    Object.keys(mundialByConfed).forEach(function(c) { mundialTeams = mundialTeams.concat(mundialByConfed[c]); });
 
     var state = {
       mode: null,         // 'mundial' or 'club'
@@ -479,6 +522,7 @@
       dorsalName: '',
       dorsalNumber: '',
       patches: 0,
+      qty: 1,
       patchesAllowed: true   // false for retro
     };
 
@@ -594,17 +638,37 @@
     function showTeamPanel(label, teams) {
       document.getElementById('team-panel').classList.remove('hidden');
       document.getElementById('team-subtitle').textContent = label;
-      // Hide liga grid
       document.getElementById('liga-grid').style.display = 'none';
       document.getElementById('mundial-banner').style.display = state.mode === 'mundial' ? 'none' : '';
       document.querySelector('#step-1 h2').style.display = 'none';
 
       var grid = document.getElementById('team-grid');
       var html = '';
-      for (var i = 0; i < teams.length; i++) {
-        html += '<button type="button" onclick="selectTeam(\'' + teams[i].replace(/'/g, "\\'") + '\')" class="builder-option">' + teams[i] + '</button>';
+
+      if (state.mode === 'mundial') {
+        // Render grouped by confederation
+        grid.className = 'space-y-5';
+        var confeds = Object.keys(mundialByConfed);
+        for (var c = 0; c < confeds.length; c++) {
+          var conf = confeds[c];
+          var cTeams = mundialByConfed[conf];
+          html += '<div>';
+          html += '<p class="text-ice text-xs font-semibold uppercase tracking-[0.12em] mb-2" style="font-family:\'Oswald\',sans-serif;">' + conf + '</p>';
+          html += '<div class="grid grid-cols-2 sm:grid-cols-3 gap-2">';
+          for (var i = 0; i < cTeams.length; i++) {
+            html += '<button type="button" onclick="selectTeam(\'' + cTeams[i].replace(/'/g, "\\'") + '\')" class="builder-option text-sm py-2.5">' + cTeams[i] + '</button>';
+          }
+          html += '</div></div>';
+        }
+        html += '<button type="button" onclick="showOtroEquipo()" class="builder-option w-full" style="border-style:dashed;">+ Otra selección</button>';
+      } else {
+        // Flat grid for clubs
+        grid.className = 'grid grid-cols-2 sm:grid-cols-3 gap-3';
+        for (var j = 0; j < teams.length; j++) {
+          html += '<button type="button" onclick="selectTeam(\'' + teams[j].replace(/'/g, "\\'") + '\')" class="builder-option">' + teams[j] + '</button>';
+        }
+        html += '<button type="button" onclick="showOtroEquipo()" class="builder-option" style="border-style:dashed;">+ Otro</button>';
       }
-      html += '<button type="button" onclick="showOtroEquipo()" class="builder-option" style="border-style:dashed;">+ Otro</button>';
       grid.innerHTML = html;
     }
 
@@ -671,6 +735,8 @@
       state.dorsalName = '';
       state.dorsalNumber = '';
       state.patches = 0;
+      state.qty = 1;
+      document.getElementById('qty-count').textContent = '1';
       state.patchesAllowed = state.mode === 'mundial' || state.temporada !== 'Retro';
 
       // Reset pill selections
@@ -678,7 +744,7 @@
       resetPills('temporada-pills', state.mode === 'mundial' ? null : '2024/25');
       resetSizePills();
       toggleDorsal(false);
-      document.getElementById('patches-count').textContent = '0';
+      togglePatches(false);
       document.getElementById('parches-section').style.display = state.patchesAllowed ? '' : 'none';
 
       updatePrice();
@@ -738,17 +804,25 @@
       updatePrice();
     }
 
-    function changePatches(delta) {
-      state.patches = Math.max(0, state.patches + delta);
-      document.getElementById('patches-count').textContent = state.patches;
+    function togglePatches(on) {
+      state.patches = on ? 1 : 0;
+      document.getElementById('parches-no').classList.toggle('selected', !on);
+      document.getElementById('parches-si').classList.toggle('selected', on);
+      updatePrice();
+    }
+
+    function changeQty(delta) {
+      state.qty = Math.max(1, Math.min(10, state.qty + delta));
+      document.getElementById('qty-count').textContent = state.qty;
       updatePrice();
     }
 
     function updatePrice() {
       var base = 400;
       var dorsal = state.dorsal ? 25 : 0;
-      var patches = state.patches * 15;
-      var total = base + dorsal + patches;
+      var patches = state.patches > 0 ? 15 : 0;
+      var unitPrice = base + dorsal + patches;
+      var total = unitPrice * state.qty;
 
       // Update price card
       document.getElementById('price-team').textContent = state.team || '';
@@ -761,8 +835,13 @@
       document.getElementById('price-dorsal-row').classList.toggle('hidden', !state.dorsal);
       document.getElementById('price-patches-row').classList.toggle('hidden', state.patches === 0);
       if (state.patches > 0) {
-        document.getElementById('price-patches-label').textContent = 'Parches ×' + state.patches;
-        document.getElementById('price-patches-value').textContent = 'Q' + patches;
+        document.getElementById('price-patches-label').textContent = 'Parches';
+        document.getElementById('price-patches-value').textContent = 'Q15';
+      }
+      document.getElementById('price-qty-row').classList.toggle('hidden', state.qty <= 1);
+      if (state.qty > 1) {
+        document.getElementById('price-qty-label').textContent = '×' + state.qty + ' unidades';
+        document.getElementById('price-qty-value').textContent = 'Q' + unitPrice + ' c/u';
       }
       document.getElementById('price-total').textContent = 'Q' + total;
     }
@@ -803,16 +882,25 @@
 
     function submitOrder() {
       var name = document.getElementById('customer-name').value.trim();
+      var email = document.getElementById('customer-email').value.trim();
       var wa = document.getElementById('customer-whatsapp').value.trim().replace(/\D/g, '');
-      var zone = document.getElementById('customer-zone').value;
-      var notes = document.getElementById('customer-notes').value.trim();
+      var dept = document.getElementById('customer-department').value;
+      var muni = document.getElementById('customer-municipality').value.trim();
+      var zone = document.getElementById('customer-zone').value.trim();
+      var address = document.getElementById('customer-address').value.trim();
+      var reference = document.getElementById('customer-reference').value.trim();
 
       // Validate
       if (!name) { showFormError('Ingresá tu nombre.'); return; }
       if (!wa || wa.length < 8) { showFormError('Ingresá un número de WhatsApp válido.'); return; }
+      if (!dept) { showFormError('Seleccioná tu departamento.'); return; }
+      if (!muni) { showFormError('Ingresá tu municipio.'); return; }
+      if (!address) { showFormError('Ingresá tu dirección.'); return; }
 
-      var base = 400, dorsal = state.dorsal ? 25 : 0, patches = state.patches * 15;
-      var total = base + dorsal + patches;
+      var base = 400, dorsal = state.dorsal ? 25 : 0, patches = state.patches > 0 ? 15 : 0;
+      var unitPrice = base + dorsal + patches;
+      var total = unitPrice * state.qty;
+      var fullAddress = (zone ? 'Zona ' + zone + ', ' : '') + address + ', ' + muni + ', ' + dept;
 
       var body = {
         type: 'custom',
@@ -824,8 +912,9 @@
         dorsal: { enabled: state.dorsal, name: state.dorsalName, number: state.dorsalNumber },
         patches: state.patches,
         size: state.talla,
-        price: { base: base, dorsal: dorsal, patches: patches, total: total },
-        customer: { name: name, whatsapp: '502' + wa, zone: zone, notes: notes }
+        quantity: state.qty,
+        price: { base: base, dorsal: dorsal, patches: patches, unit: unitPrice, total: total },
+        customer: { name: name, email: email, whatsapp: '502' + wa, zone: fullAddress, notes: reference }
       };
 
       // Disable button
