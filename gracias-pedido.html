@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="es-GT">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pedido Recibido — El Club</title>
+
+  <meta name="description" content="Tu pedido personalizado fue recibido. Te contactamos pronto por WhatsApp.">
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/png" href="/assets/img/brand/favicon.png">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS v4 Browser -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <!-- Custom Design System -->
+  <link rel="stylesheet" href="/assets/css/elclub.css?v=2">
+
+  <!-- GA4 -->
+  <!-- TODO: Replace G-XXXXXXXXXX with actual GA4 measurement ID -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX');
+  </script>
+</head>
+<body class="bg-midnight text-white">
+
+  <!-- ============================================================ -->
+  <!-- NAV                                                          -->
+  <!-- ============================================================ -->
+  <header id="site-header" class="fixed top-0 left-0 right-0 z-40 bg-midnight/95 backdrop-blur-sm border-b border-chalk transition-all duration-300">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-2">
+        <img src="/assets/img/brand/logo.svg" alt="El Club" class="h-10 w-auto">
+      </a>
+      <div class="hidden md:flex items-center gap-8">
+        <a href="/explora.html" class="nav-link">Catalogo</a>
+        <a href="/mystery-box.html" class="nav-link">Mystery Box</a>
+        <a href="/personaliza.html" class="nav-link">Pedi tu Camiseta</a>
+        <a href="/nosotros.html" class="nav-link">Nosotros</a>
+      </div>
+      <div class="flex items-center gap-4">
+        <button onclick="openCartDrawer()" class="relative text-white hover:text-ice transition-colors cursor-pointer" aria-label="Abrir carrito">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+          </svg>
+          <span class="cart-badge hidden">0</span>
+        </button>
+        <button onclick="toggleMobileMenu()" class="md:hidden text-white hover:text-ice transition-colors cursor-pointer" aria-label="Menu">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- MOBILE MENU                                                  -->
+  <!-- ============================================================ -->
+  <div id="mobile-menu" class="mobile-menu">
+    <div class="flex flex-col h-full px-6 py-8">
+      <div class="flex justify-end mb-12">
+        <button onclick="closeMobileMenu()" class="text-white hover:text-ice transition-colors cursor-pointer" aria-label="Cerrar menu">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <nav class="flex flex-col gap-8">
+        <a href="/explora.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Catalogo</a>
+        <a href="/mystery-box.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Mystery Box</a>
+        <a href="/personaliza.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Pedi tu Camiseta</a>
+        <a href="/nosotros.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Nosotros</a>
+      </nav>
+      <div class="mt-auto flex items-center gap-6">
+        <a href="https://www.instagram.com/club.gt" target="_blank" rel="noopener" class="text-smoke hover:text-ice transition-colors" aria-label="Instagram">
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+        </a>
+        <a href="https://www.tiktok.com/@club.gtm" target="_blank" rel="noopener" class="text-smoke hover:text-ice transition-colors" aria-label="TikTok">
+          <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.15V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MAIN                                                         -->
+  <!-- ============================================================ -->
+  <main class="pt-20 min-h-screen flex items-center justify-center px-4">
+    <div class="max-w-lg mx-auto text-center py-16 md:py-20 w-full">
+
+      <!-- Mundial 2026 badge (shown if source=mundial) -->
+      <div id="mundial-badge" class="hidden mb-6">
+        <span class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-ice/30 bg-ice/10 text-ice text-sm font-semibold uppercase tracking-wider">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+          Coleccion Mundial 2026
+        </span>
+      </div>
+
+      <!-- Success icon -->
+      <div class="w-20 h-20 mx-auto mb-8 rounded-full flex items-center justify-center" style="background: rgba(34,197,94,0.15);">
+        <svg class="w-10 h-10" fill="none" stroke="#22C55E" viewBox="0 0 24 24" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+
+      <!-- Headline -->
+      <h1 class="text-4xl md:text-5xl font-bold uppercase tracking-wider mb-4" style="font-family:'Oswald',system-ui,sans-serif; color:#F0F0F0;">
+        PEDIDO RECIBIDO
+      </h1>
+
+      <!-- Order code -->
+      <p id="order-code" class="text-3xl md:text-4xl font-bold mb-8" style="font-family:'Oswald',system-ui,sans-serif; color:#4DA8FF; letter-spacing:0.08em;">
+        ---
+      </p>
+
+      <!-- Order summary card -->
+      <div id="order-summary" class="text-left rounded-xl border border-chalk p-6 mb-8" style="background:#1C1C1C;">
+        <div class="space-y-3">
+          <div class="flex justify-between items-center">
+            <span class="text-sm" style="color:#999999;">Equipo</span>
+            <span id="summary-team" class="font-semibold" style="color:#F0F0F0;">-</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-sm" style="color:#999999;">Version</span>
+            <span id="summary-version" class="font-semibold" style="color:#F0F0F0;">-</span>
+          </div>
+          <div class="border-t pt-3 mt-3" style="border-color:#2A2A2A;">
+            <div class="flex justify-between items-center">
+              <span class="text-sm font-semibold uppercase tracking-wider" style="color:#F0F0F0;">Total</span>
+              <span id="summary-total" class="text-xl font-bold" style="font-family:'Oswald',system-ui,sans-serif; color:#4DA8FF;">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- WhatsApp message -->
+      <div class="rounded-xl border border-chalk p-5 mb-10 text-left" style="background:#1C1C1C;">
+        <div class="flex gap-3">
+          <div class="flex-shrink-0 mt-0.5">
+            <svg class="w-5 h-5" fill="#22C55E" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          </div>
+          <p class="text-sm leading-relaxed" style="color:#999999;">
+            Te contactamos por <strong style="color:#F0F0F0;">WhatsApp</strong> en las proximas horas para confirmar disponibilidad y coordinar el pago.
+          </p>
+        </div>
+      </div>
+
+      <!-- Timeline / Steps -->
+      <div class="mb-12">
+        <div class="flex items-center justify-between max-w-md mx-auto">
+          <!-- Step 1: Pedido (done) -->
+          <div class="flex flex-col items-center gap-2">
+            <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background:#22C55E;">
+              <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+              </svg>
+            </div>
+            <span class="text-xs font-semibold uppercase tracking-wider" style="color:#22C55E;">Pedido</span>
+          </div>
+
+          <!-- Connector -->
+          <div class="flex-1 h-px mx-2" style="background:#2A2A2A;"></div>
+
+          <!-- Step 2: Confirmacion (pending) -->
+          <div class="flex flex-col items-center gap-2">
+            <div class="w-10 h-10 rounded-full border-2 flex items-center justify-center" style="border-color:#2A2A2A;">
+              <span class="text-xs font-bold" style="color:#666666;">2</span>
+            </div>
+            <span class="text-xs font-semibold uppercase tracking-wider" style="color:#666666;">Confirmacion</span>
+          </div>
+
+          <!-- Connector -->
+          <div class="flex-1 h-px mx-2" style="background:#2A2A2A;"></div>
+
+          <!-- Step 3: Produccion (pending) -->
+          <div class="flex flex-col items-center gap-2">
+            <div class="w-10 h-10 rounded-full border-2 flex items-center justify-center" style="border-color:#2A2A2A;">
+              <span class="text-xs font-bold" style="color:#666666;">3</span>
+            </div>
+            <span class="text-xs font-semibold uppercase tracking-wider" style="color:#666666;">Produccion</span>
+          </div>
+
+          <!-- Connector -->
+          <div class="flex-1 h-px mx-2" style="background:#2A2A2A;"></div>
+
+          <!-- Step 4: Entrega (pending) -->
+          <div class="flex flex-col items-center gap-2">
+            <div class="w-10 h-10 rounded-full border-2 flex items-center justify-center" style="border-color:#2A2A2A;">
+              <span class="text-xs font-bold" style="color:#666666;">4</span>
+            </div>
+            <span class="text-xs font-semibold uppercase tracking-wider" style="color:#666666;">Entrega</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <a href="/" class="btn-primary py-3 px-8 text-center">Volver al inicio</a>
+        <a href="/explora.html" class="btn-secondary py-3 px-8 text-center">Ver catalogo</a>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ============================================================ -->
+  <!-- FOOTER                                                       -->
+  <!-- ============================================================ -->
+  <footer class="border-t border-chalk pt-12 pb-8 px-4">
+    <div class="max-w-6xl mx-auto">
+      <div class="grid md:grid-cols-3 gap-10 mb-10">
+        <!-- Col 1: Brand -->
+        <div>
+          <a href="/" class="inline-block mb-4"><img src="/assets/img/brand/logo.svg" alt="El Club" class="h-12"></a>
+          <p class="text-smoke text-sm leading-relaxed max-w-xs">La camiseta con historia. Mystery boxes con lo mejor del futbol mundial.</p>
+        </div>
+        <!-- Col 2: Links -->
+        <div>
+          <p class="text-white font-bold text-sm uppercase tracking-wider mb-4">Navegacion</p>
+          <nav class="flex flex-col gap-3">
+            <a href="/explora.html" class="text-smoke text-sm hover:text-ice transition-colors">Catalogo</a>
+            <a href="/mystery-box.html" class="text-smoke text-sm hover:text-ice transition-colors">Mystery Box</a>
+            <a href="/personaliza.html" class="text-smoke text-sm hover:text-ice transition-colors">Pedi tu Camiseta</a>
+            <a href="/nosotros.html" class="text-smoke text-sm hover:text-ice transition-colors">Nosotros</a>
+            <a href="/contacto.html" class="text-smoke text-sm hover:text-ice transition-colors">Contacto</a>
+          </nav>
+        </div>
+        <!-- Col 3: Social -->
+        <div>
+          <p class="text-white font-bold text-sm uppercase tracking-wider mb-4">Seguinos</p>
+          <div class="flex items-center gap-4 mb-6">
+            <a href="https://www.instagram.com/club.gt" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-chalk flex items-center justify-center text-smoke hover:text-ice hover:border-ice transition-colors" aria-label="Instagram">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+            </a>
+            <a href="https://www.tiktok.com/@club.gtm" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-chalk flex items-center justify-center text-smoke hover:text-ice hover:border-ice transition-colors" aria-label="TikTok">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.46V13a8.28 8.28 0 005.58 2.15V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/></svg>
+            </a>
+            <a href="https://wa.me/13185343283" target="_blank" rel="noopener" class="w-10 h-10 rounded-full border border-chalk flex items-center justify-center text-smoke hover:text-ice hover:border-ice transition-colors" aria-label="WhatsApp">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-chalk pt-6 flex flex-col items-center gap-4">
+        <div class="w-full flex flex-col sm:flex-row items-center justify-between gap-4">
+          <p class="text-ash text-xs">El Club 2026. Todos los derechos reservados.</p>
+          <p class="text-ash text-xs">Guatemala</p>
+        </div>
+        <div class="flex gap-4 text-ash text-xs">
+          <a href="/politicas.html#privacidad" class="hover:text-smoke transition-colors">Privacidad</a>
+          <a href="/politicas.html#terminos" class="hover:text-smoke transition-colors">Terminos</a>
+          <a href="/politicas.html#devoluciones" class="hover:text-smoke transition-colors">Devoluciones</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ============================================================ -->
+  <!-- CART OVERLAY + DRAWER                                        -->
+  <!-- ============================================================ -->
+  <div id="cart-overlay" class="cart-overlay" onclick="closeCartDrawer()"></div>
+
+  <div id="cart-drawer" class="cart-drawer">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-chalk">
+      <h2 class="font-bold text-lg uppercase tracking-wider">Tu carrito</h2>
+      <button onclick="closeCartDrawer()" class="text-ash hover:text-white transition-colors cursor-pointer" aria-label="Cerrar carrito">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div id="cart-empty" class="flex-1 flex flex-col items-center justify-center px-5 text-center">
+      <svg class="w-16 h-16 text-chalk mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/>
+      </svg>
+      <p class="text-smoke font-semibold mb-1">Tu carrito esta vacio</p>
+      <p class="text-ash text-sm mb-6">Agrega algo increible para empezar.</p>
+      <a href="/explora.html" onclick="closeCartDrawer()" class="btn-primary text-sm">Ver catalogo</a>
+    </div>
+    <div id="cart-filled" class="hidden flex-1 flex flex-col">
+      <div id="cart-items" class="flex-1 overflow-y-auto px-5"></div>
+      <div class="border-t border-chalk px-5 py-4">
+        <div class="flex items-center justify-between mb-4">
+          <span class="font-bold text-sm uppercase tracking-wider">Total</span>
+          <span id="cart-total" class="font-extrabold text-xl text-ice">Q0</span>
+        </div>
+        <p class="text-ash text-xs mb-4">Envio Q25 — se calcula en el checkout.</p>
+        <a href="/pedidos.html" onclick="closeCartDrawer()" class="btn-primary w-full text-center text-sm py-3.5 block">
+          Ir a pedidos
+        </a>
+        <button onclick="closeCartDrawer()" class="btn-ghost w-full text-sm py-2 mt-2 cursor-pointer">
+          Seguir comprando
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SCRIPTS                                                      -->
+  <!-- ============================================================ -->
+  <script src="/assets/js/cart.js?v=2"></script>
+  <script src="/assets/js/app.js?v=2"></script>
+
+  <script>
+    (function() {
+      // Parse URL parameters
+      var params = new URLSearchParams(window.location.search);
+      var code = params.get('code') || '';
+      var name = params.get('name') || '';
+      var team = params.get('team') || '';
+      var version = params.get('version') || '';
+      var total = params.get('total') || '';
+      var source = params.get('source') || '';
+
+      // Populate order code
+      var codeEl = document.getElementById('order-code');
+      if (codeEl && code) {
+        codeEl.textContent = code;
+      }
+
+      // Populate summary
+      var teamEl = document.getElementById('summary-team');
+      var versionEl = document.getElementById('summary-version');
+      var totalEl = document.getElementById('summary-total');
+
+      if (teamEl && team) teamEl.textContent = decodeURIComponent(team);
+      if (versionEl && version) versionEl.textContent = decodeURIComponent(version);
+      if (totalEl && total) totalEl.textContent = 'Q' + total;
+
+      // Show mundial badge if source=mundial
+      if (source === 'mundial') {
+        var badge = document.getElementById('mundial-badge');
+        if (badge) badge.classList.remove('hidden');
+      }
+
+      // GA4 custom order event
+      if (typeof gtag === 'function' && code) {
+        gtag('event', 'custom_order_received', {
+          order_code: code,
+          team: team,
+          version: version,
+          value: parseInt(total) || 0,
+          currency: 'GTQ',
+          source: source
+        });
+      }
+    })();
+  </script>
+
+</body>
+</html>

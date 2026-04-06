@@ -6,6 +6,9 @@
  *   GET  /api/coupons/validate      — Validate a coupon code
  *   POST /api/coupons/admin         — Create a coupon (admin, X-Admin-Key)
  *   POST /webhook/recurrente        — Receive payment webhook (Svix)
+ *   POST /api/order/custom          — Create custom jersey order (form capture)
+ *   GET  /api/orders                — List orders (admin, X-Admin-Key)
+ *   PATCH /api/order/:code          — Update order status (admin, X-Admin-Key)
  *   GET  /health                    — Health check
  *
  * Secrets:
@@ -28,7 +31,7 @@ function getCorsHeaders(request) {
   const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     'Access-Control-Allow-Origin': allowed,
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Key',
   };
 }
@@ -744,6 +747,85 @@ async function sendManyChatConfirmation(env, order) {
   }
 }
 
+// ── Custom Order (made-to-order jerseys) ────────────────────
+
+async function sendCustomOrderAlert(env, order) {
+  const diegoEmail = env.DIEGO_EMAIL;
+  if (!diegoEmail) {
+    console.log('DIEGO_EMAIL not configured, skipping custom order alert');
+    return;
+  }
+
+  const isWorldCup = order.source === 'mundial';
+  const badge = isWorldCup ? 'MUNDIAL 2026' : 'PEDIDO CUSTOM';
+  const badgeColor = isWorldCup ? '#c9a96e' : '#4DA8FF';
+
+  const dorsalLine = order.dorsal?.enabled
+    ? `${order.dorsal.name || ''} #${order.dorsal.number || ''}`.trim()
+    : 'Sin dorsal';
+
+  const patchLine = order.patches > 0
+    ? `${order.patches} parche${order.patches > 1 ? 's' : ''} (Q${order.patches * 15})`
+    : 'Sin parches';
+
+  const customerPhone = (order.customer.whatsapp || '').replace(/\D/g, '');
+  const customerFirst = (order.customer.name || 'cliente').split(' ')[0];
+  const waMessage = `Hola ${customerFirst}! Soy Diego de El Club. Recibí tu pedido ${order.order_code} de la camiseta de ${order.team} (${order.version}). Te confirmo disponibilidad y coordino el pago. Cualquier duda me avisás!`;
+  const waLink = customerPhone
+    ? `https://wa.me/${customerPhone}?text=${encodeURIComponent(waMessage)}`
+    : '(sin teléfono)';
+
+  const html = `
+<div style="font-family: -apple-system, sans-serif; max-width: 520px; margin: 0 auto; color: #333;">
+  <h2 style="margin: 0 0 4px; color: #111;">${badge} — ${order.order_code}</h2>
+  <p style="margin: 0 0 16px; font-size: 14px; font-weight: 700; color: ${badgeColor};">PEDIDO PERSONALIZADO — PENDIENTE DE CONTACTO</p>
+
+  <div style="background: #f4f4f4; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+    <p style="margin: 0 0 4px; font-size: 16px; font-weight: 700;">${order.team} — ${order.version}</p>
+    ${order.league ? `<p style="margin: 0 0 4px; font-size: 13px; color: #666;">${order.league}${order.season ? ' · ' + order.season : ''}</p>` : ''}
+    <p style="margin: 0 0 4px; font-size: 13px; color: #666;">Talla: ${order.size} · ${dorsalLine}</p>
+    <p style="margin: 0 0 4px; font-size: 13px; color: #666;">${patchLine}</p>
+    <p style="margin: 8px 0 0; font-size: 20px; font-weight: 700;">Total: Q${order.price.total}</p>
+  </div>
+
+  <table style="font-size: 14px; border-collapse: collapse; width: 100%; margin-bottom: 16px;">
+    <tr><td style="padding: 4px 8px 4px 0; color: #888;">Cliente</td><td style="padding: 4px 0;">${order.customer.name}</td></tr>
+    <tr><td style="padding: 4px 8px 4px 0; color: #888;">WhatsApp</td><td style="padding: 4px 0;">${order.customer.whatsapp || '(no proporcionado)'}</td></tr>
+    <tr><td style="padding: 4px 8px 4px 0; color: #888;">Zona</td><td style="padding: 4px 0;">${order.customer.zone || '(no especificada)'}</td></tr>
+    <tr><td style="padding: 4px 8px 4px 0; color: #888;">Notas</td><td style="padding: 4px 0;">${order.customer.notes || '(ninguna)'}</td></tr>
+  </table>
+
+  <div style="margin-bottom: 16px;">
+    <p style="font-size: 13px; color: #888; margin: 0 0 8px;">Desglose:</p>
+    <table style="font-size: 13px; border-collapse: collapse;">
+      <tr><td style="padding: 2px 12px 2px 0;">Camiseta base</td><td>Q${order.price.base}</td></tr>
+      ${order.price.dorsal ? `<tr><td style="padding: 2px 12px 2px 0;">Dorsal</td><td>Q${order.price.dorsal}</td></tr>` : ''}
+      ${order.price.patches ? `<tr><td style="padding: 2px 12px 2px 0;">Parches ×${order.patches}</td><td>Q${order.price.patches}</td></tr>` : ''}
+    </table>
+  </div>
+
+  ${customerPhone ? `<a href="${waLink}" style="display: inline-block; background: #25D366; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; font-size: 14px;">Contactar por WhatsApp</a>` : '<p style="color: #c00;">Sin WhatsApp — revisar</p>'}
+
+  <p style="color: #aaa; font-size: 12px; margin-top: 24px;">Orden: ${order.order_code} · ${order.created_at}</p>
+</div>`;
+
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: 'El Club Bot <noreply@tiendaventus.com>',
+      to: diegoEmail,
+      subject: `${isWorldCup ? 'WC' : 'CUSTOM'} Q${order.price.total} — ${order.team} — ${order.customer.name || 'Cliente'}`,
+      html,
+    }),
+  });
+
+  console.log(`Custom order alert sent for ${order.order_code}`);
+}
+
 // ── Router ───────────────────────────────────────────────────
 
 export default {
@@ -759,6 +841,134 @@ export default {
       // Health check
       if ((url.pathname === '/' || url.pathname === '/health') && request.method === 'GET') {
         return json({ status: 'ok', service: 'elclub-backoffice' }, 200, cors);
+      }
+
+      // ── Custom jersey order (from builder) ──
+      if (url.pathname === '/api/order/custom' && request.method === 'POST') {
+        let data;
+        try { data = await request.json(); } catch {
+          return json({ error: 'JSON invalido' }, 400, cors);
+        }
+
+        // Validate required fields
+        if (!data.team) return json({ error: 'Equipo requerido' }, 400, cors);
+        if (!data.size) return json({ error: 'Talla requerida' }, 400, cors);
+        if (!data.version) return json({ error: 'Versión requerida' }, 400, cors);
+        if (!data.customer?.name) return json({ error: 'Nombre requerido' }, 400, cors);
+        if (!data.customer?.whatsapp) return json({ error: 'WhatsApp requerido' }, 400, cors);
+        if (!data.price?.total) return json({ error: 'Precio requerido' }, 400, cors);
+
+        // Generate sequential order code
+        const isWorldCup = data.source === 'mundial';
+        const prefix = isWorldCup ? 'WC' : 'EC';
+        const counterKey = `counter:custom_orders_${prefix.toLowerCase()}`;
+        const currentCount = parseInt(await env.DATA.get(counterKey) || '0', 10);
+        const nextCount = currentCount + 1;
+        await env.DATA.put(counterKey, String(nextCount));
+        const orderCode = `${prefix}-${String(nextCount).padStart(4, '0')}`;
+
+        const order = {
+          order_code: orderCode,
+          type: 'custom',
+          source: data.source || 'club',
+          team: data.team,
+          league: data.league || null,
+          season: data.season || null,
+          version: data.version,
+          dorsal: data.dorsal || { enabled: false },
+          patches: data.patches || 0,
+          size: data.size,
+          price: data.price,
+          customer: {
+            name: data.customer.name,
+            whatsapp: data.customer.whatsapp,
+            zone: data.customer.zone || '',
+            notes: data.customer.notes || '',
+          },
+          status: 'pending',
+          created_at: new Date().toISOString(),
+        };
+
+        // Store in KV (90 days)
+        await env.DATA.put(`order:${orderCode}`, JSON.stringify(order), { expirationTtl: 7776000 });
+
+        // Also store in a list index for admin queries
+        const indexKey = 'index:custom_orders';
+        const existingIndex = JSON.parse(await env.DATA.get(indexKey) || '[]');
+        existingIndex.push({ code: orderCode, created_at: order.created_at, status: 'pending' });
+        await env.DATA.put(indexKey, JSON.stringify(existingIndex));
+
+        // Send email alert to Diego
+        if (env.RESEND_API_KEY) {
+          await sendCustomOrderAlert(env, order).catch(err => console.error('Custom alert failed:', err));
+        }
+
+        console.log(`Custom order created: ${orderCode} — ${order.team} — Q${order.price.total}`);
+        return json({ order_code: orderCode, created_at: order.created_at }, 200, cors);
+      }
+
+      // ── List custom orders (admin) ──
+      if (url.pathname === '/api/orders' && request.method === 'GET') {
+        const adminKey = request.headers.get('X-Admin-Key');
+        if (!adminKey || adminKey !== env.ADMIN_KEY) {
+          return json({ error: 'Unauthorized' }, 401, cors);
+        }
+
+        const statusFilter = url.searchParams.get('status');
+        const index = JSON.parse(await env.DATA.get('index:custom_orders') || '[]');
+
+        // Fetch full order data for each
+        const orders = [];
+        for (const entry of index) {
+          if (statusFilter && entry.status !== statusFilter) continue;
+          const raw = await env.DATA.get(`order:${entry.code}`);
+          if (raw) orders.push(JSON.parse(raw));
+        }
+
+        // Sort newest first
+        orders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        return json({ orders, total: orders.length }, 200, cors);
+      }
+
+      // ── Update order status (admin) ──
+      if (url.pathname.startsWith('/api/order/') && request.method === 'PATCH') {
+        const adminKey = request.headers.get('X-Admin-Key');
+        if (!adminKey || adminKey !== env.ADMIN_KEY) {
+          return json({ error: 'Unauthorized' }, 401, cors);
+        }
+
+        const orderCode = url.pathname.replace('/api/order/', '');
+        if (!orderCode) return json({ error: 'Código requerido' }, 400, cors);
+
+        const raw = await env.DATA.get(`order:${orderCode}`);
+        if (!raw) return json({ error: 'Orden no encontrada' }, 404, cors);
+
+        let updates;
+        try { updates = await request.json(); } catch {
+          return json({ error: 'JSON invalido' }, 400, cors);
+        }
+
+        const validStatuses = ['pending', 'contacted', 'paid', 'shipped', 'delivered', 'cancelled'];
+        if (updates.status && !validStatuses.includes(updates.status)) {
+          return json({ error: `Status invalido. Válidos: ${validStatuses.join(', ')}` }, 400, cors);
+        }
+
+        const order = JSON.parse(raw);
+        if (updates.status) order.status = updates.status;
+        if (updates.notes) order.admin_notes = updates.notes;
+        order.updated_at = new Date().toISOString();
+
+        await env.DATA.put(`order:${orderCode}`, JSON.stringify(order), { expirationTtl: 7776000 });
+
+        // Update index too
+        const index = JSON.parse(await env.DATA.get('index:custom_orders') || '[]');
+        const idx = index.findIndex(e => e.code === orderCode);
+        if (idx >= 0) {
+          index[idx].status = order.status;
+          await env.DATA.put('index:custom_orders', JSON.stringify(index));
+        }
+
+        return json({ order_code: orderCode, status: order.status, updated_at: order.updated_at }, 200, cors);
       }
 
       // Cash on delivery order
