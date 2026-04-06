@@ -132,84 +132,230 @@
   </div>
 
   <!-- ============================================================ -->
-  <!-- MAIN — Command Center Hub                                    -->
+  <!-- MAIN                                                         -->
   <!-- ============================================================ -->
-  <main class="pt-20 pb-16">
-    <!-- Hub Cards -->
-    <section class="max-w-5xl mx-auto px-4 py-12 md:py-20">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+  <main class="pt-20">
 
-        <!-- Sorprendeme -->
+    <!-- ── HERO ──────────────────────────────────── -->
+    <section class="hero-smoke relative min-h-[80vh] md:min-h-[85vh] flex items-center">
+      <div class="max-w-6xl mx-auto px-4 w-full grid md:grid-cols-2 gap-8 md:gap-12 items-center py-16 md:py-0">
+        <!-- Left: Copy -->
+        <div class="relative z-10">
+          <p class="text-ice text-sm font-semibold uppercase tracking-[0.15em] mb-4" style="font-family:'Oswald',system-ui,sans-serif;">Guatemala · Est. 2023</p>
+          <h1 class="text-4xl sm:text-5xl md:text-6xl font-bold leading-[1.05] mb-6" style="font-family:'Oswald',system-ui,sans-serif; text-transform:uppercase; letter-spacing:0.04em;">
+            La camiseta<br>te elige<br><span class="text-ice">a vos.</span>
+          </h1>
+          <p class="text-smoke text-base md:text-lg max-w-md mb-8 leading-relaxed">Mystery boxes con las camisetas más legendarias del fútbol mundial. Cada pieza tiene una historia — y la próxima es tuya.</p>
+          <div class="flex flex-wrap gap-4">
+            <a href="/mystery-box.html" class="btn-primary">Descubrí tu Box</a>
+            <a href="/explora.html" class="btn-secondary">Ver Catálogo</a>
+          </div>
+          <div class="flex items-center gap-6 mt-8 text-sm">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-success inline-block"></span>
+              <span class="text-smoke" id="hero-stock-count">25+ piezas disponibles</span>
+            </div>
+            <span class="text-chalk">|</span>
+            <span class="text-smoke">Envío en toda Guatemala</span>
+          </div>
+        </div>
+        <!-- Right: Jersey Collage -->
+        <div class="relative hidden md:block">
+          <div class="relative w-full aspect-square max-w-[480px] mx-auto">
+            <!-- Main jersey (large, centered) -->
+            <div class="absolute inset-[8%] rounded-2xl overflow-hidden border border-chalk shadow-2xl shadow-black/50 z-20 transition-transform duration-500 hover:scale-[1.03]">
+              <img src="/assets/img/products/JRS-004-JRS-004-01.png" alt="Barcelona 2005/06 — Ronaldinho" class="w-full h-full object-cover" loading="eager">
+            </div>
+            <!-- Secondary jersey (top-right, overlapping) -->
+            <div class="absolute top-0 right-0 w-[45%] aspect-square rounded-xl overflow-hidden border border-chalk/60 shadow-xl shadow-black/40 z-30 transition-transform duration-500 hover:scale-105">
+              <img src="/assets/img/products/JRS-023-JRS-023-01.png" alt="Real Madrid 2005/06 — Ronaldo" class="w-full h-full object-cover" loading="eager">
+            </div>
+            <!-- Tertiary jersey (bottom-left, overlapping) -->
+            <div class="absolute bottom-0 left-0 w-[40%] aspect-square rounded-xl overflow-hidden border border-chalk/60 shadow-xl shadow-black/40 z-30 transition-transform duration-500 hover:scale-105">
+              <img src="/assets/img/products/JRS-013-JRS-013-01.png" alt="Francia Retro — Cantona" class="w-full h-full object-cover" loading="eager">
+            </div>
+            <!-- Ambient glow -->
+            <div class="absolute inset-0 bg-gradient-to-br from-ice/5 via-transparent to-ice/3 rounded-3xl z-10 pointer-events-none"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── FEATURED JERSEYS ──────────────────────── -->
+    <section class="max-w-6xl mx-auto px-4 py-16 md:py-24">
+      <div class="flex items-end justify-between mb-10">
+        <div>
+          <p class="text-ice text-xs font-semibold uppercase tracking-[0.15em] mb-2" style="font-family:'Oswald',system-ui,sans-serif;">Colección</p>
+          <h2 class="text-2xl md:text-3xl font-bold uppercase tracking-wider" style="font-family:'Oswald',system-ui,sans-serif;">Piezas Destacadas</h2>
+        </div>
+        <a href="/explora.html" class="text-ice text-sm font-semibold uppercase tracking-wider hover:text-ice-dim transition-colors hidden sm:inline-flex items-center gap-1">
+          Ver todas
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6" id="featured-grid">
+        <!-- Populated by JS from products.json -->
+      </div>
+      <div class="text-center mt-8 sm:hidden">
+        <a href="/explora.html" class="btn-ghost text-sm">Ver todas las piezas →</a>
+      </div>
+    </section>
+
+    <!-- ── WORLD CUP 2026 BANNER ─────────────────── -->
+    <section class="relative overflow-hidden border-y border-chalk">
+      <div class="absolute inset-0 bg-gradient-to-r from-midnight via-pitch to-midnight"></div>
+      <div class="absolute inset-0 opacity-[0.03]" style="background-image: url('/assets/img/mundial/wc2026-logo-sm.jpg'); background-size: 200px; background-repeat: repeat; background-position: center;"></div>
+      <div class="relative max-w-6xl mx-auto px-4 py-14 md:py-20">
+        <div class="grid md:grid-cols-2 gap-10 items-center">
+          <!-- Left: Countdown -->
+          <div>
+            <p class="text-ice text-xs font-semibold uppercase tracking-[0.2em] mb-3" style="font-family:'Oswald',system-ui,sans-serif;">Mundial 2026</p>
+            <h2 class="text-3xl md:text-4xl font-bold uppercase tracking-wider mb-4" style="font-family:'Oswald',system-ui,sans-serif;">
+              <span id="wc-days" class="text-ice">--</span> días para<br>el kickoff
+            </h2>
+            <p class="text-smoke text-sm md:text-base max-w-md mb-6 leading-relaxed">USA, México y Canadá. El torneo más grande de la historia. Prepará tu colección antes de que arranque.</p>
+            <a href="/mundial.html" class="btn-primary">Ver Colección Mundial</a>
+          </div>
+          <!-- Right: Mini jersey grid -->
+          <div class="grid grid-cols-3 gap-3">
+            <div class="aspect-square rounded-lg overflow-hidden border border-chalk/50 transition-transform duration-300 hover:scale-105">
+              <img src="/assets/img/mundial/arg-home-sm.jpg" alt="Argentina" class="w-full h-full object-cover" loading="lazy">
+            </div>
+            <div class="aspect-square rounded-lg overflow-hidden border border-chalk/50 transition-transform duration-300 hover:scale-105">
+              <img src="/assets/img/mundial/bra-home-sm.jpg" alt="Brasil" class="w-full h-full object-cover" loading="lazy">
+            </div>
+            <div class="aspect-square rounded-lg overflow-hidden border border-chalk/50 transition-transform duration-300 hover:scale-105">
+              <img src="/assets/img/mundial/esp-home-sm.jpg" alt="España" class="w-full h-full object-cover" loading="lazy">
+            </div>
+            <div class="aspect-square rounded-lg overflow-hidden border border-chalk/50 transition-transform duration-300 hover:scale-105">
+              <img src="/assets/img/mundial/ger-home-sm.jpg" alt="Alemania" class="w-full h-full object-cover" loading="lazy">
+            </div>
+            <div class="aspect-square rounded-lg overflow-hidden border border-chalk/50 transition-transform duration-300 hover:scale-105">
+              <img src="/assets/img/mundial/por-home-sm.jpg" alt="Portugal" class="w-full h-full object-cover" loading="lazy">
+            </div>
+            <div class="aspect-square rounded-lg overflow-hidden border border-chalk/50 transition-transform duration-300 hover:scale-105">
+              <img src="/assets/img/mundial/eng-home-sm.jpg" alt="Inglaterra" class="w-full h-full object-cover" loading="lazy">
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── HUB CARDS — 3 Caminos ─────────────────── -->
+    <section class="max-w-5xl mx-auto px-4 py-16 md:py-24">
+      <div class="text-center mb-12">
+        <h2 class="text-2xl md:text-3xl font-bold uppercase tracking-wider" style="font-family:'Oswald',system-ui,sans-serif;">Elegí tu camino</h2>
+        <p class="text-smoke text-sm mt-3 max-w-md mx-auto">Tres formas de conseguir tu pieza. Todas terminan en lo mismo: una camiseta con historia.</p>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <a href="/mystery-box.html" class="hub-card group" id="hub-surprise">
           <div class="hub-card-icon">
             <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#4DA8FF" stroke-width="1.5">
-              <rect x="8" y="24" width="48" height="36" rx="2"/>
-              <path d="M8 24l24-16 24 16"/>
-              <line x1="32" y1="8" x2="32" y2="60"/>
-              <path d="M20 24c0-8 6-16 12-16s12 8 12 16"/>
+              <!-- Box body -->
+              <rect x="10" y="30" width="44" height="28" rx="3"/>
+              <!-- Lid -->
+              <rect x="7" y="22" width="50" height="10" rx="2"/>
+              <!-- Ribbon vertical -->
+              <line x1="32" y1="22" x2="32" y2="58"/>
+              <!-- Ribbon horizontal -->
+              <line x1="10" y1="44" x2="54" y2="44" stroke-opacity="0"/>
+              <!-- Bow left -->
+              <path d="M32 22c-4-8-16-10-14-2s12 2 14 2z" fill="#4DA8FF" fill-opacity="0.15" stroke="#4DA8FF"/>
+              <!-- Bow right -->
+              <path d="M32 22c4-8 16-10 14-2s-12 2-14 2z" fill="#4DA8FF" fill-opacity="0.15" stroke="#4DA8FF"/>
+              <!-- Question mark -->
+              <text x="32" y="51" text-anchor="middle" font-family="Oswald,sans-serif" font-size="16" font-weight="700" fill="#4DA8FF" stroke="none">?</text>
             </svg>
           </div>
-          <h2 class="hub-card-title">Mystery Box</h2>
+          <h3 class="hub-card-title">Mystery Box</h3>
           <p class="hub-card-sub">Dejá que el destino elija. Cada box viene armada a mano con piezas legendarias.</p>
           <span class="hub-card-meta">Q350 <s class="text-ash">Q400</s> · 1 camiseta sorpresa</span>
         </a>
-
-        <!-- Explora -->
         <a href="/explora.html" class="hub-card group" id="hub-explore">
           <div class="hub-card-icon">
             <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#4DA8FF" stroke-width="1.5">
-              <rect x="4" y="4" width="24" height="24" rx="2"/>
-              <rect x="36" y="4" width="24" height="24" rx="2"/>
-              <rect x="4" y="36" width="24" height="24" rx="2"/>
-              <rect x="36" y="36" width="24" height="24" rx="2"/>
+              <!-- Jersey body -->
+              <path d="M18 18 L10 24 L10 32 L18 28 L18 56 L46 56 L46 28 L54 32 L54 24 L46 18 L40 22 C38 24 26 24 24 22 L18 18Z" fill="#4DA8FF" fill-opacity="0.08"/>
+              <path d="M18 18 L10 24 L10 32 L18 28 L18 56 L46 56 L46 28 L54 32 L54 24 L46 18 L40 22 C38 24 26 24 24 22 L18 18Z"/>
+              <!-- Collar -->
+              <path d="M24 22 C26 24 38 24 40 22" stroke-width="1.5"/>
+              <!-- Search/browse magnifier -->
+              <circle cx="42" cy="46" r="7" stroke-width="1.5" fill="#0D0D0D"/>
+              <line x1="47" y1="51" x2="52" y2="56" stroke-width="2" stroke-linecap="round"/>
             </svg>
           </div>
-          <h2 class="hub-card-title">Catálogo</h2>
+          <h3 class="hub-card-title">Catálogo</h3>
           <p class="hub-card-sub">Todas nuestras camisetas en un solo lugar. Filtrá por liga, país o posición.</p>
           <span class="hub-card-meta" id="hub-explore-count">Cargando...</span>
         </a>
-
-        <!-- Personaliza -->
         <a href="/personaliza.html" class="hub-card group" id="hub-custom">
           <div class="hub-card-icon">
             <svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#4DA8FF" stroke-width="1.5">
-              <path d="M20 8 C20 8 12 12 12 20 L12 56 L32 60 L52 56 L52 20 C52 12 44 8 44 8 L32 4 Z" stroke-dasharray="4 3"/>
-              <line x1="32" y1="4" x2="32" y2="60" stroke-dasharray="4 3"/>
+              <!-- Jersey body (dashed = custom/pending) -->
+              <path d="M18 18 L10 24 L10 32 L18 28 L18 56 L46 56 L46 28 L54 32 L54 24 L46 18 L40 22 C38 24 26 24 24 22 L18 18Z" stroke-dasharray="4 3" fill="#4DA8FF" fill-opacity="0.05"/>
+              <!-- Collar -->
+              <path d="M24 22 C26 24 38 24 40 22" stroke-dasharray="4 3"/>
+              <!-- Pencil icon (customization) -->
+              <g transform="translate(38,38)">
+                <rect x="2" y="-2" width="16" height="6" rx="1" transform="rotate(45)" fill="#0D0D0D" stroke="#4DA8FF" stroke-width="1.5"/>
+                <path d="M12.5 2.5 L15.5 -0.5" stroke="#4DA8FF" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M1 12 L-1 15 L2 13Z" fill="#4DA8FF" stroke="none"/>
+              </g>
             </svg>
           </div>
-          <h2 class="hub-card-title">Pedí tu Camiseta</h2>
+          <h3 class="hub-card-title">Pedí tu Camiseta</h3>
           <p class="hub-card-sub">Pedí la camiseta que querés. Cualquier equipo, cualquier jugador.</p>
           <span class="hub-card-meta">Desde Q400 · 3-5 semanas</span>
         </a>
-
       </div>
     </section>
 
-    <!-- How it works (compact) -->
-    <section class="max-w-4xl mx-auto px-4 py-12 border-t border-chalk">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-        <div>
-          <div class="text-3xl font-bold text-ice mb-2" style="font-family:'Oswald',system-ui,sans-serif;">1</div>
-          <p class="text-white font-semibold text-sm uppercase tracking-wider mb-1">Elegí tu camino</p>
-          <p class="text-smoke text-xs">Sorpresa, catálogo o pedido personalizado</p>
-        </div>
-        <div>
-          <div class="text-3xl font-bold text-ice mb-2" style="font-family:'Oswald',system-ui,sans-serif;">2</div>
-          <p class="text-white font-semibold text-sm uppercase tracking-wider mb-1">Coordinamos por WhatsApp</p>
-          <p class="text-smoke text-xs">Confirmamos tu pedido y método de pago</p>
-        </div>
-        <div>
-          <div class="text-3xl font-bold text-ice mb-2" style="font-family:'Oswald',system-ui,sans-serif;">3</div>
-          <p class="text-white font-semibold text-sm uppercase tracking-wider mb-1">Recibí tu pieza</p>
-          <p class="text-smoke text-xs">Entrega en Guatemala en 2-7 días</p>
+    <!-- ── HOW IT WORKS ──────────────────────────── -->
+    <section class="border-t border-chalk">
+      <div class="max-w-4xl mx-auto px-4 py-16 md:py-20">
+        <h2 class="text-center text-xl md:text-2xl font-bold uppercase tracking-wider mb-12" style="font-family:'Oswald',system-ui,sans-serif;">Así funciona</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-10 text-center">
+          <div class="relative">
+            <div class="w-14 h-14 rounded-full border-2 border-ice flex items-center justify-center mx-auto mb-4">
+              <span class="text-ice text-xl font-bold" style="font-family:'Oswald',system-ui,sans-serif;">1</span>
+            </div>
+            <p class="text-white font-semibold text-sm uppercase tracking-wider mb-2">Elegí tu camino</p>
+            <p class="text-smoke text-xs leading-relaxed">Sorpresa, catálogo o pedido personalizado</p>
+          </div>
+          <div class="relative">
+            <div class="w-14 h-14 rounded-full border-2 border-ice flex items-center justify-center mx-auto mb-4">
+              <span class="text-ice text-xl font-bold" style="font-family:'Oswald',system-ui,sans-serif;">2</span>
+            </div>
+            <p class="text-white font-semibold text-sm uppercase tracking-wider mb-2">Coordinamos por WhatsApp</p>
+            <p class="text-smoke text-xs leading-relaxed">Confirmamos tu pedido y método de pago</p>
+          </div>
+          <div class="relative">
+            <div class="w-14 h-14 rounded-full border-2 border-ice flex items-center justify-center mx-auto mb-4">
+              <span class="text-ice text-xl font-bold" style="font-family:'Oswald',system-ui,sans-serif;">3</span>
+            </div>
+            <p class="text-white font-semibold text-sm uppercase tracking-wider mb-2">Recibí tu pieza</p>
+            <p class="text-smoke text-xs leading-relaxed">Entrega en Guatemala en 2-7 días</p>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- Tagline -->
-    <section class="text-center py-12">
-      <p class="text-2xl md:text-3xl font-bold tracking-wider text-white" style="font-family:'Oswald',system-ui,sans-serif;">La camiseta con historia.</p>
+    <!-- ── MANIFESTO / CTA ───────────────────────── -->
+    <section class="relative overflow-hidden">
+      <div class="absolute inset-0 bg-gradient-to-b from-midnight via-pitch/50 to-midnight"></div>
+      <div class="relative text-center py-20 md:py-28 px-4">
+        <p class="text-smoke text-sm uppercase tracking-[0.2em] mb-6" style="font-family:'Oswald',system-ui,sans-serif;">El Club</p>
+        <h2 class="text-3xl md:text-5xl font-bold tracking-wider mb-6 max-w-2xl mx-auto leading-tight" style="font-family:'Oswald',system-ui,sans-serif; text-transform:uppercase;">
+          No vendemos camisetas.<br><span class="text-ice">Entregamos historia.</span>
+        </h2>
+        <p class="text-smoke text-base max-w-lg mx-auto mb-10 leading-relaxed">Cada camiseta que pasa por El Club tiene un momento, un gol, una final. Cuando la abrís, no es tela — es memoria.</p>
+        <a href="https://wa.me/13185343283?text=Hola%21%20Quiero%20saber%20mas%20sobre%20El%20Club." target="_blank" rel="noopener" class="btn-whatsapp">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+          Escribinos por WhatsApp
+        </a>
+      </div>
     </section>
+
   </main>
 
   <!-- ============================================================ -->
@@ -331,14 +477,51 @@
   <script src="/assets/js/app.js?v=2"></script>
 
   <script>
-    // Populate explore count from products.json
+    // ── World Cup 2026 Countdown ──
+    (function() {
+      var wcDate = new Date('2026-06-11T00:00:00');
+      var now = new Date();
+      var diff = Math.ceil((wcDate - now) / (1000 * 60 * 60 * 24));
+      var el = document.getElementById('wc-days');
+      if (el) el.textContent = diff > 0 ? diff : '0';
+    })();
+
+    // ── Populate featured jerseys + explore count ──
     loadProducts(function(products) {
       var jerseys = products.filter(function(p) { return p.type === 'jersey' && p.stock > 0; });
-      var el = document.getElementById('hub-explore-count');
-      if (el) el.textContent = jerseys.length + ' piezas disponibles';
+      var allInStock = products.filter(function(p) { return p.stock > 0; });
+
+      // Explore count
+      var countEl = document.getElementById('hub-explore-count');
+      if (countEl) countEl.textContent = jerseys.length + ' piezas disponibles';
+
+      // Hero stock count
+      var heroCount = document.getElementById('hero-stock-count');
+      if (heroCount) heroCount.textContent = allInStock.length + ' piezas disponibles';
+
+      // Featured grid: prioritize featured, then fill with stock > 0
+      var featured = products.filter(function(p) { return p.featured && p.stock > 0 && p.type === 'jersey'; });
+      var others = jerseys.filter(function(p) { return !p.featured; });
+      var display = featured.concat(others).slice(0, 4);
+
+      var grid = document.getElementById('featured-grid');
+      if (!grid) return;
+
+      display.forEach(function(p) {
+        var card = document.createElement('a');
+        card.href = '/producto.html?id=' + p.id;
+        card.className = 'product-card group relative rounded-lg';
+        card.innerHTML =
+          '<img src="' + p.image + '" alt="' + p.name + '" class="w-full aspect-square object-cover rounded-t-lg" loading="lazy">' +
+          '<div class="p-3 md:p-4">' +
+            '<p class="text-white font-semibold text-xs md:text-sm leading-tight mb-1 line-clamp-2">' + p.name + '</p>' +
+            '<p class="text-ice font-bold text-sm" style="font-family:\'Oswald\',system-ui,sans-serif;">Q' + p.price + '</p>' +
+          '</div>';
+        grid.appendChild(card);
+      });
     });
 
-    // Hub card hover animations
+    // ── Hub card hover animations ──
     var hubSurprise = document.getElementById('hub-surprise');
     if (hubSurprise) {
       hubSurprise.addEventListener('mouseenter', function() {
@@ -350,6 +533,21 @@
         if (icon) icon.style.animation = '';
       });
     }
+
+    // ── Scroll reveal animations ──
+    (function() {
+      var reveals = document.querySelectorAll('.reveal');
+      if (!reveals.length) return;
+      var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.15 });
+      reveals.forEach(function(el) { observer.observe(el); });
+    })();
   </script>
 
 </body>
