@@ -26,7 +26,7 @@ function renderProductCard(product, isHero) {
   if (product.stock <= 0) {
     stockLabel = '<span class="badge-urgency absolute top-3 left-3 z-10">Agotado</span>';
   } else if (product.stock <= 3) {
-    stockLabel = '<span class="badge-urgency absolute top-3 left-3 z-10">Ultimas ' + product.stock + '</span>';
+    stockLabel = '<span class="badge-urgency absolute top-3 left-3 z-10">Últimas ' + product.stock + '</span>';
   }
 
   // Quick Add size pills (only for in-stock jerseys)

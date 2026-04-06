@@ -3,7 +3,7 @@
     "id": "MB-CLASICA",
     "type": "mystery-box",
     "name": "Mystery Box Clasica",
-    "description": "2 camisas de futbol curadas por El Club. No sabes que vas a recibir Ã¢ÂÂ esa es la magia.",
+    "description": "2 camisas de futbol curadas por El Club. No sabes que vas a recibir — esa es la magia.",
     "price": 400,
     "image": "/assets/img/products/mystery-box-clasica.jpg",
     "sizes": [
@@ -20,31 +20,10 @@
     ]
   },
   {
-    "id": "MB-PREMIUM",
-    "type": "mystery-box",
-    "name": "Mystery Box Premium",
-    "description": "3 camisas de futbol + un item bonus. La experiencia completa de El Club.",
-    "price": 600,
-    "image": "/assets/img/products/mystery-box-clasica.jpg",
-    "sizes": [
-      "S",
-      "M",
-      "L",
-      "XL"
-    ],
-    "stock": 5,
-    "featured": true,
-    "tags": [
-      "mystery-box",
-      "premium",
-      "destacado"
-    ]
-  },
-  {
     "id": "JRS-BARCELONA-200506-H",
     "type": "jersey",
-    "name": "Barcelona Local 2005/06 â Ronaldinho",
-    "description": "La magia tiene nombre y nÃºmero: Ronaldinho #10. Temporada 2005/06 â el aÃ±o en que Ronaldinho hizo que el BernabÃ©u entero se pusiera de pie a aplaudirlo. Un rival, en la casa del enemigo, recibiendo ovaciÃ³n de pie. Eso no habÃ­a pasado nunca y no ha vuelto a pasar. Esa misma temporada, Barcelona ganÃ³ la Champions League en ParÃ­s contra el Arsenal. Ronaldinho no fue solo el mejor jugador del mundo â fue el que mÃ¡s disfrutaba jugando. Se nota en cada jugada.",
+    "name": "Barcelona Local 2005/06 — Ronaldinho",
+    "description": "La magia tiene nombre y número: Ronaldinho #10. Temporada 2005/06 — el año en que Ronaldinho hizo que el Bernabéu entero se pusiera de pie a aplaudirlo. Un rival, en la casa del enemigo, recibiendo ovación de pie. Eso no había pasado nunca y no ha vuelto a pasar. Esa misma temporada, Barcelona ganó la Champions League en París contra el Arsenal. Ronaldinho no fue solo el mejor jugador del mundo — fue el que más disfrutaba jugando. Se nota en cada jugada.",
     "price": 435,
     "image": "/assets/img/products/JRS-004-JRS-004-01.png",
     "images": [
@@ -61,7 +40,7 @@
     "player_number": 10,
     "patches": null,
     "position": "MED",
-    "country": "EspaÃ±a",
+    "country": "España",
     "sizes": [
       "M",
       "L"
@@ -76,8 +55,8 @@
   {
     "id": "JRS-BARCELONA-201415-H",
     "type": "jersey",
-    "name": "Barcelona Local 2014/15 â Neymar Jr.",
-    "description": "La camiseta de la MSN â el tridente mÃ¡s letal de la historia del fÃºtbol. Temporada 2014/15: Messi, SuÃ¡rez y Neymar marcaron 122 goles juntos y el Barcelona ganÃ³ el triplete: Liga, Copa del Rey y Champions League. Neymar, con el #11, marcÃ³ en la final de Champions contra la Juventus en BerlÃ­n. TenÃ­a 23 aÃ±os y parecÃ­a que iba a dominar el fÃºtbol por la siguiente dÃ©cada. Esta camiseta es de antes de que todo se complicara â cuando Neymar era felicidad pura, gambetas imposibles y una sonrisa que iluminaba el Camp Nou.",
+    "name": "Barcelona Local 2014/15 — Neymar Jr.",
+    "description": "La camiseta de la MSN — el tridente más letal de la historia del fútbol. Temporada 2014/15: Messi, Suárez y Neymar marcaron 122 goles juntos y el Barcelona ganó el triplete: Liga, Copa del Rey y Champions League. Neymar, con el #11, marcó en la final de Champions contra la Juventus en Berlín. Tenía 23 años y parecía que iba a dominar el fútbol por la siguiente década. Esta camiseta es de antes de que todo se complicara — cuando Neymar era felicidad pura, gambetas imposibles y una sonrisa que iluminaba el Camp Nou.",
     "price": 435,
     "image": "/assets/img/products/JRS-028-JRS-028-01.png",
     "images": [
@@ -93,7 +72,7 @@
     "player_number": 11,
     "patches": null,
     "position": "DEL",
-    "country": "EspaÃ±a",
+    "country": "España",
     "sizes": [
       "M"
     ],
@@ -108,8 +87,8 @@
   {
     "id": "JRS-REALMADRID-202324-A",
     "type": "jersey",
-    "name": "Real Madrid Visita 2023/24 â Rodrygo",
-    "description": "La camiseta visitante del equipo que ganÃ³ la Champions League nÃºmero 15. Real Madrid, temporada 2023/24 â la de Bellingham, VinÃ­cius y una remontada mÃ¡s en el BernabÃ©u que ya ni sorprende. Rodrygo Goes, el #11, fue el comodÃ­n letal: capaz de jugar por ambas bandas, capaz de aparecer en el momento exacto. Con parches de Champions League, esta camiseta visitante es de la temporada en que el Madrid demostrÃ³, una vez mÃ¡s, que la Champions es suya por derecho divino.",
+    "name": "Real Madrid Visita 2023/24 — Rodrygo",
+    "description": "La camiseta visitante del equipo que ganó la Champions League número 15. Real Madrid, temporada 2023/24 — la de Bellingham, Vinícius y una remontada más en el Bernabéu que ya ni sorprende. Rodrygo Goes, el #11, fue el comodín letal: capaz de jugar por ambas bandas, capaz de aparecer en el momento exacto. Con parches de Champions League, esta camiseta visitante es de la temporada en que el Madrid demostró, una vez más, que la Champions es suya por derecho divino.",
     "price": 390,
     "image": "/assets/img/products/JRS-016-JRS-016-01.png",
     "images": [
@@ -125,7 +104,7 @@
     "player_number": 11,
     "patches": "Champions League",
     "position": "DEL",
-    "country": "EspaÃ±a",
+    "country": "España",
     "sizes": [
       "M"
     ],
@@ -139,8 +118,8 @@
   {
     "id": "JRS-REALMADRID-200506-H",
     "type": "jersey",
-    "name": "Real Madrid Local 2005/06 â Ronaldo",
-    "description": "El FenÃ³meno con la camiseta blanca del Real Madrid. Ronaldo NazÃ¡rio, R9, el delantero mÃ¡s espectacular que el fÃºtbol ha visto. Temporada 2005/06, los Ãºltimos dÃ­as de los GalÃ¡cticos originales â Zidane, Beckham, Roberto Carlos y Ronaldo compartiendo vestidor. El brasileÃ±o ya no era el mismo que destrozÃ³ defensas en el Mundial 2002, pero seguÃ­a siendo capaz de momentos de genialidad pura. El #9 del Madrid es un sÃ­mbolo: el hombre que demostrÃ³ que se puede ser el mejor del mundo, perder las rodillas, y seguir siendo mejor que casi todos.",
+    "name": "Real Madrid Local 2005/06 — Ronaldo",
+    "description": "El Fenómeno con la camiseta blanca del Real Madrid. Ronaldo Nazário, R9, el delantero más espectacular que el fútbol ha visto. Temporada 2005/06, los últimos días de los Galácticos originales — Zidane, Beckham, Roberto Carlos y Ronaldo compartiendo vestidor. El brasileño ya no era el mismo que destrozó defensas en el Mundial 2002, pero seguía siendo capaz de momentos de genialidad pura. El #9 del Madrid es un símbolo: el hombre que demostró que se puede ser el mejor del mundo, perder las rodillas, y seguir siendo mejor que casi todos.",
     "price": 435,
     "image": "/assets/img/products/JRS-023-JRS-023-01.png",
     "images": [
@@ -159,7 +138,7 @@
     "player_number": 9,
     "patches": null,
     "position": "DEL",
-    "country": "EspaÃ±a",
+    "country": "España",
     "sizes": [
       "M"
     ],
@@ -173,8 +152,8 @@
   {
     "id": "JRS-SEVILLA-202324-H",
     "type": "jersey",
-    "name": "Sevilla Local 2023/24 â Sergio Ramos",
-    "description": "El hijo prÃ³digo vuelve a casa. Sergio Ramos regresÃ³ al Sevilla en 2023 despuÃ©s de 18 aÃ±os, 4 Champions League con el Real Madrid y un Mundial con EspaÃ±a. El #4 volviÃ³ al club donde empezÃ³ todo â donde debutÃ³ con 17 aÃ±os. Con los parches de La Liga, esta camiseta cuenta la historia de un defensor que marcÃ³ una era: el cabezazo en la final de Lisboa 2014 al minuto 93, el gol que cambiÃ³ la historia del Madrid. Ramos eligiÃ³ volver a NerviÃ³n para cerrar el cÃ­rculo.",
+    "name": "Sevilla Local 2023/24 — Sergio Ramos",
+    "description": "El hijo pródigo vuelve a casa. Sergio Ramos regresó al Sevilla en 2023 después de 18 años, 4 Champions League con el Real Madrid y un Mundial con España. El #4 volvió al club donde empezó todo — donde debutó con 17 años. Con los parches de La Liga, esta camiseta cuenta la historia de un defensor que marcó una era: el cabezazo en la final de Lisboa 2014 al minuto 93, el gol que cambió la historia del Madrid. Ramos eligió volver a Nervión para cerrar el círculo.",
     "price": 390,
     "image": "/assets/img/products/JRS-008-JRS-008-01.png",
     "images": [
@@ -192,7 +171,7 @@
     "player_number": 4,
     "patches": "La Liga",
     "position": "DEF",
-    "country": "EspaÃ±a",
+    "country": "España",
     "sizes": [
       "XL"
     ],
@@ -206,8 +185,8 @@
   {
     "id": "JRS-PSG-202324-H",
     "type": "jersey",
-    "name": "PSG Local 2023/24 â MbappÃ©",
-    "description": "La Ãºltima temporada de Kylian MbappÃ© en ParÃ­s. El #7 se despidiÃ³ del PSG con 44 goles en 2023/24 antes de cumplir su sueÃ±o de vestir de blanco en el Real Madrid. Con los parches oficiales de la Ligue 1, esta camiseta representa el cierre de una era en la que MbappÃ© se convirtiÃ³ en el mÃ¡ximo goleador histÃ³rico del club con 256 goles. La velocidad, los sombreros, las chilenas â todo empezÃ³ con esta camiseta.",
+    "name": "PSG Local 2023/24 — Mbappé",
+    "description": "La última temporada de Kylian Mbappé en París. El #7 se despidió del PSG con 44 goles en 2023/24 antes de cumplir su sueño de vestir de blanco en el Real Madrid. Con los parches oficiales de la Ligue 1, esta camiseta representa el cierre de una era en la que Mbappé se convirtió en el máximo goleador histórico del club con 256 goles. La velocidad, los sombreros, las chilenas — todo empezó con esta camiseta.",
     "price": 390,
     "image": "/assets/img/products/JRS-003-JRS-003-01.png",
     "images": [
@@ -220,7 +199,7 @@
     "team": "PSG",
     "season": "2023/24",
     "variant": "Local",
-    "player_name": "MbappÃ©",
+    "player_name": "Mbappé",
     "player_number": 7,
     "patches": "Ligue One Uber Eats",
     "position": "DEL",
@@ -238,8 +217,8 @@
   {
     "id": "JRS-ARSENAL-Retro (pre-2005)-H",
     "type": "jersey",
-    "name": "Arsenal Local Retro (pre-2005) â Henry",
-    "description": "Thierry Henry con el #14 del Arsenal â posiblemente el mejor delantero que ha pisado la Premier League. Esta camiseta retro captura la era en que Highbury era un templo y Henry era el dios que lo habitaba. 228 goles en 376 partidos. La carrera desde su propia mitad de cancha contra el Tottenham. Los goles imposibles contra el Real Madrid en Champions. Henry no solo marcaba â hacÃ­a arte. Con la elegancia de un bailarÃ­n y la frialdad de un asesino, el francÃ©s convirtiÃ³ al Arsenal en el equipo mÃ¡s bonito de ver en la historia del fÃºtbol inglÃ©s.",
+    "name": "Arsenal Local Retro (pre-2005) — Henry",
+    "description": "Thierry Henry con el #14 del Arsenal — posiblemente el mejor delantero que ha pisado la Premier League. Esta camiseta retro captura la era en que Highbury era un templo y Henry era el dios que lo habitaba. 228 goles en 376 partidos. La carrera desde su propia mitad de cancha contra el Tottenham. Los goles imposibles contra el Real Madrid en Champions. Henry no solo marcaba — hacía arte. Con la elegancia de un bailarín y la frialdad de un asesino, el francés convirtió al Arsenal en el equipo más bonito de ver en la historia del fútbol inglés.",
     "price": 435,
     "image": "/assets/img/products/JRS-024-JRS-024-01.png",
     "images": [
@@ -270,7 +249,7 @@
     "id": "JRS-CHELSEA-202324-H",
     "type": "jersey",
     "name": "Chelsea Local 2023/24",
-    "description": "Chelsea y su temporada de caos millonario. 2023/24 bajo Mauricio Pochettino fue la continuaciÃ³n del experimento mÃ¡s caro del fÃºtbol moderno: mÃ¡s de mil millones de libras gastadas en fichajes desde la compra de Todd Boehly. Con los parches de la Premier League, esta camiseta azul sin nombre es un lienzo limpio del Stamford Bridge â el escudo solo, sin jugador, porque en ese Chelsea rotaban tanto que el equipo titular cambiaba cada semana. A veces la camiseta sin nombre dice mÃ¡s que una con estrella.",
+    "description": "Chelsea y su temporada de caos millonario. 2023/24 bajo Mauricio Pochettino fue la continuación del experimento más caro del fútbol moderno: más de mil millones de libras gastadas en fichajes desde la compra de Todd Boehly. Con los parches de la Premier League, esta camiseta azul sin nombre es un lienzo limpio del Stamford Bridge — el escudo solo, sin jugador, porque en ese Chelsea rotaban tanto que el equipo titular cambiaba cada semana. A veces la camiseta sin nombre dice más que una con estrella.",
     "price": 390,
     "image": "/assets/img/products/JRS-018-JRS-018-01.png",
     "images": [
@@ -300,8 +279,8 @@
   {
     "id": "JRS-LEICESTER-201516-H",
     "type": "jersey",
-    "name": "Leicester Local 2015/16 â Vardy",
-    "description": "La camiseta del milagro mÃ¡s grande en la historia del deporte. Leicester City, un equipo que empezÃ³ la temporada con probabilidades de 5000 a 1, ganÃ³ la Premier League 2015/16. Jamie Vardy, un delantero que cinco aÃ±os antes jugaba en la quinta divisiÃ³n inglesa y trabajaba en una fÃ¡brica, rompiÃ³ el rÃ©cord de goles consecutivos en la Premier League con 11 partidos seguidos marcando. Nadie lo creÃ­a posible. Los matemÃ¡ticos decÃ­an que era mÃ¡s probable encontrar al monstruo del Lago Ness. Esta camiseta no es de un equipo â es la prueba de que lo imposible a veces pasa.",
+    "name": "Leicester Local 2015/16 — Vardy",
+    "description": "La camiseta del milagro más grande en la historia del deporte. Leicester City, un equipo que empezó la temporada con probabilidades de 5000 a 1, ganó la Premier League 2015/16. Jamie Vardy, un delantero que cinco años antes jugaba en la quinta división inglesa y trabajaba en una fábrica, rompió el récord de goles consecutivos en la Premier League con 11 partidos seguidos marcando. Nadie lo creía posible. Los matemáticos decían que era más probable encontrar al monstruo del Lago Ness. Esta camiseta no es de un equipo — es la prueba de que lo imposible a veces pasa.",
     "price": 435,
     "image": "/assets/img/products/JRS-012-JRS-012-01.png",
     "images": [
@@ -331,8 +310,8 @@
   {
     "id": "JRS-LIVERPOOL-202324-H",
     "type": "jersey",
-    "name": "Liverpool Local 2023/24 â Darwin NÃºÃ±ez",
-    "description": "Darwin NÃºÃ±ez y su energÃ­a caÃ³tica en Anfield. El uruguayo que puede fallar tres goles cantados y luego meter uno imposible â todo en el mismo partido. 2023/24 fue la Ãºltima temporada de JÃ¼rgen Klopp como tÃ©cnico del Liverpool, y Darwin fue pieza clave en la carrera por la Premier League que se definiÃ³ en las Ãºltimas jornadas. Con los parches de la Europa League, esta camiseta representa la dualidad de un delantero que es todo corazÃ³n, todo potencia, todo caos. En Uruguay le dicen que es el sucesor de SuÃ¡rez. En Anfield, simplemente lo quieren porque nunca deja de correr.",
+    "name": "Liverpool Local 2023/24 — Darwin Núñez",
+    "description": "Darwin Núñez y su energía caótica en Anfield. El uruguayo que puede fallar tres goles cantados y luego meter uno imposible — todo en el mismo partido. 2023/24 fue la última temporada de Jürgen Klopp como técnico del Liverpool, y Darwin fue pieza clave en la carrera por la Premier League que se definió en las últimas jornadas. Con los parches de la Europa League, esta camiseta representa la dualidad de un delantero que es todo corazón, todo potencia, todo caos. En Uruguay le dicen que es el sucesor de Suárez. En Anfield, simplemente lo quieren porque nunca deja de correr.",
     "price": 390,
     "image": "/assets/img/products/JRS-014-JRS-014-01.png",
     "images": [
@@ -344,7 +323,7 @@
     "team": "Liverpool",
     "season": "2023/24",
     "variant": "Local",
-    "player_name": "Darwin NÃºÃ±ez",
+    "player_name": "Darwin Núñez",
     "player_number": 9,
     "patches": "Europa League",
     "position": "DEL",
@@ -362,8 +341,8 @@
   {
     "id": "JRS-MANCITY-202324-H",
     "type": "jersey",
-    "name": "Man City Local 2023/24 â J. Alvarez",
-    "description": "JuliÃ¡n Ãlvarez llegÃ³ al Manchester City como campeÃ³n del mundo con Argentina y se convirtiÃ³ en pieza clave del equipo que dominÃ³ el fÃºtbol inglÃ©s. El #19 aportÃ³ goles decisivos en la temporada 2023/24, la cuarta Premier League consecutiva del City. Con los parches oficiales de la Premier League, esta camiseta captura el momento antes de que Ãlvarez partiera al AtlÃ©tico de Madrid. Un pedazo de la dinastÃ­a mÃ¡s dominante en la historia de la liga inglesa.",
+    "name": "Man City Local 2023/24 — J. Alvarez",
+    "description": "Julián Álvarez llegó al Manchester City como campeón del mundo con Argentina y se convirtió en pieza clave del equipo que dominó el fútbol inglés. El #19 aportó goles decisivos en la temporada 2023/24, la cuarta Premier League consecutiva del City. Con los parches oficiales de la Premier League, esta camiseta captura el momento antes de que Álvarez partiera al Atlético de Madrid. Un pedazo de la dinastía más dominante en la historia de la liga inglesa.",
     "price": 390,
     "image": "/assets/img/products/JRS-006-JRS-006-01.png",
     "images": [
@@ -398,8 +377,8 @@
   {
     "id": "JRS-MANCITY-201112-H",
     "type": "jersey",
-    "name": "Man City Local 2011/12 â Balotelli",
-    "description": "Mario Balotelli y la temporada que cambiÃ³ la historia del Manchester City. 2011/12: el City no habÃ­a sido campeÃ³n de la liga inglesa en 44 aÃ±os. Balotelli, con su nÃºmero 45 y su personalidad de otro planeta, fue parte fundamental de la remontada mÃ¡s dramÃ¡tica del fÃºtbol inglÃ©s. \"Why Always Me?\" â la camiseta que mostrÃ³ despuÃ©s de marcar contra el United en el 6-1 de Old Trafford se convirtiÃ³ en icono cultural. Pero el momento definitivo lo tuvo en la Ãºltima jornada: fue el pase de Balotelli a AgÃ¼ero en el gol del minuto 93+20 que le dio el tÃ­tulo al City. Esta camiseta huele a locura, a genialidad, y a fuegos artificiales en el baÃ±o (literalmente).",
+    "name": "Man City Local 2011/12 — Balotelli",
+    "description": "Mario Balotelli y la temporada que cambió la historia del Manchester City. 2011/12: el City no había sido campeón de la liga inglesa en 44 años. Balotelli, con su número 45 y su personalidad de otro planeta, fue parte fundamental de la remontada más dramática del fútbol inglés. \"Why Always Me?\" — la camiseta que mostró después de marcar contra el United en el 6-1 de Old Trafford se convirtió en icono cultural. Pero el momento definitivo lo tuvo en la última jornada: fue el pase de Balotelli a Agüero en el gol del minuto 93+20 que le dio el título al City. Esta camiseta huele a locura, a genialidad, y a fuegos artificiales en el baño (literalmente).",
     "price": 435,
     "image": "/assets/img/products/JRS-026-JRS-026-01.png",
     "images": [
@@ -429,8 +408,8 @@
   {
     "id": "JRS-MANUNITED-201314-H",
     "type": "jersey",
-    "name": "Man United Local 2013/14 â Chicharito",
-    "description": "La temporada que nadie quiere recordar en Old Trafford. 2013/14 fue el aÃ±o en que Sir Alex Ferguson se retirÃ³ y David Moyes heredÃ³ un imperio que se desmoronÃ³ en meses. Chicharito HernÃ¡ndez, el goleador mexicano que habÃ­a sido pieza clave con Ferguson, vio cÃ³mo el United pasÃ³ de campeÃ³n a sÃ©ptimo lugar. El #14 con parches de Champions League es un pedazo de la Ãºltima temporada del United en la Ã©lite europea antes de aÃ±os de mediocridad. Para millones de mexicanos, Chicharito en el United representÃ³ un sueÃ±o cumplido â un chico de Guadalajara con el escudo del club mÃ¡s grande de Inglaterra.",
+    "name": "Man United Local 2013/14 — Chicharito",
+    "description": "La temporada que nadie quiere recordar en Old Trafford. 2013/14 fue el año en que Sir Alex Ferguson se retiró y David Moyes heredó un imperio que se desmoronó en meses. Chicharito Hernández, el goleador mexicano que había sido pieza clave con Ferguson, vio cómo el United pasó de campeón a séptimo lugar. El #14 con parches de Champions League es un pedazo de la última temporada del United en la élite europea antes de años de mediocridad. Para millones de mexicanos, Chicharito en el United representó un sueño cumplido — un chico de Guadalajara con el escudo del club más grande de Inglaterra.",
     "price": 435,
     "image": "/assets/img/products/JRS-011-JRS-011-01.png",
     "images": [
@@ -461,7 +440,7 @@
     "id": "JRS-NEWCASTLE-202324-H",
     "type": "jersey",
     "name": "Newcastle Local 2023/24",
-    "description": "El regreso de Newcastle a la Ã©lite. DespuÃ©s de 20 aÃ±os fuera de la Champions League, los Magpies volvieron en 2023/24 con la pasiÃ³n de St. James'  Park empujÃ¡ndolos. Las famosas rayas blanco y negro son una de las camisetas mÃ¡s icÃ³nicas del fÃºtbol inglÃ©s â un diseÃ±o que no ha cambiado en mÃ¡s de un siglo. Con parches de Champions League, esta camiseta representa el inicio de una nueva era para uno de los clubes mÃ¡s apasionados de Inglaterra.",
+    "description": "El regreso de Newcastle a la élite. Después de 20 años fuera de la Champions League, los Magpies volvieron en 2023/24 con la pasión de St. James'  Park empujándolos. Las famosas rayas blanco y negro son una de las camisetas más icónicas del fútbol inglés — un diseño que no ha cambiado en más de un siglo. Con parches de Champions League, esta camiseta representa el inicio de una nueva era para uno de los clubes más apasionados de Inglaterra.",
     "price": 390,
     "image": "/assets/img/products/JRS-005-JRS-005-01.png",
     "images": [
@@ -493,7 +472,7 @@
     "id": "JRS-BOCA-202324-H",
     "type": "jersey",
     "name": "Boca Local 2023/24",
-    "description": "La azul y oro mÃ¡s famosa de SudamÃ©rica. Boca Juniors no necesita nombre en la espalda â el escudo dice todo. La Bombonera, el barrio de La Boca, Diego Maradona, Riquelme, TÃ©vez. Con los parches de la Copa Libertadores, esta camiseta 2023/24 representa la obsesiÃ³n continental de un club que ha ganado el trofeo 6 veces. En Boca, la camiseta no es un uniforme â es una identidad. La franja diagonal amarilla sobre fondo azul es reconocible en cualquier rincÃ³n del mundo donde se juegue fÃºtbol.",
+    "description": "La azul y oro más famosa de Sudamérica. Boca Juniors no necesita nombre en la espalda — el escudo dice todo. La Bombonera, el barrio de La Boca, Diego Maradona, Riquelme, Tévez. Con los parches de la Copa Libertadores, esta camiseta 2023/24 representa la obsesión continental de un club que ha ganado el trofeo 6 veces. En Boca, la camiseta no es un uniforme — es una identidad. La franja diagonal amarilla sobre fondo azul es reconocible en cualquier rincón del mundo donde se juegue fútbol.",
     "price": 420,
     "image": "/assets/img/products/JRS-027-JRS-027-01.png",
     "images": [
@@ -502,7 +481,7 @@
       "/assets/img/products/JRS-027-JRS-027-03.png",
       "/assets/img/products/JRS-027-JRS-027-04.png"
     ],
-    "league": "Primera DivisiÃ³n Argentina",
+    "league": "Primera División Argentina",
     "team": "Boca",
     "season": "2023/24",
     "variant": "Local",
@@ -517,15 +496,15 @@
     "stock": 1,
     "featured": false,
     "tags": [
-      "primera-divisiÃ³n-argentina",
+      "primera-división-argentina",
       "boca"
     ]
   },
   {
     "id": "JRS-ALHILAL-202324-H",
     "type": "jersey",
-    "name": "Al Hilal Local 2023/24 â Neymar Jr.",
-    "description": "Neymar Jr. en Arabia Saudita â el capÃ­tulo mÃ¡s agridulce de una carrera llena de momentos brillantes y decisiones cuestionables. El brasileÃ±o llegÃ³ al Al Hilal en agosto de 2023 como el fichaje mÃ¡s mediÃ¡tico de la Saudi Pro League, pero la ilusiÃ³n durÃ³ exactamente 73 dÃ­as: ruptura de ligamento cruzado anterior contra Uruguay en octubre. Casi toda la temporada perdida. Mientras Neymar se recuperaba, Al Hilal tuvo una de las mejores temporadas domÃ©sticas en la historia del fÃºtbol saudÃ­. Esta camiseta con el #10 es la de la promesa que nunca se cumpliÃ³ en Riad.",
+    "name": "Al Hilal Local 2023/24 — Neymar Jr.",
+    "description": "Neymar Jr. en Arabia Saudita — el capítulo más agridulce de una carrera llena de momentos brillantes y decisiones cuestionables. El brasileño llegó al Al Hilal en agosto de 2023 como el fichaje más mediático de la Saudi Pro League, pero la ilusión duró exactamente 73 días: ruptura de ligamento cruzado anterior contra Uruguay en octubre. Casi toda la temporada perdida. Mientras Neymar se recuperaba, Al Hilal tuvo una de las mejores temporadas domésticas en la historia del fútbol saudí. Esta camiseta con el #10 es la de la promesa que nunca se cumplió en Riad.",
     "price": 435,
     "image": "/assets/img/products/JRS-021-JRS-021-01.png",
     "images": [
@@ -556,8 +535,8 @@
   {
     "id": "JRS-FRANCIA-Retro (pre-2005)-H",
     "type": "jersey",
-    "name": "Francia Local Retro (pre-2005) â Cantona",
-    "description": "Eric Cantona con la selecciÃ³n francesa es la historia de un genio que nunca encajÃ³ en el molde. Le Roi Eric, el mismo que revolucionÃ³ el fÃºtbol inglÃ©s con el Manchester United, solo jugÃ³ 45 partidos con Francia. Su relaciÃ³n con la selecciÃ³n terminÃ³ abruptamente despuÃ©s de llamar al entrenador Henri Michel un \"sac Ã  merde\" en televisiÃ³n nacional. Cantona fue excluido de la selecciÃ³n y nunca jugÃ³ el Mundial del 98 que Francia ganÃ³ en casa. Esta camiseta retro con el #18 es de un tiempo en que el fÃºtbol francÃ©s tenÃ­a a un artista que era demasiado rebelde hasta para su propio paÃ­s.",
+    "name": "Francia Local Retro (pre-2005) — Cantona",
+    "description": "Eric Cantona con la selección francesa es la historia de un genio que nunca encajó en el molde. Le Roi Eric, el mismo que revolucionó el fútbol inglés con el Manchester United, solo jugó 45 partidos con Francia. Su relación con la selección terminó abruptamente después de llamar al entrenador Henri Michel un \"sac à merde\" en televisión nacional. Cantona fue excluido de la selección y nunca jugó el Mundial del 98 que Francia ganó en casa. Esta camiseta retro con el #18 es de un tiempo en que el fútbol francés tenía a un artista que era demasiado rebelde hasta para su propio país.",
     "price": 435,
     "image": "/assets/img/products/JRS-013-JRS-013-01.png",
     "images": [
@@ -592,8 +571,8 @@
   {
     "id": "JRS-FRANCIA-200506-A",
     "type": "jersey",
-    "name": "Francia Visita 2005/06 â Zidane",
-    "description": "El Ãºltimo baile de Zinedine Zidane. Esta camiseta visita de Francia es de la temporada del Mundial 2006 en Alemania, donde Zidane saliÃ³ del retiro para llevar a Francia a la final. El #10 marcÃ³ uno de los penales mÃ¡s frÃ­os de la historia en esa final contra Italia â un panenka con el mundo mirando. Minutos despuÃ©s, el cabezazo a Materazzi. Zidane se fue del fÃºtbol caminando junto a la Copa del Mundo sin mirarla. La camiseta de la despedida mÃ¡s dramÃ¡tica que el fÃºtbol ha visto.",
+    "name": "Francia Visita 2005/06 — Zidane",
+    "description": "El último baile de Zinedine Zidane. Esta camiseta visita de Francia es de la temporada del Mundial 2006 en Alemania, donde Zidane salió del retiro para llevar a Francia a la final. El #10 marcó uno de los penales más fríos de la historia en esa final contra Italia — un panenka con el mundo mirando. Minutos después, el cabezazo a Materazzi. Zidane se fue del fútbol caminando junto a la Copa del Mundo sin mirarla. La camiseta de la despedida más dramática que el fútbol ha visto.",
     "price": 435,
     "image": "/assets/img/products/JRS-002-JRS-002-01.png",
     "images": [
@@ -624,8 +603,8 @@
   {
     "id": "JRS-PORTUGAL-200506-H",
     "type": "jersey",
-    "name": "Portugal Local 2005/06 â Cristiano Ronaldo",
-    "description": "El #17 antes del #7. Esta camiseta de Portugal es del Mundial 2006 en Alemania, cuando Cristiano Ronaldo tenÃ­a 21 aÃ±os y jugaba su segundo Mundial. Era una estrella en ascenso en el Manchester United, pero todavÃ­a no era CR7 â era el chico de Madeira con el nÃºmero 17 en la espalda. En ese torneo, Portugal llegÃ³ a semifinales y Ronaldo protagonizÃ³ uno de los momentos mÃ¡s polÃ©micos del mundial: el guiÃ±o a la banca despuÃ©s de la expulsiÃ³n de su compaÃ±ero de equipo Wayne Rooney contra Inglaterra. Ese gesto le costÃ³ meses de hostilidad en la Premier League. Pero Cristiano no se escondiÃ³ â al aÃ±o siguiente marcÃ³ 23 goles y empezÃ³ la transformaciÃ³n en la mÃ¡quina que dominarÃ­a el fÃºtbol durante 15 aÃ±os.",
+    "name": "Portugal Local 2005/06 — Cristiano Ronaldo",
+    "description": "El #17 antes del #7. Esta camiseta de Portugal es del Mundial 2006 en Alemania, cuando Cristiano Ronaldo tenía 21 años y jugaba su segundo Mundial. Era una estrella en ascenso en el Manchester United, pero todavía no era CR7 — era el chico de Madeira con el número 17 en la espalda. En ese torneo, Portugal llegó a semifinales y Ronaldo protagonizó uno de los momentos más polémicos del mundial: el guiño a la banca después de la expulsión de su compañero de equipo Wayne Rooney contra Inglaterra. Ese gesto le costó meses de hostilidad en la Premier League. Pero Cristiano no se escondió — al año siguiente marcó 23 goles y empezó la transformación en la máquina que dominaría el fútbol durante 15 años.",
     "price": 435,
     "image": "/assets/img/products/JRS-009-JRS-009-01.png",
     "images": [
@@ -656,8 +635,8 @@
   {
     "id": "JRS-PORTUGAL-201516-H",
     "type": "jersey",
-    "name": "Portugal Local 2015/16 â Cristiano Ronaldo",
-    "description": "La camiseta de la primera gran conquista de Portugal. Euro 2016 en Francia â Cristiano Ronaldo, ahora con el #7 y como capitÃ¡n, llevÃ³ a la selecciÃ³n portuguesa a su primer tÃ­tulo internacional. La final contra Francia en el Stade de France fue dramÃ¡tica: Ronaldo saliÃ³ lesionado al minuto 25 por un golpe de Payet, pero se quedÃ³ al borde del campo gritando instrucciones como un entrenador poseso. Eder marcÃ³ el gol de la victoria en la prÃ³rroga. Cristiano llorÃ³. Portugal entera llorÃ³. Esta camiseta roja es la del dÃ­a en que una naciÃ³n entera demostrÃ³ que no necesitaba a su mejor jugador en la cancha para ganar â lo necesitaba creyendo.",
+    "name": "Portugal Local 2015/16 — Cristiano Ronaldo",
+    "description": "La camiseta de la primera gran conquista de Portugal. Euro 2016 en Francia — Cristiano Ronaldo, ahora con el #7 y como capitán, llevó a la selección portuguesa a su primer título internacional. La final contra Francia en el Stade de France fue dramática: Ronaldo salió lesionado al minuto 25 por un golpe de Payet, pero se quedó al borde del campo gritando instrucciones como un entrenador poseso. Eder marcó el gol de la victoria en la prórroga. Cristiano lloró. Portugal entera lloró. Esta camiseta roja es la del día en que una nación entera demostró que no necesitaba a su mejor jugador en la cancha para ganar — lo necesitaba creyendo.",
     "price": 435,
     "image": "/assets/img/products/JRS-030-JRS-030-01.png",
     "images": [
@@ -687,8 +666,8 @@
   {
     "id": "JRS-MILAN-202324-H",
     "type": "jersey",
-    "name": "Milan Local 2023/24 â Rafael Leao",
-    "description": "Rafael LeÃ£o heredÃ³ el nÃºmero 10 del AC Milan â el mismo que usaron Rivera, Gullit, Boban, Rui Costa y Seedorf. No es cualquier dorsal. El portuguÃ©s, con su velocidad elÃ©ctrica y su gambeta imposible, se convirtiÃ³ en el jugador mÃ¡s decisivo del Milan en la temporada 2023/24. Con los parches oficiales de la Serie A, esta camiseta lleva el peso de San Siro y de una historia que pocos clubes pueden igualar. LeÃ£o tiene ese don raro de hacer que 75,000 personas se levanten del asiento en un segundo.",
+    "name": "Milan Local 2023/24 — Rafael Leao",
+    "description": "Rafael Leão heredó el número 10 del AC Milan — el mismo que usaron Rivera, Gullit, Boban, Rui Costa y Seedorf. No es cualquier dorsal. El portugués, con su velocidad eléctrica y su gambeta imposible, se convirtió en el jugador más decisivo del Milan en la temporada 2023/24. Con los parches oficiales de la Serie A, esta camiseta lleva el peso de San Siro y de una historia que pocos clubes pueden igualar. Leão tiene ese don raro de hacer que 75,000 personas se levanten del asiento en un segundo.",
     "price": 390,
     "image": "/assets/img/products/JRS-015-JRS-015-01.png",
     "images": [
@@ -719,8 +698,8 @@
   {
     "id": "JRS-MILAN-200708-A",
     "type": "jersey",
-    "name": "Milan Visita 2007/08 â KakÃ¡",
-    "description": "KakÃ¡ con el #22 del Milan â su nÃºmero desde que llegÃ³ de SÃ£o Paulo con 21 aÃ±os. Esta es la camiseta visitante de la temporada 2007/08, la inmediatamente posterior a la venganza contra el Liverpool en la final de Champions League de Atenas. KakÃ¡ acababa de ganar el BalÃ³n de Oro 2007 â el Ãºltimo jugador que no fuera Messi o Cristiano en ganarlo hasta que ModriÄ rompiÃ³ el duopolio en 2018. El brasileÃ±o era pura elegancia: zancada larga, cambio de ritmo letal, y una humildad que contrastaba con su genialidad. Esta fue su Ãºltima gran temporada antes de irse al Real Madrid.",
+    "name": "Milan Visita 2007/08 — Kaká",
+    "description": "Kaká con el #22 del Milan — su número desde que llegó de São Paulo con 21 años. Esta es la camiseta visitante de la temporada 2007/08, la inmediatamente posterior a la venganza contra el Liverpool en la final de Champions League de Atenas. Kaká acababa de ganar el Balón de Oro 2007 — el último jugador que no fuera Messi o Cristiano en ganarlo hasta que Modrić rompió el duopolio en 2018. El brasileño era pura elegancia: zancada larga, cambio de ritmo letal, y una humildad que contrastaba con su genialidad. Esta fue su última gran temporada antes de irse al Real Madrid.",
     "price": 435,
     "image": "/assets/img/products/JRS-019-JRS-019-01.png",
     "images": [
@@ -733,7 +712,7 @@
     "team": "Milan",
     "season": "2007/08",
     "variant": "Visita",
-    "player_name": "KakÃ¡",
+    "player_name": "Kaká",
     "player_number": 22,
     "patches": null,
     "position": "MED",
@@ -751,8 +730,8 @@
   {
     "id": "JRS-MILAN-200910-A",
     "type": "jersey",
-    "name": "Milan Visita 2009/10 â Beckham",
-    "description": "David Beckham y su romance tardÃ­o con el AC Milan. El inglÃ©s llegÃ³ a prÃ©stamo desde LA Galaxy con 33 aÃ±os y eligiÃ³ el #32 â un nÃºmero que nadie asocia con una leyenda, pero que Beckham hizo suyo en San Siro. Esta es la camiseta visitante de la temporada 2009/10, su segundo prÃ©stamo en MilÃ¡n. Beckham jugaba como si tuviera 25: centros milimÃ©tricos, tiros libres que desafiaban la fÃ­sica, y una elegancia que hacÃ­a olvidar su edad. Pero esa temporada terminÃ³ con tragedia â ruptura del tendÃ³n de Aquiles en marzo, poniendo en riesgo su sueÃ±o de jugar un cuarto Mundial con Inglaterra.",
+    "name": "Milan Visita 2009/10 — Beckham",
+    "description": "David Beckham y su romance tardío con el AC Milan. El inglés llegó a préstamo desde LA Galaxy con 33 años y eligió el #32 — un número que nadie asocia con una leyenda, pero que Beckham hizo suyo en San Siro. Esta es la camiseta visitante de la temporada 2009/10, su segundo préstamo en Milán. Beckham jugaba como si tuviera 25: centros milimétricos, tiros libres que desafiaban la física, y una elegancia que hacía olvidar su edad. Pero esa temporada terminó con tragedia — ruptura del tendón de Aquiles en marzo, poniendo en riesgo su sueño de jugar un cuarto Mundial con Inglaterra.",
     "price": 435,
     "image": "/assets/img/products/JRS-025-JRS-025-01.png",
     "images": [
@@ -782,8 +761,8 @@
   {
     "id": "JRS-INTER-201011-H",
     "type": "jersey",
-    "name": "Inter Local 2010/11 â J. Zanetti",
-    "description": "La camiseta del capitÃ¡n eterno. Javier Zanetti llevÃ³ el #4 del Inter durante 19 temporadas â el extranjero con mÃ¡s partidos en la historia de la Serie A. Esta es la camiseta de la temporada siguiente al triplete histÃ³rico de Mourinho, cuando Inter ganÃ³ Serie A, Coppa Italia y Champions League en 2010. Zanetti levantÃ³ la orejona en el BernabÃ©u ese mayo. Con parches de Champions League, esta pieza representa una de las Ãºltimas grandes dinastÃ­as del fÃºtbol italiano.",
+    "name": "Inter Local 2010/11 — J. Zanetti",
+    "description": "La camiseta del capitán eterno. Javier Zanetti llevó el #4 del Inter durante 19 temporadas — el extranjero con más partidos en la historia de la Serie A. Esta es la camiseta de la temporada siguiente al triplete histórico de Mourinho, cuando Inter ganó Serie A, Coppa Italia y Champions League en 2010. Zanetti levantó la orejona en el Bernabéu ese mayo. Con parches de Champions League, esta pieza representa una de las últimas grandes dinastías del fútbol italiano.",
     "price": 435,
     "image": "/assets/img/products/JRS-001-JRS-001-01.png",
     "images": [
@@ -815,8 +794,8 @@
   {
     "id": "JRS-JUVENTUS-201112-A",
     "type": "jersey",
-    "name": "Juventus Visita 2011/12 â Pirlo",
-    "description": "El fichaje libre mÃ¡s rentable de la historia del fÃºtbol. Andrea Pirlo llegÃ³ a la Juventus en 2011 despuÃ©s de que el Milan decidiera que, a sus 32 aÃ±os, ya no lo necesitaba. Lo que siguiÃ³ fue una de las temporadas mÃ¡s perfectas en la historia de la Serie A: la Juventus no perdiÃ³ un solo partido en toda la liga. 38 jornadas invictos. Pirlo, con su barba de filÃ³sofo y su visiÃ³n de juego sobrenatural, orquestÃ³ cada ataque desde el mediocampo. Esta es la camiseta visitante de esa temporada irrepetible â la de un tipo que el Milan regalÃ³ y que Juventus convirtiÃ³ en leyenda.",
+    "name": "Juventus Visita 2011/12 — Pirlo",
+    "description": "El fichaje libre más rentable de la historia del fútbol. Andrea Pirlo llegó a la Juventus en 2011 después de que el Milan decidiera que, a sus 32 años, ya no lo necesitaba. Lo que siguió fue una de las temporadas más perfectas en la historia de la Serie A: la Juventus no perdió un solo partido en toda la liga. 38 jornadas invictos. Pirlo, con su barba de filósofo y su visión de juego sobrenatural, orquestó cada ataque desde el mediocampo. Esta es la camiseta visitante de esa temporada irrepetible — la de un tipo que el Milan regaló y que Juventus convirtió en leyenda.",
     "price": 435,
     "image": "/assets/img/products/JRS-010-JRS-010-01.png",
     "images": [
@@ -847,7 +826,7 @@
     "id": "JRS-NAPOLI-202324-H",
     "type": "jersey",
     "name": "Napoli Local 2023/24",
-    "description": "La temporada siguiente al Scudetto que cambiÃ³ todo. En 2022/23, Napoli ganÃ³ la Serie A por primera vez desde Maradona en 1990 â 33 aÃ±os de espera. Toda la ciudad explotÃ³. La temporada 2023/24 fue la defensa de ese tÃ­tulo, con Napoli entrando a la Champions League como campeÃ³n de Italia. Con parches de Champions, esta camiseta azul celeste lleva el peso de la historia: Maradona, el Vesubio, y una ciudad que vive el fÃºtbol como religiÃ³n.",
+    "description": "La temporada siguiente al Scudetto que cambió todo. En 2022/23, Napoli ganó la Serie A por primera vez desde Maradona en 1990 — 33 años de espera. Toda la ciudad explotó. La temporada 2023/24 fue la defensa de ese título, con Napoli entrando a la Champions League como campeón de Italia. Con parches de Champions, esta camiseta azul celeste lleva el peso de la historia: Maradona, el Vesubio, y una ciudad que vive el fútbol como religión.",
     "price": 390,
     "image": "/assets/img/products/JRS-007-JRS-007-01.png",
     "images": [
