@@ -333,6 +333,20 @@
       .price-offer { font-size: 40px; }
     }
   </style>
+  <!-- Meta Pixel -->
+  <script>
+    !function(f,b,e,v,n,t,s)
+    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)}(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '979730357737472');
+    fbq('track', 'PageView');
+  </script>
+  <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=979730357737472&ev=PageView&noscript=1"/></noscript>
 </head>
 <body class="bg-midnight text-white">
 
@@ -474,6 +488,7 @@
             <button onclick="wizNext()" class="btn-primary flex-1 py-3 cursor-pointer">Siguiente</button>
             <button onclick="skipTeams(); wizNext()" class="btn-ghost flex-1 py-3 cursor-pointer text-sm">Estoy abierto a todos</button>
           </div>
+          <p class="text-ash/60 text-[11px] text-center mt-4 max-w-xs leading-relaxed">Los Dioses del Fútbol escuchan, pero no obedecen. Tus preferencias guían la selección — no la garantizan.</p>
         </div>
 
         <!-- STEP 2: Jugadores a evitar -->
@@ -488,6 +503,7 @@
             <button onclick="wizNext()" class="btn-primary flex-1 py-3 cursor-pointer">Siguiente</button>
             <button onclick="document.getElementById('wiz-players').value=''; wizNext()" class="btn-ghost flex-1 py-3 cursor-pointer text-sm">Ninguno</button>
           </div>
+          <p class="text-ash/60 text-[11px] text-center mt-4 max-w-xs leading-relaxed">Los Dioses del Fútbol escuchan, pero no obedecen. Tus preferencias guían la selección — no la garantizan.</p>
           <button onclick="wizPrev()" class="mt-4 text-ash text-sm hover:text-smoke cursor-pointer bg-transparent border-none">&larr; Volver</button>
         </div>
 
@@ -514,6 +530,7 @@
             <button onclick="wizNext()" class="btn-primary flex-1 py-3 cursor-pointer">Siguiente</button>
             <button onclick="clearColors(); wizNext()" class="btn-ghost flex-1 py-3 cursor-pointer text-sm">Sin preferencia</button>
           </div>
+          <p class="text-ash/60 text-[11px] text-center mt-4 max-w-xs leading-relaxed">Los Dioses del Fútbol escuchan, pero no obedecen. Tus preferencias guían la selección — no la garantizan.</p>
           <button onclick="wizPrev()" class="mt-4 text-ash text-sm hover:text-smoke cursor-pointer bg-transparent border-none">&larr; Volver</button>
         </div>
 
@@ -540,7 +557,8 @@
             <p class="text-smoke text-xs">Sorpréndeme con lo que sea</p>
           </button>
 
-          <button onclick="wizPrev()" class="mt-6 text-ash text-sm hover:text-smoke cursor-pointer bg-transparent border-none">&larr; Volver</button>
+          <p class="text-ash/60 text-[11px] text-center mt-6 max-w-xs leading-relaxed">Los Dioses del Fútbol escuchan, pero no obedecen. Tus preferencias guían la selección — no la garantizan.</p>
+          <button onclick="wizPrev()" class="mt-4 text-ash text-sm hover:text-smoke cursor-pointer bg-transparent border-none">&larr; Volver</button>
         </div>
 
         <!-- STEP 5: Talla -->
@@ -583,6 +601,24 @@
             Agregar al carrito
           </button>
           <button onclick="wizPrev()" class="mt-4 text-ash text-sm hover:text-smoke cursor-pointer bg-transparent border-none">&larr; Cambiar algo</button>
+        </div>
+
+        <!-- STEP 7: Confirmación -->
+        <div id="wiz-step-7" class="wizard-step">
+          <div class="w-20 h-20 mx-auto mb-5 rounded-full bg-[#22c55e]/10 border-2 border-[#22c55e] flex items-center justify-center">
+            <svg class="w-10 h-10 text-[#22c55e]" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+          </div>
+          <h2 class="font-display text-3xl sm:text-4xl text-white text-center mb-2">Producto en el carrito</h2>
+          <p class="text-smoke text-sm text-center mb-8">Tu Mystery Box está lista. ¿Qué querés hacer?</p>
+
+          <div class="flex flex-col gap-3 w-full max-w-sm mx-auto">
+            <button onclick="closeWizard(); openCartDrawer();" class="btn-primary w-full py-4 cursor-pointer text-base">
+              Proceder al pago
+            </button>
+            <button onclick="closeWizard()" class="w-full py-4 cursor-pointer text-base font-bold uppercase tracking-wider text-white bg-transparent border border-chalk rounded-lg hover:border-ice transition-colors">
+              Seguir comprando
+            </button>
+          </div>
         </div>
 
       </div>
@@ -766,7 +802,7 @@
   // WIZARD STATE
   // ═══════════════════════════════════════
   var wizStep = 1;
-  var wizTotalSteps = 6;
+  var wizTotalSteps = 7;
   var wizState = {
     avoided_teams: [],
     avoided_players: '',
@@ -824,14 +860,27 @@
   function renderDots() {
     var container = document.getElementById('wiz-dots');
     var html = '';
-    var steps = wizState.aleatorio ? 2 : 6; // aleatorio only shows step 5+6
-    for (var i = 1; i <= wizTotalSteps; i++) {
+    var dotsCount = 6; // step 7 is confirmation, not shown in dots
+    for (var i = 1; i <= dotsCount; i++) {
       var cls = 'wiz-dot';
       if (i < wizStep) cls += ' done';
       if (i === wizStep) cls += ' active';
       html += '<div class="' + cls + '"></div>';
     }
     container.innerHTML = html;
+    // Hide dots on confirmation step
+    container.style.display = wizStep === 7 ? 'none' : '';
+  }
+
+  function goToStep(n) {
+    var current = document.getElementById('wiz-step-' + wizStep);
+    current.classList.add('exiting');
+    current.classList.remove('active');
+    setTimeout(function() {
+      current.classList.remove('exiting');
+      wizStep = n;
+      showStep(wizStep);
+    }, 250);
   }
 
   // ═══════════════════════════════════════
@@ -1016,11 +1065,12 @@
     wizState.saved_at = new Date().toISOString();
     localStorage.setItem('elclub_mystery_preferences', JSON.stringify(wizState));
 
-    // Add to cart
+    // Add to cart (will trigger toast, dismiss it since we show confirmation in wizard)
     addToCart('MB-CLASICA', 'Mystery Box', price, wizState.size, '/assets/img/products/mystery-box-clasica.jpg', 99);
+    dismissCartToast();
 
-    // Close wizard
-    closeWizard();
+    // Show confirmation step
+    goToStep(7);
   }
 
   // ═══════════════════════════════════════
