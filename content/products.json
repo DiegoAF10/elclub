@@ -3,8 +3,8 @@
     "id": "MB-CLASICA",
     "type": "mystery-box",
     "name": "Mystery Box Clasica",
-    "description": "2 camisas de futbol curadas por El Club. No sabes que vas a recibir — esa es la magia.",
-    "price": 400,
+    "description": "Una camiseta de fútbol seleccionada por El Club. No sabés cuál te va a tocar — esa es la magia.",
+    "price": 350,
     "image": "/assets/img/products/mystery-box-clasica.jpg",
     "sizes": [
       "S",
