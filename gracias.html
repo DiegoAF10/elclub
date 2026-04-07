@@ -36,6 +36,10 @@
     'https://connect.facebook.net/en_US/fbevents.js');
     fbq('init', '979730357737472');
     fbq('track', 'PageView');
+    fbq('track', 'Purchase', {
+      value: 0,
+      currency: 'GTQ'
+    });
   </script>
   <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=979730357737472&ev=PageView&noscript=1"/></noscript>
 </head>

@@ -75,6 +75,17 @@ function addToCart(id, name, price, size, image, stock) {
   }
   saveCart(cart);
 
+  // Meta Pixel: AddToCart
+  if (typeof fbq === 'function') {
+    fbq('track', 'AddToCart', {
+      content_name: name,
+      content_ids: [id],
+      content_type: 'product',
+      value: price,
+      currency: 'GTQ'
+    });
+  }
+
   // GA4: add_to_cart event
   if (typeof gtag === 'function') {
     var qty = existing ? existing.quantity : 1;
@@ -360,6 +371,14 @@ function checkoutWhatsApp() {
   msg += '\nTotal: Q' + totals.total + '\n';
   msg += '\nEspero confirmacion para proceder con el pago.';
 
+  // Meta Pixel: Contact (WhatsApp checkout = conversion event)
+  if (typeof fbq === 'function') {
+    fbq('track', 'Contact', {
+      value: totals.total,
+      currency: 'GTQ'
+    });
+  }
+
   var url = 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(msg);
   window.open(url, '_blank');
 }
@@ -396,6 +415,15 @@ function checkoutRecurrente() {
   if (btn) {
     btn.disabled = true;
     btn.textContent = 'Procesando...';
+  }
+
+  // Meta Pixel: InitiateCheckout (card payment)
+  if (typeof fbq === 'function') {
+    fbq('track', 'InitiateCheckout', {
+      value: totals.total,
+      currency: 'GTQ',
+      num_items: totals.count
+    });
   }
 
   fetch(BACKOFFICE_URL + '/api/checkout', {

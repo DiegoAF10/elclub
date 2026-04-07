@@ -682,6 +682,17 @@
             document.head.appendChild(script);
           })();
 
+          // Meta Pixel: ViewContent
+          if (typeof fbq === 'function') {
+            fbq('track', 'ViewContent', {
+              content_name: product.name,
+              content_ids: [product.id],
+              content_type: 'product',
+              value: product.price,
+              currency: 'GTQ'
+            });
+          }
+
           // GA4: view_item event
           if (typeof gtag === 'function') {
             gtag('event', 'view_item', {
