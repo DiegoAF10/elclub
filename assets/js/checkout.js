@@ -634,17 +634,36 @@ function payContraEntrega() {
       product_ids: productIds,
       product_quantities: productQuantities,
       coupon_code: appliedCoupon ? appliedCoupon.code : null,
-      customer: {
-        name: shipping.name || '',
-        email: shipping.email || '',
-        phone: shipping.phone || '',
-        address: shipping.address || '',
-        department: shipping.department || '',
-        municipality: shipping.municipality || '',
-        zone: shipping.zone || '',
-        reference: shipping.reference || '',
-        notes: shipping.reference || ''
-      }
+      customer: (function() {
+        var c = {
+          name: shipping.name || '',
+          email: shipping.email || '',
+          phone: shipping.phone || '',
+          address: shipping.address || '',
+          department: shipping.department || '',
+          municipality: shipping.municipality || '',
+          zone: shipping.zone || '',
+          reference: shipping.reference || '',
+          notes: shipping.reference || ''
+        };
+        // Append mystery box preferences if present
+        try {
+          var prefs = JSON.parse(localStorage.getItem('elclub_mystery_preferences') || 'null');
+          if (prefs) {
+            var prefParts = [];
+            if (prefs.avoided_teams && prefs.avoided_teams.length > 0) {
+              prefParts.push('Evitar equipos: ' + prefs.avoided_teams.join(', '));
+            }
+            if (prefs.avoided_players) {
+              prefParts.push('Evitar jugadores: ' + prefs.avoided_players);
+            }
+            if (prefParts.length > 0) {
+              c.notes = (c.notes ? c.notes + ' | ' : '') + prefParts.join(' | ');
+            }
+          }
+        } catch (e) {}
+        return c;
+      })()
     })
   })
   .then(function(res) { return res.json(); })

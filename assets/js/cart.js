@@ -359,6 +359,12 @@ function renderCartDrawer() {
 }
 
 // ── WhatsApp Checkout ──
+function getMysteryPreferences() {
+  try {
+    return JSON.parse(localStorage.getItem('elclub_mystery_preferences') || 'null');
+  } catch (e) { return null; }
+}
+
 function checkoutWhatsApp() {
   var totals = getCartTotals();
   if (totals.count === 0) return;
@@ -369,6 +375,18 @@ function checkoutWhatsApp() {
     msg += '- ' + item.name + ' (Talla ' + item.size + ') x' + item.quantity + ' — Q' + (item.price * item.quantity) + '\n';
   }
   msg += '\nTotal: Q' + totals.total + '\n';
+
+  // Append mystery box preferences if present
+  var prefs = getMysteryPreferences();
+  if (prefs) {
+    if (prefs.avoided_teams && prefs.avoided_teams.length > 0) {
+      msg += '\nEquipos a evitar: ' + prefs.avoided_teams.join(', ');
+    }
+    if (prefs.avoided_players) {
+      msg += '\nJugadores a evitar: ' + prefs.avoided_players;
+    }
+  }
+
   msg += '\nEspero confirmacion para proceder con el pago.';
 
   // Meta Pixel: Contact (WhatsApp checkout = conversion event)
@@ -426,14 +444,31 @@ function checkoutRecurrente() {
     });
   }
 
+  var checkoutPayload = {
+    items: items,
+    product_ids: productIds,
+    product_quantities: productQuantities
+  };
+
+  // Include mystery box preferences in order notes
+  var prefs = getMysteryPreferences();
+  if (prefs) {
+    var prefParts = [];
+    if (prefs.avoided_teams && prefs.avoided_teams.length > 0) {
+      prefParts.push('Evitar equipos: ' + prefs.avoided_teams.join(', '));
+    }
+    if (prefs.avoided_players) {
+      prefParts.push('Evitar jugadores: ' + prefs.avoided_players);
+    }
+    if (prefParts.length > 0) {
+      checkoutPayload.customer = { notes: prefParts.join(' | ') };
+    }
+  }
+
   fetch(BACKOFFICE_URL + '/api/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      items: items,
-      product_ids: productIds,
-      product_quantities: productQuantities
-    })
+    body: JSON.stringify(checkoutPayload)
   })
   .then(function(res) { return res.json(); })
   .then(function(data) {
