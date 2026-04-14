@@ -207,7 +207,8 @@
     "sizes": [
       "S"
     ],
-    "stock": 1,
+    "stock": 0,
+    "available": false,
     "featured": false,
     "tags": [
       "ligue-1",
@@ -847,7 +848,8 @@
     "sizes": [
       "L"
     ],
-    "stock": 1,
+    "stock": 0,
+    "available": false,
     "featured": false,
     "tags": [
       "serie-a",
