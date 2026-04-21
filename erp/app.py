@@ -17,6 +17,7 @@ from db import (
     update_jersey, get_team_by_id,
     PHOTOS_DIR, BASE_DIR,
 )
+import vault_orders
 
 # ═══════════════════════════════════════
 # INIT
@@ -77,6 +78,7 @@ PAGES = {
     "📝 Registrar Camiseta": "register",
     "📦 Inventario": "inventory",
     "📸 Agregar Fotos": "photos",
+    "📬 Ordenes Vault": "vault_orders",
 }
 
 # Logo in sidebar
@@ -1257,3 +1259,9 @@ elif page_key == "inventory":
     page_inventory()
 elif page_key == "photos":
     page_photos()
+elif page_key == "vault_orders":
+    _vault_conn = get_conn()
+    try:
+        vault_orders.render_page(_vault_conn)
+    finally:
+        _vault_conn.close()

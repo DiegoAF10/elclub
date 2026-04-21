@@ -100,3 +100,50 @@ FROM jerseys j
 JOIN teams t ON j.team_id = t.team_id
 LEFT JOIN photos p ON j.jersey_id = p.jersey_id
 GROUP BY j.jersey_id;
+
+-- ═══════════════════════════════════════
+-- VAULT ORDERS (synced from Cloudflare Worker)
+-- ═══════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS vault_orders (
+    ref             TEXT PRIMARY KEY,
+    received_at     TEXT,
+    cliente_nombre  TEXT,
+    cliente_tel     TEXT,
+    cliente_email   TEXT,
+    envio_json      TEXT,
+    pago_metodo     TEXT,
+    total           INTEGER,
+    status          TEXT DEFAULT 'new',
+    notas           TEXT,
+    synced_at       TEXT,
+    raw_json        TEXT
+);
+
+CREATE TABLE IF NOT EXISTS vault_order_items (
+    item_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_ref            TEXT REFERENCES vault_orders(ref),
+    family_id            TEXT,
+    team                 TEXT,
+    season               TEXT,
+    variant_label        TEXT,
+    version              TEXT,
+    size                 TEXT,
+    personalization_json TEXT,
+    total_price          INTEGER,
+    supplier_sent_at     TEXT,
+    fulfillment_status   TEXT DEFAULT 'pending'
+);
+
+CREATE TABLE IF NOT EXISTS vault_order_status_history (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_ref    TEXT,
+    from_status  TEXT,
+    to_status    TEXT,
+    changed_at   TEXT,
+    note         TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_vault_orders_status ON vault_orders(status);
+CREATE INDEX IF NOT EXISTS idx_vault_items_order ON vault_order_items(order_ref);
+CREATE INDEX IF NOT EXISTS idx_vault_status_hist_ref ON vault_order_status_history(order_ref);
