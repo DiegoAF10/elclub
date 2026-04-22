@@ -13,7 +13,7 @@ import base64
 import json
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 from datetime import datetime
 
 # Import lazy de audit_db para log de errores (evita circular si audit_db hace import
@@ -234,21 +234,53 @@ def claude_enrich(family, checks=None, notes=""):
     return {"ok": True, "data": data, "raw": raw_text}
 
 
-def claude_enrich_batch(families_with_context, concurrency=5):
+def claude_enrich_batch(families_with_context, concurrency=3, on_progress=None,
+                         per_item_timeout=120):
     """Procesa multiples families en paralelo.
     families_with_context: list of dicts { family, checks, notes }
-    Retorna: dict {family_id: result_dict}
+    concurrency: workers paralelos (default 3, antes 5 — reduje para no activar
+      rate limit de TPM de Anthropic que causaba cuelgues en cascade).
+    on_progress: callback(done_count, total, last_fid, last_ok) para UI.
+    per_item_timeout: timeout por item (sec). Si un item excede, su future
+      se cancela y se marca error; los demás siguen.
+
+    Retorna: dict {family_id: result_dict}.
+
+    Fix s14m: antes usaba executor.map() que es ORDERED — si el primer item
+    se colgaba, los demás no yieldean (bloqueaba UI forever). Ahora usa
+    as_completed() + per-item timeout para no bloquear.
     """
     results = {}
+    total = len(families_with_context)
 
     def _one(item):
         family = item["family"]
         r = claude_enrich(family, item.get("checks"), item.get("notes", ""))
         return family["family_id"], r
 
+    done = 0
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
-        for fid, result in executor.map(_one, families_with_context):
-            results[fid] = result
+        future_to_fid = {}
+        for item in families_with_context:
+            fid = item["family"].get("family_id", "?")
+            fut = executor.submit(_one, item)
+            future_to_fid[fut] = fid
+
+        for fut in as_completed(future_to_fid):
+            fid = future_to_fid[fut]
+            try:
+                result_fid, result = fut.result(timeout=per_item_timeout)
+                results[result_fid] = result
+            except FuturesTimeoutError:
+                results[fid] = {"ok": False, "error": f"per_item_timeout ({per_item_timeout}s)"}
+            except Exception as e:
+                results[fid] = {"ok": False, "error": f"worker exception: {type(e).__name__}: {e}"}
+            done += 1
+            if on_progress:
+                try:
+                    on_progress(done, total, fid, results[fid].get("ok", False))
+                except Exception:
+                    pass  # UI callback no debe romper el batch
 
     return results
 

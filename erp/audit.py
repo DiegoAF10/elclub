@@ -1988,8 +1988,23 @@ def _run_claude_batch(conn, catalog):
             "notes": r["notes"] or "",
         })
 
-    with st.spinner(f"Procesando {len(families_ctx)} items con Claude…"):
-        results = audit_enrich.claude_enrich_batch(families_ctx, concurrency=5)
+    # Fix s14m: progress bar con streaming en vez de spinner ciego. Antes el
+    # spinner se quedaba infinito si algún request se colgaba (executor.map
+    # eager + sin timeout). Ahora cada item completa → update progress.
+    total = len(families_ctx)
+    progress = st.progress(0.0, text=f"Procesando {total} items con Claude…")
+    log_area = st.empty()
+    log_lines = []
+
+    def _on_progress(done, tot, fid, ok):
+        log_lines.append(f"[{done}/{tot}] {fid}: {'✅' if ok else '❌'}")
+        log_area.code("\n".join(log_lines[-12:]))
+        progress.progress(done / tot, text=f"Claude batch: {done}/{tot}")
+
+    results = audit_enrich.claude_enrich_batch(
+        families_ctx, concurrency=3, on_progress=_on_progress, per_item_timeout=120,
+    )
+    progress.progress(1.0, text=f"Claude batch terminó: {total} items")
 
     ok_count = 0
     err_count = 0
