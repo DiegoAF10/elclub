@@ -141,8 +141,12 @@ KEYBOARD_JS = """
   }
 
   function focusByIdx(idx) {
-    const col = parentDoc.querySelector('[data-testid="stColumn"][data-photo-idx="' + idx + '"]');
-    if (col) setFocus(idx, col);
+    // Ops s13 — con tabs por modelo, múltiples columns pueden tener mismo data-photo-idx.
+    // Solo el tab activo es visible; filtramos por offsetParent != null.
+    const cols = parentDoc.querySelectorAll('[data-testid="stColumn"][data-photo-idx="' + idx + '"]');
+    for (const c of cols) {
+      if (c.offsetParent !== null) { setFocus(idx, c); return; }
+    }
   }
 
   // Expone dispatcher reutilizable (lo consume también el preview modal de Tarea 2).
@@ -152,7 +156,10 @@ KEYBOARD_JS = """
     const win = parentDoc.defaultView;
     const idx = (idxOverride != null) ? idxOverride : win.__focusedPhotoIdx;
     if (idx == null) return false;
-    const col = parentDoc.querySelector('[data-testid="stColumn"][data-photo-idx="' + idx + '"]');
+    // Ops s13 — buscar el col visible con ese idx (tabs ocultan inactivos)
+    const cols = parentDoc.querySelectorAll('[data-testid="stColumn"][data-photo-idx="' + idx + '"]');
+    let col = null;
+    for (const c of cols) { if (c.offsetParent !== null) { col = c; break; } }
     if (!col) return false;
 
     // Reorder: botones ↑ / ↓ (Ops s11 reemplaza el input numérico por swap con
@@ -1091,12 +1098,73 @@ def _jump_product(conn, catalog, direction=1):
 
 
 def _render_variant_form(conn, fam):
-    """Form para auditar UNA variant. Fotos + checks + notes + verify/flag."""
+    """Form para auditar UNA family. Ops s13: si family tiene `modelos[]`, renderiza
+    tabs por modelo; cada tab muestra la gallery del modelo + acciones por foto.
+    Legacy (sin modelos): comportamiento original sobre fam.gallery.
+
+    Acciones por foto se persisten con family_id = modelo.source_family_id (el pre-unify).
+    Esto preserva disambiguación: fan_adult + kid comparten canonical pero tienen
+    galleries distintas → rows independientes en audit_photo_actions.
+    """
+    fid = fam["family_id"]
+    modelos = fam.get("modelos") or []
+
+    if modelos:
+        _render_unified_form(conn, fam, modelos)
+    else:
+        _render_legacy_form(conn, fam)
+
+
+def _render_unified_form(conn, fam, modelos):
+    """Ops s13 — render tabs por modelo para unified families."""
+    fid = fam["family_id"]
+    # Label por modelo: "Fan adult · S-XXL · Q435" etc
+    def _label(i, m):
+        t = m.get("type", "?").replace("_", " ").title()
+        sleeve = "·L" if m.get("sleeve") == "long" else ""
+        sz = m.get("sizes") or "—"
+        price = f"Q{m.get('price')}" if m.get("price") else ""
+        return f"{t}{sleeve} · {sz} {price}".strip().rstrip("·")
+    tab_labels = [_label(i, m) for i, m in enumerate(modelos)]
+    tabs = st.tabs(tab_labels)
+
+    for i, (tab, m) in enumerate(zip(tabs, modelos)):
+        with tab:
+            # modelo → mini "family-view" cargando gallery/hero del modelo pero
+            # escribiendo acciones bajo su source_family_id efectivo.
+            effective_fid = m.get("source_family_id") or fid
+            modelo_view = {
+                "family_id": effective_fid,
+                "gallery": m.get("gallery") or [],
+                "hero_thumbnail": m.get("hero_thumbnail"),
+                # Fallback opcional: si hay metadata que el form legacy consulte
+                "team": fam.get("team"),
+                "season": fam.get("season"),
+                "variant": fam.get("variant"),
+            }
+            _render_photos_and_actions(conn, modelo_view, form_key_prefix=f"{fid}__{i}")
+
+    # Checks globales + verify/flag para TODA la family (Ops s13 conserva 1 set
+    # por producto madre, no por modelo).
+    _render_family_checks_and_verify(conn, fam)
+
+
+def _render_legacy_form(conn, fam):
+    """Legacy — family sin modelos[]. Usa fam.gallery directo."""
+    _render_photos_and_actions(conn, fam, form_key_prefix=fam["family_id"])
+    _render_family_checks_and_verify(conn, fam)
+
+
+def _render_photos_and_actions(conn, fam, form_key_prefix):
+    """Renderiza grid de fotos + acciones por-foto. fam puede ser real o modelo-view.
+    Writes/reads audit_photo_actions con fam['family_id'] (que es el effective_fid
+    de modelo si viene del unified form).
+    """
     fid = fam["family_id"]
     gallery = fam.get("gallery") or []
     current_hero = fam.get("hero_thumbnail")
 
-    # Cargar acciones existentes
+    # Cargar acciones existentes (keyed por el fid efectivo del modelo o family)
     saved_actions = {a["original_index"]: a for a in audit_db.get_photo_actions(conn, fid)}
 
     if not gallery:
@@ -1104,37 +1172,42 @@ def _render_variant_form(conn, fam):
         if current_hero:
             st.image(current_hero, width=240)
         st.info("Las acciones por foto requieren galería. Solo se puede verificar/flaggear la variante.")
+        return
 
     # Decoder UI para cada foto
-    if gallery:
-        st.caption(f"{len(gallery)} fotos en galería · click para ampliar · ↑↓ reordenar · 👑 set hero")
-        # Computar display order actual (excluyendo deletes) — fuente de verdad para ↑↓ swap.
-        # Ops s11: reemplaza el input numérico por flechas que swappean posiciones adyacentes.
-        non_deleted = [
-            i for i in range(len(gallery))
-            if saved_actions.get(i, {}).get("action") != "delete"
-        ]
-        def _sort_key(i):
-            ni = saved_actions.get(i, {}).get("new_index")
-            return (ni if ni is not None else i, i)
-        display_order = sorted(non_deleted, key=_sort_key)
-        # Map: original_index → display_position (0-indexed) en la galería visible
-        display_pos_of = {idx: pos for pos, idx in enumerate(display_order)}
+    st.caption(f"{len(gallery)} fotos en galería · click para ampliar · ↑↓ reordenar · 👑 set hero")
+    # Computar display order actual (excluyendo deletes) — fuente de verdad para ↑↓ swap.
+    non_deleted = [
+        i for i in range(len(gallery))
+        if saved_actions.get(i, {}).get("action") != "delete"
+    ]
+    def _sort_key(i):
+        ni = saved_actions.get(i, {}).get("new_index")
+        return (ni if ni is not None else i, i)
+    display_order = sorted(non_deleted, key=_sort_key)
+    display_pos_of = {idx: pos for pos, idx in enumerate(display_order)}
 
-        cols_per_row = 4
-        for row_start in range(0, len(gallery), cols_per_row):
-            cols = st.columns(cols_per_row)
-            for col_idx in range(cols_per_row):
-                i = row_start + col_idx
-                if i >= len(gallery):
-                    break
-                with cols[col_idx]:
-                    _render_photo_card(conn, fid, i, gallery[i], saved_actions.get(i),
-                                       current_hero, display_order=display_order,
-                                       display_pos=display_pos_of.get(i))
+    cols_per_row = 4
+    for row_start in range(0, len(gallery), cols_per_row):
+        cols = st.columns(cols_per_row)
+        for col_idx in range(cols_per_row):
+            i = row_start + col_idx
+            if i >= len(gallery):
+                break
+            with cols[col_idx]:
+                _render_photo_card(conn, fid, i, gallery[i], saved_actions.get(i),
+                                   current_hero, display_order=display_order,
+                                   display_pos=display_pos_of.get(i),
+                                   key_prefix=form_key_prefix)
 
-    st.markdown("")
-    # Checks globales
+
+def _render_family_checks_and_verify(conn, fam):
+    """Checks globales + verify/flag/needs-rework. UN solo set por producto madre.
+    Se renderea fuera de los tabs de modelos (Ops s13) porque la decisión de
+    audit es del producto completo, no por modelo.
+    """
+    fid = fam["family_id"]
+    st.markdown("---")
     st.markdown("##### Checks globales")
     deci = audit_db.get_decision(conn, fid) or {}
     checks = {}
@@ -1157,12 +1230,11 @@ def _render_variant_form(conn, fam):
     notes = st.text_input("Notas", value=deci.get("notes", "") or "",
                           key=f"notes_{fid}", placeholder="Observaciones libres…")
 
-    # Variant action buttons
     ba1, ba2 = st.columns(2)
     with ba1:
         if st.button(f"🟢 VERIFY {fid} (V)", key=f"verify_{fid}", type="primary", use_container_width=True):
             _save_variant_decision(conn, fid, "verified", fotos_ok, cat_ok, vers_ok, notes)
-            st.success(f"Variante verificada: {fid}")
+            st.success(f"Verificado: {fid}")
             st.rerun()
     with ba2:
         if st.button(f"🔴 FLAG {fid} (F)", key=f"flag_{fid}", use_container_width=True):
@@ -1171,14 +1243,19 @@ def _render_variant_form(conn, fam):
 
 
 def _render_photo_card(conn, fid, index, url, saved_action, current_hero,
-                        display_order=None, display_pos=None):
+                        display_order=None, display_pos=None, key_prefix=None):
     """Una foto con controles: delete, watermark, regen-Gemini, hero, reorder.
 
     Ops s11: display_order (lista de original_index en orden visual) y display_pos
     (int 0-indexed en display_order) son requeridos para ↑↓ swap con vecinos.
+    Ops s13: key_prefix namespacea los botones para tabs por modelo (evita
+    collision de keys entre modelo fan_adult idx=0 y kid idx=0).
     """
     action = (saved_action or {}).get("action", "keep")
     is_hero = bool((saved_action or {}).get("is_new_hero")) or (url == current_hero)
+    # Prefix para keys Streamlit + data-photo-idx del anchor. Si no se pasa,
+    # uso el fid solo (backward-compat con render legacy).
+    kp = key_prefix or fid
 
     # Position visible: 1-indexed en display_order (ej "#3/5"). Fallback al idx original.
     if display_pos is not None and display_order:
@@ -1192,7 +1269,7 @@ def _render_photo_card(conn, fid, index, url, saved_action, current_hero,
     # dispatchar X/W/G/Enter/↑↓ a los botones de ESTE column.
     st.markdown(
         f'<div class="audit-photo-anchor-wrap">'
-        f'<span class="audit-photo-anchor" data-photo-idx="{index}" data-photo-fid="{fid}" data-photo-url="{url}"></span>'
+        f'<span class="audit-photo-anchor" data-photo-idx="{index}" data-photo-kp="{kp}" data-photo-fid="{fid}" data-photo-url="{url}"></span>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -1212,19 +1289,19 @@ def _render_photo_card(conn, fid, index, url, saved_action, current_hero,
     # Controls row
     bc = st.columns(4)
     with bc[0]:
-        if st.button("👑", key=f"hero_{fid}_{index}", help="Set hero"):
+        if st.button("👑", key=f"hero_{kp}_{index}", help="Set hero"):
             _set_hero(conn, fid, url, index)
             st.rerun()
     with bc[1]:
-        if st.button("❌", key=f"del_{fid}_{index}", help="Delete foto"):
+        if st.button("❌", key=f"del_{kp}_{index}", help="Delete foto"):
             audit_db.set_photo_action(conn, fid, url, index, action="delete")
             st.rerun()
     with bc[2]:
-        if st.button("⚠️", key=f"wm_{fid}_{index}", help="Flag watermark"):
+        if st.button("⚠️", key=f"wm_{kp}_{index}", help="Flag watermark"):
             audit_db.set_photo_action(conn, fid, url, index, action="flag_watermark")
             st.rerun()
     with bc[3]:
-        if st.button("🎨", key=f"regen_{fid}_{index}", help="Flag regen manual (calidad mala, Diego la rehace aparte)"):
+        if st.button("🎨", key=f"regen_{kp}_{index}", help="Flag regen manual (calidad mala, Diego la rehace aparte)"):
             audit_db.set_photo_action(conn, fid, url, index, action="flag_regen")
             st.rerun()
 
@@ -1236,19 +1313,19 @@ def _render_photo_card(conn, fid, index, url, saved_action, current_hero,
         is_first = (display_pos == 0)
         is_last = (display_pos == len(display_order) - 1)
         with rc[0]:
-            if st.button("↑", key=f"up_{fid}_{index}", disabled=is_first, use_container_width=True,
+            if st.button("↑", key=f"up_{kp}_{index}", disabled=is_first, use_container_width=True,
                          help="Subir una posición (swap con anterior)"):
                 _swap_photos(conn, fid, display_order, display_pos, display_pos - 1)
                 st.rerun()
         with rc[1]:
-            if st.button("↓", key=f"dn_{fid}_{index}", disabled=is_last, use_container_width=True,
+            if st.button("↓", key=f"dn_{kp}_{index}", disabled=is_last, use_container_width=True,
                          help="Bajar una posición (swap con siguiente)"):
                 _swap_photos(conn, fid, display_order, display_pos, display_pos + 1)
                 st.rerun()
 
     # Reset a keep
     if action in ("delete", "flag_watermark", "flag_regen"):
-        if st.button("↺ reset", key=f"reset_{fid}_{index}"):
+        if st.button("↺ reset", key=f"reset_{kp}_{index}"):
             audit_db.set_photo_action(conn, fid, url, index, action="keep")
             st.rerun()
 
@@ -1493,9 +1570,13 @@ def _run_claude_batch(conn, catalog):
     st.success(f"Claude procesó {ok_count} ok · {err_count} errores.")
 
 
-def _apply_photo_actions_to_gallery(conn, fam, run_gemini_watermark=False):
+def _apply_photo_actions_to_gallery(conn, fam, run_gemini_watermark=False, effective_fid=None):
     """Aplica las actions del audit_photo_actions a la gallery[] original.
     Retorna la nueva lista de URLs.
+
+    Ops s13: `effective_fid` permite leer actions escritos bajo un family_id
+    distinto al canonical (útil para unified modelos donde UI escribe con
+    modelo.source_family_id). Si None, cae al canonical fam['family_id'].
 
     Si run_gemini_watermark=True:
       - Para cada foto con action=flag_watermark sin processed_url:
@@ -1508,10 +1589,10 @@ def _apply_photo_actions_to_gallery(conn, fam, run_gemini_watermark=False):
     flag_regen NO dispara Gemini — es solo un marcador manual. Diego rehace
     esas fotos aparte y reemplaza el asset en R2 manualmente cuando tenga.
     """
-    import requests
     original = fam.get("gallery") or []
+    fid_for_actions = effective_fid or fam["family_id"]
     actions_by_idx = {
-        a["original_index"]: a for a in audit_db.get_photo_actions(conn, fam["family_id"])
+        a["original_index"]: a for a in audit_db.get_photo_actions(conn, fid_for_actions)
     }
 
     # Build list of (new_index, url) skipping deletes
@@ -1526,7 +1607,7 @@ def _apply_photo_actions_to_gallery(conn, fam, run_gemini_watermark=False):
         # Gemini watermark processing (solo al publicar, no al generar preview)
         processed = a.get("processed_url")
         if run_gemini_watermark and action == "flag_watermark" and not processed:
-            processed = _process_watermark_with_gemini(conn, fam["family_id"], url, i)
+            processed = _process_watermark_with_gemini(conn, fid_for_actions, url, i)
 
         final_url = processed or url
 
@@ -1746,39 +1827,75 @@ def _publish_family(conn, fam, claude_data, new_gallery, featured=False):
     # Featured toggle (U-001) — persiste el TOP badge
     target["featured"] = bool(featured)
 
-    # Re-compute gallery ACTIVANDO Gemini para watermarks (solo al publicar).
-    # En el preview se usa la gallery cacheada; aquí refrescamos con procesamiento real.
-    new_gallery = _apply_photo_actions_to_gallery(conn, fam, run_gemini_watermark=True)
-
-    # Ops s11 — abort si alguna foto con flag_watermark no pudo procesarse con Gemini.
-    # Pre-s11: se publicaba silencioso con la URL original (watermark residual visible).
-    # Root cause del bug albania-2026-third: download/Gemini/R2 fallaba y fallback
-    # silencioso. Ahora: mark needs_rework + no publicar hasta que Diego reintente.
+    # Ops s13 — iterar modelos si la family es unified. Actions están keyed por
+    # modelo.source_family_id (UI lo escribe así para namespacing). Al publish:
+    # por cada modelo procesamos watermarks + aplicamos actions a su gallery.
+    # Si ANY modelo tiene flag_watermark no procesable → abort needs_rework.
+    modelos = target.get("modelos") or []
     fid = fam["family_id"]
-    actions = audit_db.get_photo_actions(conn, fid)
-    unprocessed_watermarks = [
-        a for a in actions
-        if a.get("action") == "flag_watermark" and not a.get("processed_url")
-    ]
-    if unprocessed_watermarks:
-        idxs = [a["original_index"] for a in unprocessed_watermarks]
-        audit_db.upsert_decision(
-            conn, fid,
-            status="needs_rework",
-            decided_at=datetime.now().isoformat(timespec="seconds"),
-        )
-        st.error(
-            f"🚨 Gemini watermark falló en {len(unprocessed_watermarks)} foto(s) "
-            f"(índices {idxs}). Family marcada `needs_rework` — no se publicó. "
-            f"Revisá `audit_api_errors` para ver el detalle, y reintentá con "
-            f"'🔄 Re-run Gemini' o re-publish cuando Gemini esté disponible."
-        )
-        return  # abort publish
+    unprocessed_report = []  # [(modelo_idx, source_fid, idxs), ...]
 
-    # Apply gallery + hero
-    if new_gallery:
-        target["gallery"] = new_gallery
-        target["hero_thumbnail"] = new_gallery[0]
+    if modelos:
+        for i, modelo in enumerate(modelos):
+            src_fid = modelo.get("source_family_id") or fid
+            # Mini-fam para reusar la función con gallery del modelo
+            modelo_view = {"family_id": src_fid, "gallery": modelo.get("gallery") or []}
+            new_mg = _apply_photo_actions_to_gallery(
+                conn, modelo_view, run_gemini_watermark=True, effective_fid=src_fid,
+            )
+            # Chequear unprocessed watermarks en este modelo
+            actions = audit_db.get_photo_actions(conn, src_fid)
+            unproc = [a for a in actions
+                      if a.get("action") == "flag_watermark" and not a.get("processed_url")]
+            if unproc:
+                unprocessed_report.append((i, src_fid, [a["original_index"] for a in unproc]))
+            else:
+                # Actualizar modelo in-place
+                if new_mg:
+                    modelo["gallery"] = new_mg
+                    modelo["hero_thumbnail"] = new_mg[0]
+        # Post-loop: si hay unprocessed, abort
+        if unprocessed_report:
+            audit_db.upsert_decision(
+                conn, fid, status="needs_rework",
+                decided_at=datetime.now().isoformat(timespec="seconds"),
+            )
+            msg_parts = "; ".join(
+                f"modelo[{i}] ({fid_}): idx {idxs}" for i, fid_, idxs in unprocessed_report
+            )
+            st.error(
+                f"🚨 Gemini watermark falló en {len(unprocessed_report)} modelo(s). "
+                f"{msg_parts}. Family marcada `needs_rework` — no se publicó. "
+                f"Ver `audit_api_errors` y reintentá cuando Gemini esté disponible."
+            )
+            return
+        # Sync top-level fallback del primary modelo (para vault.elclub.club)
+        prim_idx = target.get("primary_modelo_idx")
+        if prim_idx is not None and 0 <= prim_idx < len(modelos):
+            prim = modelos[prim_idx]
+            if prim.get("gallery"):
+                target["gallery"] = prim["gallery"]
+                target["hero_thumbnail"] = prim["gallery"][0]
+    else:
+        # Legacy: gallery a nivel family
+        new_gallery = _apply_photo_actions_to_gallery(conn, fam, run_gemini_watermark=True)
+        actions = audit_db.get_photo_actions(conn, fid)
+        unproc = [a for a in actions
+                  if a.get("action") == "flag_watermark" and not a.get("processed_url")]
+        if unproc:
+            idxs = [a["original_index"] for a in unproc]
+            audit_db.upsert_decision(
+                conn, fid, status="needs_rework",
+                decided_at=datetime.now().isoformat(timespec="seconds"),
+            )
+            st.error(
+                f"🚨 Gemini watermark falló en {len(unproc)} foto(s) (índices {idxs}). "
+                f"Family marcada `needs_rework` — no se publicó."
+            )
+            return
+        if new_gallery:
+            target["gallery"] = new_gallery
+            target["hero_thumbnail"] = new_gallery[0]
 
     # Save catalog
     with open(catalog_path, "w", encoding="utf-8") as f:
