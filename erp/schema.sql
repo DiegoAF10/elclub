@@ -147,3 +147,122 @@ CREATE TABLE IF NOT EXISTS vault_order_status_history (
 CREATE INDEX IF NOT EXISTS idx_vault_orders_status ON vault_orders(status);
 CREATE INDEX IF NOT EXISTS idx_vault_items_order ON vault_order_items(order_ref);
 CREATE INDEX IF NOT EXISTS idx_vault_status_hist_ref ON vault_order_status_history(order_ref);
+
+-- ═══════════════════════════════════════
+-- COMERCIAL (cross-channel sales tracking — all of El Club)
+-- Bucket "Comercial" — 2026-04-22
+-- ═══════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS customers (
+    customer_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    name             TEXT NOT NULL,
+    phone            TEXT,
+    email            TEXT,
+    tags_json        TEXT DEFAULT '[]',
+    source           TEXT,
+    first_order_at   TEXT,
+    notes            TEXT,
+    created_at       TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_customers_phone ON customers(phone) WHERE phone IS NOT NULL AND phone != '';
+CREATE INDEX IF NOT EXISTS idx_customers_source ON customers(source);
+
+CREATE TABLE IF NOT EXISTS sales (
+    sale_id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    ref                 TEXT UNIQUE,
+    occurred_at         TEXT NOT NULL,
+    modality            TEXT NOT NULL CHECK(modality IN ('mystery','stock','ondemand')),
+    origin              TEXT,
+    customer_id         INTEGER REFERENCES customers(customer_id),
+    payment_method      TEXT CHECK(payment_method IN ('recurrente','transferencia','contra_entrega','efectivo','otro') OR payment_method IS NULL),
+    fulfillment_status  TEXT DEFAULT 'pending' CHECK(fulfillment_status IN ('pending','sent_to_supplier','in_production','shipped','delivered','cancelled')),
+    shipping_method     TEXT,
+    tracking_code       TEXT,
+    subtotal            INTEGER,
+    shipping_fee        INTEGER DEFAULT 0,
+    discount            INTEGER DEFAULT 0,
+    total               INTEGER NOT NULL,
+    source_vault_ref    TEXT,
+    notes               TEXT,
+    created_at          TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_sales_modality ON sales(modality);
+CREATE INDEX IF NOT EXISTS idx_sales_origin ON sales(origin);
+CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales(customer_id);
+CREATE INDEX IF NOT EXISTS idx_sales_occurred ON sales(occurred_at);
+CREATE INDEX IF NOT EXISTS idx_sales_vault_ref ON sales(source_vault_ref);
+
+CREATE TABLE IF NOT EXISTS sale_items (
+    item_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_id              INTEGER NOT NULL REFERENCES sales(sale_id) ON DELETE CASCADE,
+    family_id            TEXT,
+    jersey_id            TEXT,
+    team                 TEXT,
+    season               TEXT,
+    variant_label        TEXT,
+    version              TEXT,
+    size                 TEXT,
+    personalization_json TEXT DEFAULT '{}',
+    unit_price           INTEGER NOT NULL DEFAULT 0,
+    unit_cost            INTEGER,
+    notes                TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
+CREATE INDEX IF NOT EXISTS idx_sale_items_family ON sale_items(family_id);
+CREATE INDEX IF NOT EXISTS idx_sale_items_team_season ON sale_items(team, season);
+
+CREATE TABLE IF NOT EXISTS sales_attribution (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_id           INTEGER NOT NULL REFERENCES sales(sale_id) ON DELETE CASCADE,
+    ad_campaign_id    TEXT,
+    ad_campaign_name  TEXT,
+    source            TEXT,
+    note              TEXT,
+    created_at        TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_attribution_sale ON sales_attribution(sale_id);
+CREATE INDEX IF NOT EXISTS idx_attribution_campaign ON sales_attribution(ad_campaign_id);
+
+-- Views: revenue + COGS split to avoid JOIN multiplication.
+
+CREATE VIEW IF NOT EXISTS v_sales_by_day AS
+SELECT
+    modality,
+    origin,
+    DATE(occurred_at) AS day,
+    COUNT(*) AS n_sales,
+    SUM(total) AS revenue,
+    SUM(total - COALESCE(shipping_fee, 0) - COALESCE(discount, 0)) AS net_revenue
+FROM sales
+WHERE fulfillment_status != 'cancelled'
+GROUP BY modality, origin, DATE(occurred_at);
+
+CREATE VIEW IF NOT EXISTS v_cogs_by_day AS
+SELECT
+    s.modality,
+    DATE(s.occurred_at) AS day,
+    COUNT(i.item_id) AS n_items,
+    SUM(COALESCE(i.unit_cost, 0)) AS cogs
+FROM sales s
+JOIN sale_items i ON i.sale_id = s.sale_id
+WHERE s.fulfillment_status != 'cancelled'
+GROUP BY s.modality, DATE(s.occurred_at);
+
+CREATE VIEW IF NOT EXISTS v_top_skus AS
+SELECT
+    i.team,
+    i.season,
+    i.variant_label,
+    i.version,
+    COUNT(*) AS units_sold,
+    SUM(COALESCE(i.unit_price, 0)) AS revenue_from_items,
+    SUM(COALESCE(i.unit_cost, 0)) AS cogs
+FROM sale_items i
+JOIN sales s ON i.sale_id = s.sale_id
+WHERE s.fulfillment_status != 'cancelled'
+GROUP BY i.team, i.season, i.variant_label, i.version
+ORDER BY units_sold DESC;

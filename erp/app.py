@@ -18,6 +18,7 @@ from db import (
     PHOTOS_DIR, BASE_DIR,
 )
 import vault_orders
+import comercial
 import audit
 
 # ═══════════════════════════════════════
@@ -80,6 +81,7 @@ PAGES = {
     "📦 Inventario": "inventory",
     "📸 Agregar Fotos": "photos",
     "📬 Ordenes Vault": "vault_orders",
+    "💰 Comercial": "comercial",
     "🔍 Audit Catalog": "audit",
 }
 
@@ -1267,6 +1269,12 @@ elif page_key == "vault_orders":
         vault_orders.render_page(_vault_conn)
     finally:
         _vault_conn.close()
+elif page_key == "comercial":
+    _com_conn = get_conn()
+    try:
+        comercial.render_page(_com_conn)
+    finally:
+        _com_conn.close()
 elif page_key == "audit":
     _audit_conn = get_conn()
     try:
