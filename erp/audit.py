@@ -2268,6 +2268,12 @@ def _publish_family(conn, fam, claude_data, new_gallery, featured=False):
     # Featured toggle (U-001) — persiste el TOP badge
     target["featured"] = bool(featured)
 
+    # Ops s14g — al publicar, la family queda visible en el vault live.
+    # El frontend (Vault UX) filtra `families.filter(f => f.published === true)`.
+    # Default de todas las families post-refetch: published=false (via script
+    # mark-all-unpublished.py).
+    target["published"] = True
+
     # Ops s13 — iterar modelos si la family es unified. Actions están keyed por
     # modelo.source_family_id (UI lo escribe así para namespacing). Al publish:
     # por cada modelo procesamos watermarks + aplicamos actions a su gallery.
