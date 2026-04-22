@@ -21,6 +21,7 @@ from datetime import datetime
 import streamlit as st
 
 import audit_db
+import audit_enrich
 
 
 def render_page(conn):
@@ -291,6 +292,10 @@ def _render_detail(conn, fid, catalog):
                         st.success(f"✅ modelo[{i}] guardado. Cambios: {', '.join(changed) if changed else 'ninguno'}")
                         st.rerun()
 
+                # Editor de galería (post-publish, mutations directas sobre
+                # catalog.gallery — no pasa por audit_photo_actions).
+                _render_gallery_editor(fid, i, m)
+
     # Acciones finales
     st.markdown("---")
     st.markdown("### ⚡ Acciones")
@@ -325,6 +330,224 @@ def _render_detail(conn, fid, catalog):
             st.session_state["current_family"] = sku
             st.session_state["_page_override"] = "audit"
             st.rerun()
+
+
+# ═══════════════════════════════════════════════
+# Gallery editor (post-publish)
+# ═══════════════════════════════════════════════
+
+def _render_gallery_editor(fid, modelo_idx, modelo):
+    """Grid de fotos con acciones por-foto: 👑 hero, ↑↓ reorder, ❌ delete,
+    ⚠️ re-run Gemini watermark inpaint. Mutations directas sobre catalog.gallery
+    (no audit_photo_actions — eso es pre-publish).
+    """
+    st.markdown("##### 📷 Galería")
+    gallery = modelo.get("gallery") or []
+    if not gallery:
+        st.info("Sin galería. Agregar imágenes es vía re-fetch scripts (scope Operaciones).")
+        return
+
+    st.caption(f"{len(gallery)} fotos · foto #1 = hero (lo que ve el cliente primero)")
+
+    cols_per_row = 4
+    for row_start in range(0, len(gallery), cols_per_row):
+        cols = st.columns(cols_per_row)
+        for col_idx in range(cols_per_row):
+            p_idx = row_start + col_idx
+            if p_idx >= len(gallery):
+                break
+            url = gallery[p_idx]
+            with cols[col_idx]:
+                crown = "👑 HERO" if p_idx == 0 else f"#{p_idx + 1}"
+                st.caption(crown)
+                try:
+                    st.image(url, use_container_width=True)
+                except Exception:
+                    st.warning(f"⚠️ img load fail: {url[-40:]}")
+
+                bc1, bc2, bc3, bc4 = st.columns(4)
+                with bc1:
+                    if st.button("👑", key=f"pub_hero_{fid}_{modelo_idx}_{p_idx}",
+                                 help="Set as hero (move to #1)",
+                                 disabled=(p_idx == 0)):
+                        _gallery_set_hero(fid, modelo_idx, p_idx)
+                        st.rerun()
+                with bc2:
+                    if st.button("↑", key=f"pub_up_{fid}_{modelo_idx}_{p_idx}",
+                                 help="Move up",
+                                 disabled=(p_idx == 0)):
+                        _gallery_swap(fid, modelo_idx, p_idx, p_idx - 1)
+                        st.rerun()
+                with bc3:
+                    if st.button("↓", key=f"pub_dn_{fid}_{modelo_idx}_{p_idx}",
+                                 help="Move down",
+                                 disabled=(p_idx == len(gallery) - 1)):
+                        _gallery_swap(fid, modelo_idx, p_idx, p_idx + 1)
+                        st.rerun()
+                with bc4:
+                    if st.button("❌", key=f"pub_del_{fid}_{modelo_idx}_{p_idx}",
+                                 help="Delete foto (removes from gallery array)"):
+                        _gallery_delete(fid, modelo_idx, p_idx)
+                        st.toast(f"🗑 Foto #{p_idx + 1} eliminada de {fid} m{modelo_idx}")
+                        st.rerun()
+
+                # Watermark row
+                wc1, wc2 = st.columns(2)
+                with wc1:
+                    if st.button("⚠️ Watermark",
+                                 key=f"pub_wm_{fid}_{modelo_idx}_{p_idx}",
+                                 help="Re-run Gemini para remover watermark residual + overwrite R2",
+                                 disabled=not audit_enrich.gemini_available()):
+                        with st.spinner("Gemini inpainting…"):
+                            res = _regen_watermark(fid, modelo_idx, p_idx)
+                        if res.get("ok"):
+                            st.toast(f"✅ Watermark cleaned #{p_idx + 1}")
+                        else:
+                            st.error(f"⚠️ {res.get('error', 'unknown')}")
+                        st.rerun()
+                with wc2:
+                    st.caption("")  # spacer
+
+
+def _gallery_set_hero(fid, modelo_idx, photo_idx):
+    """Mueve photo_idx a la posición 0 (hero). Sync top-level si es primary modelo."""
+    catalog = _load_catalog_fresh()
+    fam = _find_fam(catalog, fid)
+    if not fam:
+        return
+    modelo = (fam.get("modelos") or [])[modelo_idx]
+    gallery = list(modelo.get("gallery") or [])
+    if photo_idx <= 0 or photo_idx >= len(gallery):
+        return
+    new_hero = gallery.pop(photo_idx)
+    gallery.insert(0, new_hero)
+    modelo["gallery"] = gallery
+    modelo["hero_thumbnail"] = gallery[0]
+    _sync_top_level_if_primary(fam, modelo_idx)
+    _save_catalog(catalog)
+
+
+def _gallery_swap(fid, modelo_idx, pos_a, pos_b):
+    catalog = _load_catalog_fresh()
+    fam = _find_fam(catalog, fid)
+    if not fam:
+        return
+    modelo = (fam.get("modelos") or [])[modelo_idx]
+    gallery = list(modelo.get("gallery") or [])
+    if not (0 <= pos_a < len(gallery) and 0 <= pos_b < len(gallery)):
+        return
+    gallery[pos_a], gallery[pos_b] = gallery[pos_b], gallery[pos_a]
+    modelo["gallery"] = gallery
+    if 0 in (pos_a, pos_b):
+        modelo["hero_thumbnail"] = gallery[0]
+    _sync_top_level_if_primary(fam, modelo_idx)
+    _save_catalog(catalog)
+
+
+def _gallery_delete(fid, modelo_idx, photo_idx):
+    """Remueve foto del array. Los bytes en R2 quedan huérfanos (no urgente limpiar)."""
+    catalog = _load_catalog_fresh()
+    fam = _find_fam(catalog, fid)
+    if not fam:
+        return
+    modelo = (fam.get("modelos") or [])[modelo_idx]
+    gallery = list(modelo.get("gallery") or [])
+    if not (0 <= photo_idx < len(gallery)):
+        return
+    gallery.pop(photo_idx)
+    modelo["gallery"] = gallery
+    modelo["hero_thumbnail"] = gallery[0] if gallery else None
+    _sync_top_level_if_primary(fam, modelo_idx)
+    _save_catalog(catalog)
+
+
+def _regen_watermark(fid, modelo_idx, photo_idx):
+    """Descarga foto de R2, pasa por Gemini (watermark prompt), sube resultado
+    al mismo key + cache-bust URL en catalog."""
+    import requests
+    from datetime import datetime
+
+    catalog = _load_catalog_fresh()
+    fam = _find_fam(catalog, fid)
+    if not fam:
+        return {"error": "family not found"}
+    modelo = (fam.get("modelos") or [])[modelo_idx]
+    gallery = list(modelo.get("gallery") or [])
+    if not (0 <= photo_idx < len(gallery)):
+        return {"error": "photo index OOB"}
+
+    current_url = gallery[photo_idx]
+    base_url = current_url.split("?")[0]
+    # Derivar R2 key desde el URL público (https://img.elclub.club/<key>)
+    if "/families/" not in base_url:
+        return {"error": f"URL no reconocida como R2 path: {base_url}"}
+    key = "families/" + base_url.split("/families/", 1)[1]
+
+    # Download
+    try:
+        resp = requests.get(current_url, timeout=30)
+    except Exception as e:
+        return {"error": f"download fail: {e}"}
+    if resp.status_code != 200:
+        return {"error": f"download http {resp.status_code}"}
+    img_bytes = resp.content
+
+    # Gemini watermark inpaint
+    gem = audit_enrich.gemini_regen_image(
+        img_bytes, mime_type="image/jpeg", prompt_variant="watermark",
+        family_id=fid, photo_index=photo_idx,
+    )
+    if not gem.get("ok"):
+        return {"error": gem.get("error", "gemini fail")}
+
+    # Upload back to same key (overwrite)
+    up = audit_enrich.upload_image_to_r2(
+        gem["image_bytes"], key, content_type=gem.get("mime_type", "image/jpeg"),
+    )
+    if not up.get("ok"):
+        return {"error": up.get("error", "upload fail")}
+
+    # Cache-bust: update URL en catalog con ?v={ts}
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    new_url = f"{base_url}?v={ts}"
+    gallery[photo_idx] = new_url
+    modelo["gallery"] = gallery
+    if photo_idx == 0:
+        modelo["hero_thumbnail"] = new_url
+    _sync_top_level_if_primary(fam, modelo_idx)
+    _save_catalog(catalog)
+
+    return {"ok": True, "new_url": new_url}
+
+
+# Helpers compartidos
+def _load_catalog_fresh():
+    with open(audit_db.CATALOG_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _save_catalog(catalog):
+    with open(audit_db.CATALOG_PATH, "w", encoding="utf-8") as f:
+        json.dump(catalog, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+
+def _find_fam(catalog, fid):
+    for f in catalog:
+        if f.get("family_id") == fid:
+            return f
+    return None
+
+
+def _sync_top_level_if_primary(fam, modelo_idx):
+    """Si modelo_idx es primary, sync fam.gallery + fam.hero_thumbnail."""
+    primary_idx = fam.get("primary_modelo_idx", 0) or 0
+    if modelo_idx != primary_idx:
+        return
+    modelo = (fam.get("modelos") or [])[modelo_idx]
+    gallery = modelo.get("gallery") or []
+    fam["gallery"] = list(gallery)
+    fam["hero_thumbnail"] = gallery[0] if gallery else None
 
 
 # ═══════════════════════════════════════════════
