@@ -60,6 +60,7 @@ SHORTCUTS_HTML = """
 <b style="color:#4DA8FF;">⌨️ SHORTCUTS</b><br>
 <span style="color:#999">Por foto (click primero):</span> <code>1-9</code> foco · <code>X</code> delete · <code>W</code> watermark (→Gemini auto) · <code>G</code> marcar regen manual · <code>Enter</code> set hero · <code>↑↓</code> reorder<br>
 <span style="color:#999">Preview modal (click en la imagen):</span> <code>ESC</code> cerrar · <code>←→</code> navegar · <code>scroll</code> zoom · <code>dblclick</code> reset · <code>W/X/G/Enter</code> acciones<br>
+<span style="color:#999">Preview modal — mobile:</span> <code>swipe ←→</code> navegar · <code>pinch</code> zoom · <code>double-tap</code> reset · <code>tap fuera</code> cerrar<br>
 <span style="color:#999">Por variante:</span> <code>V</code> verify · <code>F</code> flag<br>
 <span style="color:#999">Producto completo:</span> <code>Shift+V</code> verify todas · <code>Shift+F</code> flag todas · <code>S</code> skip · <code>Tab</code> next variante · <code>J/K</code> next/prev producto
 </div>
@@ -144,33 +145,33 @@ KEYBOARD_JS = """
   }
 
   // Expone dispatcher reutilizable (lo consume también el preview modal de Tarea 2).
+  // Identifica botones por emoji (robusto) no por posición (Streamlit duplica buttons
+  // y stImage inyecta un "Fullscreen" que rompe el indexing posicional).
   parentDoc.defaultView.__auditDispatchPhotoAction = function(action, idxOverride) {
     const win = parentDoc.defaultView;
     const idx = (idxOverride != null) ? idxOverride : win.__focusedPhotoIdx;
     if (idx == null) return false;
     const col = parentDoc.querySelector('[data-testid="stColumn"][data-photo-idx="' + idx + '"]');
     if (!col) return false;
-    // Orden de botones dentro del stColumn de la foto:
-    //   0: 👑 hero · 1: ❌ delete · 2: ⚠️ watermark · 3: 🎨 regen
-    const buttons = col.querySelectorAll('button');
-    const actionToPos = { 'hero': 0, 'delete': 1, 'watermark': 2, 'regen': 3 };
+
+    // Reorder via stNumberInputStepUp/StepDown (testid explícito de Streamlit).
     if (action === 'reorder-up' || action === 'reorder-down') {
-      // Streamlit number_input renderiza 2 botones +/-; posición relativa al stNumberInput.
-      const numInput = col.querySelector('[data-testid="stNumberInput"]');
-      if (!numInput) return false;
-      const incBtn = numInput.querySelector('button[aria-label*="ncrement"], button[kind="secondary"][class*="step-up"]');
-      const decBtn = numInput.querySelector('button[aria-label*="ecrement"], button[kind="secondary"][class*="step-down"]');
-      // Fallback: 2 botones dentro del numInput
-      const allBtns = numInput.querySelectorAll('button');
-      const inc = incBtn || allBtns[allBtns.length - 1];
-      const dec = decBtn || allBtns[0];
-      const target = (action === 'reorder-up') ? dec : inc;  // ↑ = decrementa posición (más arriba), ↓ = incrementa
-      if (target) { target.click(); return true; }
+      // ↑ = subir en la lista = decrementar el número de posición
+      const targetTestId = (action === 'reorder-up') ? 'stNumberInputStepDown' : 'stNumberInputStepUp';
+      const btn = col.querySelector('[data-testid="' + targetTestId + '"]');
+      if (btn) { btn.click(); return true; }
       return false;
     }
-    const pos = actionToPos[action];
-    if (pos == null || !buttons[pos]) return false;
-    buttons[pos].click();
+
+    // Match por emoji. Streamlit renderea cada button dos veces (visible + hidden
+    // twin para focus/tooltip). .find() retorna el primero, que es el visible.
+    const emojiMap = { hero: '👑', delete: '❌', watermark: '⚠️', regen: '🎨' };
+    const targetEmoji = emojiMap[action];
+    if (!targetEmoji) return false;
+    const btn = Array.from(col.querySelectorAll('button[kind="secondary"]'))
+      .find(b => b.textContent.trim() === targetEmoji);
+    if (!btn) return false;
+    btn.click();
     return true;
   };
 
@@ -525,6 +526,92 @@ PREVIEW_MODAL_HTML = """
 
   // Double-click = reset
   $('img').addEventListener('dblclick', e => { e.stopPropagation(); resetTransform(); });
+
+  // ── Touch support (mobile) ─────────────────────────
+  // 1 dedo + zoom=1: tracking para swipe horizontal → nav prev/next
+  // 1 dedo + zoom>1: pan (drag)
+  // 2 dedos: pinch-to-zoom usando distancia inicial
+  // Tap simple fuera de imagen: cierra (ya cubierto por el click handler de modal)
+  // Doble-tap en imagen: reset (ya cubierto por dblclick, la mayoría de mobile browsers lo disparan)
+  const SWIPE_THRESHOLD = 50;     // px mínimos en horizontal para considerar swipe
+  const SWIPE_VERT_LIMIT = 80;    // si el dedo se mueve más de esto en vertical, no es swipe
+  const touch = { active: false, startX: 0, startY: 0, lastX: 0, lastY: 0,
+                   pinchStartDist: 0, pinchStartZoom: 1, mode: null /* 'swipe'|'pan'|'pinch' */ };
+
+  function dist(t1, t2) {
+    const dx = t1.clientX - t2.clientX;
+    const dy = t1.clientY - t2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  $('stage').addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      touch.mode = 'pinch';
+      touch.pinchStartDist = dist(e.touches[0], e.touches[1]);
+      touch.pinchStartZoom = state.zoom;
+      e.preventDefault();
+    } else if (e.touches.length === 1) {
+      touch.active = true;
+      touch.startX = touch.lastX = e.touches[0].clientX;
+      touch.startY = touch.lastY = e.touches[0].clientY;
+      touch.mode = state.zoom > 1 ? 'pan' : 'swipe';
+    }
+  }, { passive: false });
+
+  $('stage').addEventListener('touchmove', e => {
+    if (touch.mode === 'pinch' && e.touches.length === 2) {
+      const d = dist(e.touches[0], e.touches[1]);
+      const scale = d / touch.pinchStartDist;
+      state.zoom = Math.min(Math.max(touch.pinchStartZoom * scale, 0.5), 8);
+      applyTransform();
+      e.preventDefault();
+    } else if (touch.mode === 'pan' && e.touches.length === 1) {
+      const t = e.touches[0];
+      state.panX += t.clientX - touch.lastX;
+      state.panY += t.clientY - touch.lastY;
+      touch.lastX = t.clientX; touch.lastY = t.clientY;
+      applyTransform();
+      e.preventDefault();
+    } else if (touch.mode === 'swipe' && e.touches.length === 1) {
+      touch.lastX = e.touches[0].clientX;
+      touch.lastY = e.touches[0].clientY;
+      // NO preventDefault — permite que el usuario scrollee verticalmente si cambia de idea
+    }
+  }, { passive: false });
+
+  $('stage').addEventListener('touchend', e => {
+    if (touch.mode === 'swipe' && touch.active) {
+      const dx = touch.lastX - touch.startX;
+      const dy = Math.abs(touch.lastY - touch.startY);
+      if (dy < SWIPE_VERT_LIMIT && Math.abs(dx) > SWIPE_THRESHOLD) {
+        nav(dx > 0 ? -1 : +1);  // swipe right → prev, swipe left → next
+      }
+    }
+    // Si era pinch y el zoom quedó ~1, resetear pan por limpieza visual
+    if (touch.mode === 'pinch' && state.zoom <= 1.05) {
+      resetTransform();
+    }
+    touch.active = false;
+    touch.mode = null;
+  });
+
+  // Tap en imagen para doble-tap zoom reset (muchos mobile browsers no disparan dblclick).
+  // Detecta dos toques cerca en tiempo/espacio.
+  let lastTapAt = 0;
+  let lastTapX = 0;
+  $('img').addEventListener('touchend', e => {
+    const now = Date.now();
+    const t = e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    if (now - lastTapAt < 350 && Math.abs(t.clientX - lastTapX) < 40) {
+      resetTransform();
+      e.preventDefault();
+      lastTapAt = 0;  // reset para evitar triple-tap
+    } else {
+      lastTapAt = now;
+      lastTapX = t.clientX;
+    }
+  });
 
   // Keyboard handler (solo cuando modal abierto)
   // Llama stopImmediatePropagation en capture para que el handler global de Tarea 1 NO
