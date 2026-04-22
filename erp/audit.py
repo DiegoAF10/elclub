@@ -59,43 +59,510 @@ SHORTCUTS_HTML = """
 <div style="background:#1C1C1C;border:1px solid #4DA8FF;border-radius:8px;padding:12px 16px;font-family:'Space Grotesk',monospace;font-size:12px;color:#F0F0F0;line-height:1.6;">
 <b style="color:#4DA8FF;">⌨️ SHORTCUTS</b><br>
 <span style="color:#999">Por foto (click primero):</span> <code>1-9</code> foco · <code>X</code> delete · <code>W</code> watermark (→Gemini auto) · <code>G</code> marcar regen manual · <code>Enter</code> set hero · <code>↑↓</code> reorder<br>
+<span style="color:#999">Preview modal (click en la imagen):</span> <code>ESC</code> cerrar · <code>←→</code> navegar · <code>scroll</code> zoom · <code>dblclick</code> reset · <code>W/X/G/Enter</code> acciones<br>
 <span style="color:#999">Por variante:</span> <code>V</code> verify · <code>F</code> flag<br>
 <span style="color:#999">Producto completo:</span> <code>Shift+V</code> verify todas · <code>Shift+F</code> flag todas · <code>S</code> skip · <code>Tab</code> next variante · <code>J/K</code> next/prev producto
 </div>
 """
 
-# JavaScript para shortcuts. Dispatchea clicks a buttons por data-audit-action.
+# CSS — border ice para foto focusada (va injectado en el parent doc, una sola vez)
+PHOTO_FOCUS_CSS = """
+<style id="audit-photo-focus-css">
+  /* Anchor invisible que marca la columna como "foto auditable" con su índice */
+  .audit-photo-anchor { display:none; }
+  /* Border ice aplicado al stColumn que contiene la foto focusada */
+  [data-testid="stColumn"].audit-photo-focused {
+    outline: 2px solid #4DA8FF;
+    outline-offset: -2px;
+    border-radius: 6px;
+    box-shadow: 0 0 0 4px rgba(77, 168, 255, 0.18);
+    transition: outline 120ms ease, box-shadow 120ms ease;
+  }
+  /* Cursor pointer sobre fotos auditables */
+  [data-testid="stColumn"]:has(> div > .audit-photo-anchor-wrap) {
+    cursor: pointer;
+  }
+</style>
+"""
+
+# JavaScript para shortcuts. Dispatchea clicks a buttons:
+#   - Globales (verify-all, flag-all, skip, next, prev, verify-current, flag-current) via
+#     tags data-audit-action aplicados por _inject_tag_script.
+#   - Per-foto (hero, delete, watermark, regen, reorder) via índice de foto focusada.
 KEYBOARD_JS = """
 <script>
 (function(){
-  if (window.__auditShortcutsBound) return;
-  window.__auditShortcutsBound = true;
-  document.addEventListener('keydown', function(e){
-    // No interferir si el user está tipeando en un input/textarea
+  const parentDoc = window.parent && window.parent.document;
+  if (!parentDoc) return;
+
+  // 1. Injectar CSS de focus una sola vez en el parent
+  if (!parentDoc.getElementById('audit-photo-focus-css')) {
+    const existing = document.getElementById('audit-photo-focus-css');
+    if (existing) parentDoc.head.appendChild(existing.cloneNode(true));
+  }
+
+  // 2. Bindear keydown + click delegation una sola vez por lifecycle del parent window
+  if (parentDoc.defaultView.__auditShortcutsBound) {
+    // Re-scan de anchors en cada rerun por si cambió la lista
+    scanPhotoAnchors();
+    return;
+  }
+  parentDoc.defaultView.__auditShortcutsBound = true;
+  parentDoc.defaultView.__focusedPhotoIdx = null;
+  parentDoc.defaultView.__focusedPhotoCol = null;
+
+  // ── Helpers ───────────────────────────────────────────
+  function getParentCol(el) {
+    return el.closest('[data-testid="stColumn"]');
+  }
+
+  function scanPhotoAnchors() {
+    // Actualiza dataset.photoIdx en el stColumn padre de cada anchor.
+    const anchors = parentDoc.querySelectorAll('.audit-photo-anchor');
+    anchors.forEach(a => {
+      const col = getParentCol(a);
+      if (!col) return;
+      col.dataset.photoIdx = a.dataset.photoIdx;
+      col.dataset.photoFid = a.dataset.photoFid;
+      col.classList.add('audit-photo-col');
+    });
+  }
+
+  function setFocus(idx, col) {
+    const win = parentDoc.defaultView;
+    if (win.__focusedPhotoCol) {
+      win.__focusedPhotoCol.classList.remove('audit-photo-focused');
+    }
+    win.__focusedPhotoIdx = idx;
+    win.__focusedPhotoCol = col;
+    if (col) col.classList.add('audit-photo-focused');
+  }
+
+  function focusByIdx(idx) {
+    const col = parentDoc.querySelector('[data-testid="stColumn"][data-photo-idx="' + idx + '"]');
+    if (col) setFocus(idx, col);
+  }
+
+  // Expone dispatcher reutilizable (lo consume también el preview modal de Tarea 2).
+  parentDoc.defaultView.__auditDispatchPhotoAction = function(action, idxOverride) {
+    const win = parentDoc.defaultView;
+    const idx = (idxOverride != null) ? idxOverride : win.__focusedPhotoIdx;
+    if (idx == null) return false;
+    const col = parentDoc.querySelector('[data-testid="stColumn"][data-photo-idx="' + idx + '"]');
+    if (!col) return false;
+    // Orden de botones dentro del stColumn de la foto:
+    //   0: 👑 hero · 1: ❌ delete · 2: ⚠️ watermark · 3: 🎨 regen
+    const buttons = col.querySelectorAll('button');
+    const actionToPos = { 'hero': 0, 'delete': 1, 'watermark': 2, 'regen': 3 };
+    if (action === 'reorder-up' || action === 'reorder-down') {
+      // Streamlit number_input renderiza 2 botones +/-; posición relativa al stNumberInput.
+      const numInput = col.querySelector('[data-testid="stNumberInput"]');
+      if (!numInput) return false;
+      const incBtn = numInput.querySelector('button[aria-label*="ncrement"], button[kind="secondary"][class*="step-up"]');
+      const decBtn = numInput.querySelector('button[aria-label*="ecrement"], button[kind="secondary"][class*="step-down"]');
+      // Fallback: 2 botones dentro del numInput
+      const allBtns = numInput.querySelectorAll('button');
+      const inc = incBtn || allBtns[allBtns.length - 1];
+      const dec = decBtn || allBtns[0];
+      const target = (action === 'reorder-up') ? dec : inc;  // ↑ = decrementa posición (más arriba), ↓ = incrementa
+      if (target) { target.click(); return true; }
+      return false;
+    }
+    const pos = actionToPos[action];
+    if (pos == null || !buttons[pos]) return false;
+    buttons[pos].click();
+    return true;
+  };
+
+  // ── Click delegation: focus on photo column ───────────
+  parentDoc.addEventListener('click', function(e){
+    // Si el click cayó sobre un botón/input dentro de la foto, también focusear la col antes.
+    const col = e.target.closest('[data-testid="stColumn"].audit-photo-col');
+    if (col && col.dataset.photoIdx != null) {
+      setFocus(parseInt(col.dataset.photoIdx, 10), col);
+    }
+  }, true);
+
+  // ── Keyboard handler ───────────────────────────────────
+  parentDoc.addEventListener('keydown', function(e){
     const tag = (e.target && e.target.tagName) || '';
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+    // No interferir con inputs de texto; tampoco con un button con focus
+    // porque Enter ahí ya lo clickea nativamente (evita doble dispatch).
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON' || tag === 'A') return;
+    if (e.target.isContentEditable) return;
 
     const shift = e.shiftKey;
     const key = e.key;
-    let action = null;
+    const win = parentDoc.defaultView;
+    const hasFocus = win.__focusedPhotoIdx != null;
 
-    if (shift && key === 'V') action = 'verify-all';
-    else if (shift && key === 'F') action = 'flag-all';
-    else if (key === 'S' || key === 's') action = 'skip';
-    else if (key === 'V' || key === 'v') action = 'verify-current';
-    else if (key === 'F' || key === 'f') action = 'flag-current';
-    else if (key === 'J' || key === 'j') action = 'next';
-    else if (key === 'K' || key === 'k') action = 'prev';
+    // ── Global (prioridad baja, después de per-foto) ───
+    let globalAction = null;
+    if (shift && key === 'V') globalAction = 'verify-all';
+    else if (shift && key === 'F') globalAction = 'flag-all';
+    else if (key === 'S' || key === 's') globalAction = 'skip';
+    else if (key === 'V' || key === 'v') globalAction = 'verify-current';
+    else if (key === 'F' || key === 'f') globalAction = 'flag-current';
+    else if (key === 'J' || key === 'j') globalAction = 'next';
+    else if (key === 'K' || key === 'k') globalAction = 'prev';
 
-    if (!action) return;
-    // Busca el button con data-audit-action dentro del parent streamlit
-    const parentDoc = window.parent && window.parent.document;
-    if (!parentDoc) return;
-    const btn = parentDoc.querySelector('[data-audit-action="' + action + '"]');
-    if (btn) {
-      btn.click();
+    // ── Per-foto (1-9 focus, X/W/G/Enter action, ↑↓ reorder) ───
+    let photoDispatched = false;
+
+    // Números 1-9: setea focus a esa foto (0-indexed internamente)
+    if (/^[1-9]$/.test(key)) {
+      focusByIdx(parseInt(key, 10) - 1);
       e.preventDefault();
+      return;
     }
+
+    if (hasFocus) {
+      if (key === 'x' || key === 'X') {
+        photoDispatched = win.__auditDispatchPhotoAction('delete');
+      } else if (key === 'w' || key === 'W') {
+        photoDispatched = win.__auditDispatchPhotoAction('watermark');
+      } else if (key === 'g' || key === 'G') {
+        photoDispatched = win.__auditDispatchPhotoAction('regen');
+      } else if (key === 'Enter') {
+        photoDispatched = win.__auditDispatchPhotoAction('hero');
+      } else if (key === 'ArrowUp') {
+        photoDispatched = win.__auditDispatchPhotoAction('reorder-up');
+      } else if (key === 'ArrowDown') {
+        photoDispatched = win.__auditDispatchPhotoAction('reorder-down');
+      }
+      if (photoDispatched) {
+        e.preventDefault();
+        return;
+      }
+    }
+
+    if (globalAction) {
+      const btn = parentDoc.querySelector('[data-audit-action="' + globalAction + '"]');
+      if (btn) { btn.click(); e.preventDefault(); }
+    }
+  });
+
+  // Primer scan
+  scanPhotoAnchors();
+})();
+</script>
+"""
+
+
+# ═══════════════════════════════════════
+# Preview modal (Tarea 2 Ops s10) — fullscreen viewer con zoom/pan + keyboard
+# Se inyecta en el parent doc. Reusa __auditDispatchPhotoAction de Tarea 1
+# para X/W/G/Enter → dispatch al mismo botón del audit form.
+# ═══════════════════════════════════════
+
+PREVIEW_MODAL_HTML = """
+<style id="audit-preview-modal-css">
+  #audit-preview-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #0D0D0D;
+    z-index: 99999;
+    font-family: 'Space Grotesk', -apple-system, sans-serif;
+    color: #F0F0F0;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #audit-preview-modal.open { display: flex; flex-direction: column; }
+
+  #audit-preview-modal .apm-top {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+    z-index: 2;
+  }
+  #audit-preview-modal .apm-counter {
+    flex: 1; text-align: center;
+    font-family: 'Oswald', sans-serif;
+    font-size: 18px; letter-spacing: 2px;
+    color: #4DA8FF;
+  }
+  #audit-preview-modal .apm-close {
+    background: transparent; border: 1px solid #333; color: #F0F0F0;
+    width: 36px; height: 36px; border-radius: 50%;
+    font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 100ms ease, border-color 100ms ease;
+  }
+  #audit-preview-modal .apm-close:hover { background: rgba(255,255,255,0.08); border-color: #4DA8FF; }
+
+  #audit-preview-modal .apm-stage {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    cursor: grab;
+  }
+  #audit-preview-modal .apm-stage.grabbing { cursor: grabbing; }
+  #audit-preview-modal .apm-stage img {
+    max-width: 95vw; max-height: 85vh;
+    object-fit: contain;
+    transform-origin: center center;
+    transition: transform 80ms ease-out;
+    will-change: transform;
+  }
+
+  #audit-preview-modal .apm-nav {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    background: rgba(13,13,13,0.7); border: 1px solid #333; color: #F0F0F0;
+    width: 48px; height: 48px; border-radius: 50%;
+    font-size: 24px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 100ms ease, border-color 100ms ease;
+    z-index: 2;
+  }
+  #audit-preview-modal .apm-nav:hover { background: rgba(77,168,255,0.2); border-color: #4DA8FF; }
+  #audit-preview-modal .apm-nav.prev { left: 20px; }
+  #audit-preview-modal .apm-nav.next { right: 20px; }
+
+  #audit-preview-modal .apm-zoom-ctrl {
+    position: absolute; bottom: 80px; right: 20px;
+    display: flex; gap: 4px; flex-direction: column;
+    z-index: 2;
+  }
+  #audit-preview-modal .apm-zoom-ctrl button {
+    width: 40px; height: 40px; border-radius: 6px;
+    background: rgba(13,13,13,0.7); border: 1px solid #333; color: #F0F0F0;
+    cursor: pointer; font-size: 16px;
+  }
+  #audit-preview-modal .apm-zoom-ctrl button:hover { background: rgba(77,168,255,0.2); border-color: #4DA8FF; }
+
+  #audit-preview-modal .apm-meta {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 12px 20px 20px;
+    background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    text-align: center;
+    font-size: 12px;
+    z-index: 2;
+  }
+  #audit-preview-modal .apm-meta .fid { color: #F0F0F0; font-weight: 600; }
+  #audit-preview-modal .apm-meta .sep { color: #555; margin: 0 8px; }
+  #audit-preview-modal .apm-meta .sz { color: #999; }
+
+  #audit-preview-modal .apm-toast {
+    position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+    background: rgba(77,168,255,0.95); color: #0D0D0D;
+    padding: 10px 18px; border-radius: 6px;
+    font-size: 13px; font-weight: 600;
+    opacity: 0; pointer-events: none;
+    transition: opacity 120ms ease;
+    z-index: 3;
+  }
+  #audit-preview-modal .apm-toast.show { opacity: 1; }
+
+  #audit-preview-modal .apm-hint {
+    position: absolute; top: 12px; left: 50%; transform: translate(-50%, 52px);
+    font-size: 11px; color: #666;
+    pointer-events: none;
+  }
+</style>
+<script id="audit-preview-modal-js">
+(function(){
+  const parentDoc = window.parent && window.parent.document;
+  if (!parentDoc) return;
+
+  // CSS al parent (si no está ya)
+  if (!parentDoc.getElementById('audit-preview-modal-css')) {
+    const existing = document.getElementById('audit-preview-modal-css');
+    if (existing) parentDoc.head.appendChild(existing.cloneNode(true));
+  }
+
+  // Binding una sola vez
+  if (parentDoc.defaultView.__auditPreviewBound) return;
+  parentDoc.defaultView.__auditPreviewBound = true;
+
+  // Construir modal en el parent doc
+  const modal = parentDoc.createElement('div');
+  modal.id = 'audit-preview-modal';
+  modal.innerHTML = [
+    '<div class="apm-top">',
+    '  <div style="width:36px"></div>',
+    '  <div class="apm-counter" data-role="counter">— / —</div>',
+    '  <button class="apm-close" data-role="close" aria-label="Cerrar">✕</button>',
+    '</div>',
+    '<div class="apm-hint">ESC cerrar · ←→ navegar · W/X/G/Enter acciones · scroll zoom</div>',
+    '<div class="apm-stage" data-role="stage">',
+    '  <img data-role="img" alt="preview" draggable="false" />',
+    '</div>',
+    '<button class="apm-nav prev" data-role="prev" aria-label="Anterior">‹</button>',
+    '<button class="apm-nav next" data-role="next" aria-label="Siguiente">›</button>',
+    '<div class="apm-zoom-ctrl">',
+    '  <button data-role="zoom-in" aria-label="Zoom in">+</button>',
+    '  <button data-role="zoom-reset" aria-label="Reset zoom">0</button>',
+    '  <button data-role="zoom-out" aria-label="Zoom out">−</button>',
+    '</div>',
+    '<div class="apm-meta" data-role="meta"></div>',
+    '<div class="apm-toast" data-role="toast"></div>'
+  ].join('');
+  parentDoc.body.appendChild(modal);
+
+  // Estado del viewer
+  const state = {
+    anchors: [],      // lista ordenada de {idx, fid, url, size}
+    cursor: 0,        // posición en anchors
+    zoom: 1,
+    panX: 0, panY: 0,
+    dragging: false,
+    lastX: 0, lastY: 0,
+  };
+
+  function $(sel) { return modal.querySelector('[data-role="' + sel + '"]'); }
+
+  function applyTransform() {
+    $('img').style.transform = 'translate(' + state.panX + 'px,' + state.panY + 'px) scale(' + state.zoom + ')';
+  }
+
+  function resetTransform() {
+    state.zoom = 1; state.panX = 0; state.panY = 0;
+    applyTransform();
+  }
+
+  function renderCurrent() {
+    if (!state.anchors.length) return;
+    const a = state.anchors[state.cursor];
+    $('img').src = a.url;
+    $('counter').textContent = 'FOTO ' + (state.cursor + 1) + ' / ' + state.anchors.length;
+    $('meta').innerHTML =
+      '<span class="fid">' + a.fid + '</span>' +
+      '<span class="sep">·</span><span>posición ' + (a.idx + 1) + '</span>' +
+      (a.size ? '<span class="sep">·</span><span class="sz">' + a.size + '</span>' : '');
+    resetTransform();
+  }
+
+  function collectAnchors() {
+    const nodes = parentDoc.querySelectorAll('.audit-photo-anchor');
+    const list = [];
+    nodes.forEach(n => {
+      list.push({
+        idx: parseInt(n.dataset.photoIdx, 10),
+        fid: n.dataset.photoFid || '',
+        url: n.dataset.photoUrl || '',
+      });
+    });
+    return list;
+  }
+
+  function openModal(startIdx) {
+    state.anchors = collectAnchors();
+    state.cursor = Math.max(0, state.anchors.findIndex(a => a.idx === startIdx));
+    if (state.cursor < 0) state.cursor = 0;
+    modal.classList.add('open');
+    renderCurrent();
+  }
+
+  function closeModal() {
+    modal.classList.remove('open');
+  }
+
+  function nav(delta) {
+    if (!state.anchors.length) return;
+    state.cursor = (state.cursor + delta + state.anchors.length) % state.anchors.length;
+    renderCurrent();
+  }
+
+  function showToast(text) {
+    const t = $('toast');
+    t.textContent = text;
+    t.classList.add('show');
+    clearTimeout(state._toastT);
+    state._toastT = setTimeout(() => t.classList.remove('show'), 1100);
+  }
+
+  function dispatchAndToast(action, label) {
+    const cur = state.anchors[state.cursor];
+    if (!cur) return;
+    const ok = parentDoc.defaultView.__auditDispatchPhotoAction &&
+               parentDoc.defaultView.__auditDispatchPhotoAction(action, cur.idx);
+    showToast(ok ? (label + ' ✓') : (label + ' — no se pudo'));
+  }
+
+  // ── Bindings del modal ─────────────────────────────
+  $('close').addEventListener('click', closeModal);
+  $('prev').addEventListener('click', () => nav(-1));
+  $('next').addEventListener('click', () => nav(+1));
+  $('zoom-in').addEventListener('click', () => { state.zoom = Math.min(state.zoom * 1.25, 8); applyTransform(); });
+  $('zoom-out').addEventListener('click', () => { state.zoom = Math.max(state.zoom / 1.25, 0.5); applyTransform(); });
+  $('zoom-reset').addEventListener('click', resetTransform);
+
+  // Click outside image closes (si está en zoom 1)
+  modal.addEventListener('click', e => {
+    if (e.target === modal || e.target.classList.contains('apm-stage')) {
+      if (state.zoom === 1) closeModal();
+    }
+  });
+
+  // Scroll wheel zoom
+  $('stage').addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    state.zoom = Math.min(Math.max(state.zoom * factor, 0.5), 8);
+    applyTransform();
+  }, { passive: false });
+
+  // Pan con drag (cuando zoom > 1)
+  $('stage').addEventListener('mousedown', e => {
+    if (state.zoom <= 1) return;
+    state.dragging = true;
+    state.lastX = e.clientX; state.lastY = e.clientY;
+    $('stage').classList.add('grabbing');
+  });
+  parentDoc.addEventListener('mousemove', e => {
+    if (!state.dragging) return;
+    state.panX += e.clientX - state.lastX;
+    state.panY += e.clientY - state.lastY;
+    state.lastX = e.clientX; state.lastY = e.clientY;
+    applyTransform();
+  });
+  parentDoc.addEventListener('mouseup', () => {
+    state.dragging = false;
+    $('stage').classList.remove('grabbing');
+  });
+
+  // Double-click = reset
+  $('img').addEventListener('dblclick', e => { e.stopPropagation(); resetTransform(); });
+
+  // Keyboard handler (solo cuando modal abierto)
+  // Llama stopImmediatePropagation en capture para que el handler global de Tarea 1 NO
+  // vuelva a dispatchar la misma acción (evita doble click en el botón subyacente).
+  parentDoc.addEventListener('keydown', e => {
+    if (!modal.classList.contains('open')) return;
+    const key = e.key;
+    const consume = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+    if (key === 'Escape')     { consume(); closeModal(); return; }
+    if (key === 'ArrowLeft')  { consume(); nav(-1); return; }
+    if (key === 'ArrowRight') { consume(); nav(+1); return; }
+    if (/^[1-9]$/.test(key)) {
+      const target = parseInt(key, 10) - 1;
+      const hit = state.anchors.findIndex(a => a.idx === target);
+      if (hit >= 0) { state.cursor = hit; renderCurrent(); consume(); }
+      return;
+    }
+    if (key === 'w' || key === 'W') { consume(); dispatchAndToast('watermark', 'Watermark flaggeado'); return; }
+    if (key === 'g' || key === 'G') { consume(); dispatchAndToast('regen', 'Regen marcada'); return; }
+    if (key === 'Enter')             { consume(); dispatchAndToast('hero', 'Hero asignado'); return; }
+    if (key === 'x' || key === 'X') {
+      consume();
+      dispatchAndToast('delete', 'Foto deleteada');
+      // Avanza a siguiente (o cierra si era la última)
+      setTimeout(() => { if (state.anchors.length > 1) nav(+1); else closeModal(); }, 250);
+      return;
+    }
+    // Teclas sin mapeo → no consumimos, dejamos pasar (ej. la Tarea 1 sigue funcionando)
+  }, true);  // capture: sí, para ganar prioridad antes del handler global de Tarea 1
+
+  // ── Trigger: click en <img> de un photo-card abre el modal ─────
+  parentDoc.addEventListener('click', e => {
+    const img = e.target.closest('[data-testid="stImage"] img');
+    if (!img) return;
+    const col = img.closest('[data-testid="stColumn"].audit-photo-col');
+    if (!col || col.dataset.photoIdx == null) return;
+    e.preventDefault();
+    openModal(parseInt(col.dataset.photoIdx, 10));
   });
 })();
 </script>
@@ -412,8 +879,12 @@ def render_detail(conn, catalog):
         if st.button("Next → (J)", key="next_prod", use_container_width=True):
             _jump_product(conn, catalog, direction=1)
 
-    # Inject shortcut bindings
-    components.html(KEYBOARD_JS, height=0)
+    # Inject shortcut bindings + preview modal — CSS + JS juntos para que el JS encuentre
+    # los <style> en el iframe y los copie al parent document (una sola vez por lifecycle).
+    components.html(
+        PHOTO_FOCUS_CSS + KEYBOARD_JS + PREVIEW_MODAL_HTML,
+        height=0,
+    )
     _inject_tag_script({
         "VERIFY TODAS": "verify-all",
         "FLAG TODAS": "flag-all",
@@ -515,6 +986,16 @@ def _render_photo_card(conn, fid, index, url, saved_action, current_hero):
     # Position visible
     display_pos = new_index if new_index is not None else index + 1
     crown = "👑" if is_hero else f"#{display_pos}"
+
+    # Anchor para keyboard shortcuts y preview modal (Tarea 1+2 de Ops s10).
+    # KEYBOARD_JS usa `data-photo-idx` para saber qué foto está focusada y
+    # dispatchar X/W/G/Enter/↑↓ a los botones de ESTE column.
+    st.markdown(
+        f'<div class="audit-photo-anchor-wrap">'
+        f'<span class="audit-photo-anchor" data-photo-idx="{index}" data-photo-fid="{fid}" data-photo-url="{url}"></span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     # Image
     st.image(url, use_container_width=True)
