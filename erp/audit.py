@@ -1941,9 +1941,10 @@ def _run_batch_publish(conn, catalog, items):
             claude_data = json.loads(item.get("claude_enriched_json") or "{}")
         except Exception:
             claude_data = {}
-        # Para apply_photo_actions: usar el source_family_id del modelo si
-        # unified (donde las photo_actions están keyed), sino canonical.
-        effective_fid = (modelo or {}).get("source_family_id") or fam["family_id"]
+        # Fix s14m6: photo_actions están keyed por SKU (la UI escribe con SKU
+        # como fam.family_id). source_family_id = canonical para unified, NO
+        # matchea las rows. Uso el SKU directamente.
+        effective_fid = fid  # = SKU = item["family_id"]
         if modelo:
             fam_for_apply = {"family_id": effective_fid, "gallery": modelo.get("gallery") or []}
         else:
@@ -2382,28 +2383,30 @@ def _publish_family(conn, fam, claude_data, new_gallery, featured=False, sku=Non
     # mark-all-unpublished.py).
     target["published"] = True
 
-    # Ops s13 — iterar modelos si la family es unified. Actions están keyed por
-    # modelo.source_family_id (UI lo escribe así para namespacing). Al publish:
-    # por cada modelo procesamos watermarks + aplicamos actions a su gallery.
-    # Si ANY modelo tiene flag_watermark no procesable → abort needs_rework.
+    # Ops s13 — iterar modelos si la family es unified.
+    # Fix s14m6: audit_photo_actions está keyed por SKU (la UI en el audit detail
+    # escribe con fam["family_id"]=SKU). El comentario original s13 decía
+    # "source_family_id" pero eso NUNCA fue real — data inspection post Diego
+    # publish de Argentina away confirmó 84 rows bajo SKU y 0 bajo canonical.
+    # Entonces el key correcto para apply_photo_actions es modelo.sku.
     modelos = target.get("modelos") or []
     fid = fam["family_id"]
-    unprocessed_report = []  # [(modelo_idx, source_fid, idxs), ...]
+    unprocessed_report = []  # [(modelo_idx, sku, idxs), ...]
 
     if modelos:
         for i, modelo in enumerate(modelos):
-            src_fid = modelo.get("source_family_id") or fid
+            modelo_key = modelo.get("sku") or modelo.get("source_family_id") or fid
             # Mini-fam para reusar la función con gallery del modelo
-            modelo_view = {"family_id": src_fid, "gallery": modelo.get("gallery") or []}
+            modelo_view = {"family_id": modelo_key, "gallery": modelo.get("gallery") or []}
             new_mg = _apply_photo_actions_to_gallery(
-                conn, modelo_view, run_gemini_watermark=True, effective_fid=src_fid,
+                conn, modelo_view, run_gemini_watermark=True, effective_fid=modelo_key,
             )
             # Chequear unprocessed watermarks en este modelo
-            actions = audit_db.get_photo_actions(conn, src_fid)
+            actions = audit_db.get_photo_actions(conn, modelo_key)
             unproc = [a for a in actions
                       if a.get("action") == "flag_watermark" and not a.get("processed_url")]
             if unproc:
-                unprocessed_report.append((i, src_fid, [a["original_index"] for a in unproc]))
+                unprocessed_report.append((i, modelo_key, [a["original_index"] for a in unproc]))
             else:
                 # Actualizar modelo in-place
                 if new_mg:
