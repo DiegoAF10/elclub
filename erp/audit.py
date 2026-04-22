@@ -1881,10 +1881,20 @@ def render_pending_review(conn, catalog):
     with bp2:
         st.caption("Procesa cada item: apply Claude enrichment + Gemini watermark (retry interno) + commit + push. Si Gemini falla en alguna foto, el item se marca `needs_rework` y el batch para — los items previos quedan publicados.")
 
+    # Fix s14m3: pending_review.family_id es SKU post-s13. Resolve via sku_idx
+    # para obtener el canonical fam (donde están title/description/historia/
+    # gallery). Antes get_family(SKU) retornaba None → no se renderizaba nada.
+    sku_idx = audit_db.build_sku_index(catalog)
+
     for item in pending:
         fid = item["family_id"]
-        fam = audit_db.get_family(catalog, fid)
+        resolved = sku_idx.get(fid)
+        if resolved:
+            fam, _modelo = resolved
+        else:
+            fam = audit_db.get_family(catalog, fid)  # legacy fallback
         if not fam:
+            st.warning(f"⚠️ {fid}: no resuelve en catalog (drift)")
             continue
 
         with st.expander(f"{fid}  ·  {TIER_LABELS.get(item.get('tier'), 'Sin tier')}",
@@ -1910,26 +1920,41 @@ def _run_batch_publish(conn, catalog, items):
         log_lines.append(line)
         log_area.code("\n".join(log_lines[-15:]))
 
+    # Fix s14m3: pending_review.family_id es SKU. Resolve → canonical fam.
+    # _publish_family espera canonical fam (muta catalog por canonical family_id).
+    # audit_decisions sigue keyed por SKU (get_decision/upsert_decision usan SKU).
+    sku_idx = audit_db.build_sku_index(catalog)
+
     for i, item in enumerate(items, start=1):
-        fid = item["family_id"]
-        fam = audit_db.get_family(catalog, fid)
+        fid = item["family_id"]  # SKU
+        resolved = sku_idx.get(fid)
+        if resolved:
+            fam, modelo = resolved
+        else:
+            fam = audit_db.get_family(catalog, fid)
+            modelo = None
         if not fam:
-            _log(f"[{i}/{total}] {fid} — SKIP (no está en catalog)")
+            _log(f"[{i}/{total}] {fid} — SKIP (no resuelve en catalog)")
             continue
 
         try:
             claude_data = json.loads(item.get("claude_enriched_json") or "{}")
         except Exception:
             claude_data = {}
-        new_gallery = _apply_photo_actions_to_gallery(conn, fam)
+        # Para apply_photo_actions: usar el source_family_id del modelo si
+        # unified (donde las photo_actions están keyed), sino canonical.
+        effective_fid = (modelo or {}).get("source_family_id") or fam["family_id"]
+        if modelo:
+            fam_for_apply = {"family_id": effective_fid, "gallery": modelo.get("gallery") or []}
+        else:
+            fam_for_apply = fam
+        new_gallery = _apply_photo_actions_to_gallery(
+            conn, fam_for_apply, effective_fid=effective_fid,
+        )
 
         _log(f"[{i}/{total}] {fid} — publishing…")
-        # _publish_family re-lee catalog, aplica cambios y hace git push. Si detecta
-        # gemini failure, mark needs_rework + st.error + return sin publicar.
         pre_dec = audit_db.get_decision(conn, fid) or {}
 
-        # Capturar si publish aborta por needs_rework. _publish_family hace st.error
-        # internamente y cambia status. Chequeamos post-call.
         _publish_family(conn, fam, claude_data, new_gallery, featured=bool(fam.get("featured")))
         post_dec = audit_db.get_decision(conn, fid) or {}
 
