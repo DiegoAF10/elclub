@@ -1960,7 +1960,14 @@ def _run_batch_publish(conn, catalog, items):
 
 
 def _run_claude_batch(conn, catalog):
-    """Procesa todos los verified sin pending review."""
+    """Procesa todos los verified sin pending review.
+
+    Fix s14m2: post-s13 audit_decisions.family_id es SKU, no canonical.
+    `get_family(catalog, SKU)` retornaba None → families_ctx vacío → batch
+    silencioso (Diego: "no carga nunca"). Ahora usa build_sku_index para
+    resolver SKU → (canonical_fam, modelo) y construye fam-view con el
+    SKU como family_id (para que Claude lo use en el output `sku` field).
+    """
     rows = conn.execute(
         """SELECT d.family_id, d.checks_json, d.notes FROM audit_decisions d
            LEFT JOIN pending_review p ON d.family_id = p.family_id
@@ -1972,21 +1979,51 @@ def _run_claude_batch(conn, catalog):
         st.info("Nada para procesar.")
         return
 
+    sku_idx = audit_db.build_sku_index(catalog)
     families_ctx = []
+    skipped_unresolved = 0
     for r in rows:
-        fam = audit_db.get_family(catalog, r["family_id"])
+        sku = r["family_id"]
+        resolved = sku_idx.get(sku)
+        fam = None
+        modelo = None
+        if resolved:
+            fam, modelo = resolved
+        else:
+            # Legacy row: family_id tradicional (pre-migration)
+            fam = audit_db.get_family(catalog, sku)
         if not fam:
+            skipped_unresolved += 1
             continue
+        # Build fam-view: shallow copy + family_id=SKU (para output Claude).
+        # Inyecta metadata del modelo para que Claude genere description+historia
+        # específicos (player vs fan vs kid, etc).
+        fam_view = dict(fam)
+        fam_view["family_id"] = sku
+        if modelo:
+            fam_view["_modelo_type"] = modelo.get("type")
+            fam_view["_modelo_sleeve"] = modelo.get("sleeve")
+            fam_view["_modelo_sizes"] = modelo.get("sizes")
+            fam_view["_modelo_price"] = modelo.get("price")
         checks = {}
         try:
             checks = json.loads(r["checks_json"] or "{}")
         except Exception:
             pass
         families_ctx.append({
-            "family": fam,
+            "family": fam_view,
             "checks": checks,
             "notes": r["notes"] or "",
+            "_sku": sku,                        # preservar para save_pending_review
+            "_canonical": fam["family_id"],
+            "_modelo": modelo,
         })
+
+    if skipped_unresolved:
+        st.warning(f"⚠️ {skipped_unresolved} SKUs saltados (no resolvieron a canonical — probable drift audit_decisions ↔ catalog)")
+    if not families_ctx:
+        st.error(f"Ninguno de los {len(rows)} verified se pudo resolver. Revisá el drift.")
+        return
 
     # Fix s14m: progress bar con streaming en vez de spinner ciego. Antes el
     # spinner se quedaba infinito si algún request se colgaba (executor.map
@@ -2006,18 +2043,35 @@ def _run_claude_batch(conn, catalog):
     )
     progress.progress(1.0, text=f"Claude batch terminó: {total} items")
 
+    # Fix s14m2: `fid` acá es SKU (no canonical). Para aplicar photo_actions
+    # necesitamos el source_family_id del modelo (donde las photo_actions se
+    # guardaron) o caer al canonical fam. save_pending_review keyed por SKU.
+    ctx_by_sku = {c["_sku"]: c for c in families_ctx}
+
     ok_count = 0
     err_count = 0
     for fid, result in results.items():
         if result.get("ok"):
-            # Aplicamos actions a gallery para preview
-            fam = audit_db.get_family(catalog, fid)
-            new_gallery = _apply_photo_actions_to_gallery(conn, fam)
+            ctx = ctx_by_sku.get(fid, {})
+            canonical_fam = audit_db.get_family(catalog, ctx.get("_canonical"))
+            modelo = ctx.get("_modelo")
+            source_fid = (modelo or {}).get("source_family_id") or (canonical_fam or {}).get("family_id") or fid
+
+            # Gallery del modelo (unified) o de la family (legacy)
+            if modelo:
+                base_gallery = modelo.get("gallery") or []
+                fam_for_apply = {"family_id": source_fid, "gallery": base_gallery}
+            else:
+                fam_for_apply = canonical_fam or {"family_id": fid, "gallery": []}
+            new_gallery = _apply_photo_actions_to_gallery(
+                conn, fam_for_apply, effective_fid=source_fid,
+            )
+            hero_fallback = (modelo or canonical_fam or {}).get("hero_thumbnail")
             audit_db.save_pending_review(
-                conn, fid,
+                conn, fid,   # SKU keying
                 claude_json=json.dumps(result["data"], ensure_ascii=False),
                 gallery_json=json.dumps(new_gallery, ensure_ascii=False),
-                new_hero=new_gallery[0] if new_gallery else fam.get("hero_thumbnail"),
+                new_hero=new_gallery[0] if new_gallery else hero_fallback,
             )
             ok_count += 1
         else:
