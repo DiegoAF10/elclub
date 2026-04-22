@@ -2225,7 +2225,12 @@ def _process_watermark_with_gemini(conn, family_id, original_url, original_index
 
 
 def _render_pending_preview(conn, fam, item):
-    fid = fam["family_id"]
+    # Fix s14m4: fam es canonical (ej. 'argentina-2026-away'), pero puede haber
+    # múltiples pending items del mismo canonical (ARG-V-FS + ARG-V-PS ambos
+    # comparten canonical argentina-2026-away). Widget keys deben usar el SKU
+    # para no colisionar. audit_decisions también keyed por SKU post-s13.
+    canonical_fid = fam["family_id"]
+    sku = item["family_id"]   # SKU usado para keys widget + audit_decisions lookups
     try:
         claude_data = json.loads(item.get("claude_enriched_json") or "{}")
     except Exception:
@@ -2235,9 +2240,9 @@ def _render_pending_preview(conn, fam, item):
     except Exception:
         new_gallery = []
 
-    # Surface de fotos flaggeadas pendientes (watermark va auto al publicar,
-    # regen queda como tarea manual de Diego)
-    actions = audit_db.get_photo_actions(conn, fid)
+    # photo_actions están keyed por source_family_id (del modelo) o canonical en legacy.
+    # Para simplicidad leemos ambos y mergeamos.
+    actions = audit_db.get_photo_actions(conn, canonical_fid)
     wm_pending = [a for a in actions if a.get("action") == "flag_watermark" and not a.get("processed_url")]
     regen_pending = [a for a in actions if a.get("action") == "flag_regen"]
     if wm_pending:
@@ -2259,46 +2264,49 @@ def _render_pending_preview(conn, fam, item):
                     with thumb_cols[idx % len(thumb_cols)]:
                         st.image(url, caption=f"#{idx+2}", use_container_width=True)
     with pc2:
-        st.markdown("##### 🤖 Claude suggested")
+        st.markdown("##### 🤖 Claude suggested (factual only)")
         st.markdown(f"**Title:** {claude_data.get('title', '—')}")
-        st.markdown(f"**Description:** {claude_data.get('description', '—')}")
-        hist = claude_data.get("historia") or fam.get("historia") or "—"
-        st.markdown(f"**Historia:**  \n> {hist}")
-        st.markdown(f"**SKU:** `{claude_data.get('sku', '—')}`")
+        st.markdown(f"**SKU sugerido:** `{claude_data.get('sku', '—')}`")
         kw = claude_data.get("keywords", [])
         st.markdown(f"**Keywords:** {', '.join(kw) if kw else '—'}")
         val = claude_data.get("validation_issues", [])
         if val:
             st.warning(f"Validation: {', '.join(val)}")
+        st.caption(
+            "📝 Description + Historia no se generan automáticamente (Claude "
+            "confundía 'Midnight Stadium' con el fabricante). Diego las rellena "
+            "post-publish desde panel Publicados con deep research."
+        )
 
     # Featured toggle — marca como "TOP" para el badge destacado en la Card del catálogo.
-    # El flag persiste al publicar (catalog.json.featured=true).
+    # Key usa SKU (no canonical) para evitar duplicate key si múltiples pending
+    # items comparten canonical family (ej. ARG-V-FS + ARG-V-PS).
     current_featured = bool(fam.get("featured", False))
     featured = st.checkbox(
         "⭐ Destacar (TOP badge en la Card)",
         value=current_featured,
-        key=f"featured_{fid}",
+        key=f"featured_{sku}",
         help="Marca esta family como TOP. El badge aparece en la Card del catálogo. Default: off.",
     )
 
     ac1, ac2, ac3 = st.columns(3)
     with ac1:
-        if st.button(f"✅ PUBLISH", key=f"publish_{fid}", type="primary", use_container_width=True):
+        if st.button(f"✅ PUBLISH", key=f"publish_{sku}", type="primary", use_container_width=True):
             _publish_family(conn, fam, claude_data, new_gallery, featured=featured)
             st.rerun()
     with ac2:
-        if st.button(f"❌ REJECT", key=f"reject_{fid}", use_container_width=True):
-            st.session_state[f"rejecting_{fid}"] = True
+        if st.button(f"❌ REJECT", key=f"reject_{sku}", use_container_width=True):
+            st.session_state[f"rejecting_{sku}"] = True
             st.rerun()
     with ac3:
-        if st.button(f"🔄 Re-run Claude", key=f"rerun_{fid}", use_container_width=True):
-            # Regenera para este family
-            deci = audit_db.get_decision(conn, fid) or {}
+        if st.button(f"🔄 Re-run Claude", key=f"rerun_{sku}", use_container_width=True):
+            # audit_decisions keyed por SKU post-s13
+            deci = audit_db.get_decision(conn, sku) or {}
             checks = json.loads(deci.get("checks_json") or "{}")
             r = audit_enrich.claude_enrich(fam, checks, deci.get("notes", ""))
             if r.get("ok"):
                 audit_db.save_pending_review(
-                    conn, fid,
+                    conn, sku,   # pending_review keyed por SKU
                     claude_json=json.dumps(r["data"], ensure_ascii=False),
                     gallery_json=item.get("new_gallery_json"),
                     new_hero=item.get("new_hero_url"),
@@ -2307,18 +2315,18 @@ def _render_pending_preview(conn, fam, item):
                 st.error(r.get("error", "Error"))
             st.rerun()
 
-    # Rejection notes
-    if st.session_state.get(f"rejecting_{fid}"):
-        reason = st.text_area(f"Razón del reject de {fid}", key=f"reason_{fid}")
+    # Rejection notes — keyed por SKU
+    if st.session_state.get(f"rejecting_{sku}"):
+        reason = st.text_area(f"Razón del reject de {sku}", key=f"reason_{sku}")
         rc1, rc2 = st.columns(2)
         with rc1:
-            if st.button("Confirmar reject", key=f"confirm_reject_{fid}"):
-                audit_db.mark_rejected(conn, fid, reason)
-                st.session_state[f"rejecting_{fid}"] = False
+            if st.button("Confirmar reject", key=f"confirm_reject_{sku}"):
+                audit_db.mark_rejected(conn, sku, reason)
+                st.session_state[f"rejecting_{sku}"] = False
                 st.rerun()
         with rc2:
-            if st.button("Cancelar", key=f"cancel_reject_{fid}"):
-                st.session_state[f"rejecting_{fid}"] = False
+            if st.button("Cancelar", key=f"cancel_reject_{sku}"):
+                st.session_state[f"rejecting_{sku}"] = False
                 st.rerun()
 
 
@@ -2350,10 +2358,10 @@ def _publish_family(conn, fam, claude_data, new_gallery, featured=False):
     # Apply Claude enrichment
     if claude_data.get("title"):
         target["title"] = claude_data["title"]
-    if claude_data.get("description"):
-        target["description"] = claude_data["description"]
-    if claude_data.get("historia") and not target.get("historia"):
-        target["historia"] = claude_data["historia"]
+    # Fix s14m4: NO aplicar description ni historia de Claude — confundía
+    # "Midnight Stadium" como fabricante. Diego escribe esos post-publish
+    # desde el panel Publicados con deep research manual.
+    # (Preservar si Claude los manda por runs viejos: ignorar silenciosamente.)
     if claude_data.get("sku"):
         target["sku"] = claude_data["sku"]
     if claude_data.get("keywords"):

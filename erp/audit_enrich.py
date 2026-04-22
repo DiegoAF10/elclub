@@ -130,9 +130,11 @@ def gemini_available():
 # Claude enrichment
 # ───────────────────────────────────────────
 
-PROMPT_TEMPLATE = """Eres el editor del catálogo de El Club Vault (catálogo privado de jerseys de fútbol en Guatemala). Brand: Midnight Stadium, premium dark, voseo guatemalteco 40% educativo + 40% emocional + 20% irreverente.
+PROMPT_TEMPLATE = """Eres el editor del catálogo de El Club Vault (catálogo privado de jerseys de fútbol en Guatemala).
 
-Enriquece este producto con la metadata.
+Enriquece este producto con metadata FACTUAL únicamente. NO generes narrativa
+ni descripción — Diego escribe esos manualmente post-audit con deep research
+verificable. Limitate a título factual + keywords + validaciones.
 
 Input:
 - family_id: {family_id}
@@ -142,21 +144,18 @@ Input:
 - category: {category}
 - variants: {variants}
 - current_title: {current_title}
-- current_description: {current_description}
-- current_historia: {current_historia}
 - checks: {checks}
 - notes: {notes}
 
 Output EXCLUSIVAMENTE un JSON válido con este schema (sin markdown fences, sin prosa):
 {{
-  "title": "string pulido corto (< 60 chars)",
-  "description": "2-3 oraciones, tono Midnight Stadium",
-  "historia": "50-80 palabras, tono 40/40/20 voseo guatemalteco, null si current_historia ya existe",
-  "sku": "identificador único generado tipo TEAM-YY-YY-TYPE-CAT",
-  "keywords": ["search", "terms", "en", "espanol"],
+  "title": "string factual corto (< 60 chars), ej. 'Argentina 2026 Visita - Player'",
+  "keywords": ["search", "terms", "factuales", "en", "español"],
   "similar_product_ids": [],
-  "validation_issues": []
-}}"""
+  "validation_issues": ["array de strings si detectás issues en la data input, ej. 'season format inconsistente'"]
+}}
+
+NO incluir campos description ni historia — Diego los rellena post-enrichment."""
 
 
 def _build_claude_prompt(family, checks, notes):
