@@ -20,6 +20,7 @@ from db import (
 import vault_orders
 import comercial
 import audit
+import publicados
 
 # ═══════════════════════════════════════
 # INIT
@@ -83,6 +84,7 @@ PAGES = {
     "📬 Ordenes Vault": "vault_orders",
     "💰 Comercial": "comercial",
     "🔍 Audit Catalog": "audit",
+    "🚀 Publicados": "publicados",
 }
 
 # Logo in sidebar
@@ -1313,3 +1315,9 @@ elif page_key == "audit":
         audit.render_page(_audit_conn)
     finally:
         _audit_conn.close()
+elif page_key == "publicados":
+    _pub_conn = get_conn()
+    try:
+        publicados.render_page(_pub_conn)
+    finally:
+        _pub_conn.close()
