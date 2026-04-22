@@ -58,7 +58,7 @@ TIER_LABELS = {
 SHORTCUTS_HTML = """
 <div style="background:#1C1C1C;border:1px solid #4DA8FF;border-radius:8px;padding:12px 16px;font-family:'Space Grotesk',monospace;font-size:12px;color:#F0F0F0;line-height:1.6;">
 <b style="color:#4DA8FF;">⌨️ SHORTCUTS</b><br>
-<span style="color:#999">Por foto (click primero):</span> <code>1-9</code> foco · <code>X</code> delete · <code>W</code> watermark · <code>G</code> regen-Gemini · <code>Enter</code> set hero · <code>↑↓</code> reorder<br>
+<span style="color:#999">Por foto (click primero):</span> <code>1-9</code> foco · <code>X</code> delete · <code>W</code> watermark (→Gemini auto) · <code>G</code> marcar regen manual · <code>Enter</code> set hero · <code>↑↓</code> reorder<br>
 <span style="color:#999">Por variante:</span> <code>V</code> verify · <code>F</code> flag<br>
 <span style="color:#999">Producto completo:</span> <code>Shift+V</code> verify todas · <code>Shift+F</code> flag todas · <code>S</code> skip · <code>Tab</code> next variante · <code>J/K</code> next/prev producto
 </div>
@@ -543,7 +543,7 @@ def _render_photo_card(conn, fid, index, url, saved_action, current_hero):
             audit_db.set_photo_action(conn, fid, url, index, action="flag_watermark")
             st.rerun()
     with bc[3]:
-        if st.button("🎨", key=f"regen_{fid}_{index}", help="Regen con Gemini (calidad mala)"):
+        if st.button("🎨", key=f"regen_{fid}_{index}", help="Flag regen manual (calidad mala, Diego la rehace aparte)"):
             audit_db.set_photo_action(conn, fid, url, index, action="flag_regen")
             st.rerun()
 
@@ -695,10 +695,22 @@ def _run_claude_batch(conn, catalog):
     st.success(f"Claude procesó {ok_count} ok · {err_count} errores.")
 
 
-def _apply_photo_actions_to_gallery(conn, fam):
+def _apply_photo_actions_to_gallery(conn, fam, run_gemini_watermark=False):
     """Aplica las actions del audit_photo_actions a la gallery[] original.
     Retorna la nueva lista de URLs.
+
+    Si run_gemini_watermark=True:
+      - Para cada foto con action=flag_watermark sin processed_url:
+        - Descarga original de R2
+        - Pasa por Gemini (remove watermark)
+        - Sube processed a R2 con suffix -cleaned.jpg
+        - Actualiza processed_url en audit_photo_actions
+    Si run_gemini_watermark=False (preview mode): usa processed_url existente o url original.
+
+    flag_regen NO dispara Gemini — es solo un marcador manual. Diego rehace
+    esas fotos aparte y reemplaza el asset en R2 manualmente cuando tenga.
     """
+    import requests
     original = fam.get("gallery") or []
     actions_by_idx = {
         a["original_index"]: a for a in audit_db.get_photo_actions(conn, fam["family_id"])
@@ -712,10 +724,18 @@ def _apply_photo_actions_to_gallery(conn, fam):
         action = a.get("action", "keep")
         if action == "delete":
             continue
+
+        # Gemini watermark processing (solo al publicar, no al generar preview)
+        processed = a.get("processed_url")
+        if run_gemini_watermark and action == "flag_watermark" and not processed:
+            processed = _process_watermark_with_gemini(conn, fam["family_id"], url, i)
+
+        final_url = processed or url
+
         # Si está marcada hero, la ponemos primero
         if a.get("is_new_hero"):
-            hero_url = a.get("processed_url") or url
-        final_url = a.get("processed_url") or url
+            hero_url = final_url
+
         new_idx = a.get("new_index")
         kept.append((new_idx if new_idx is not None else i, final_url))
 
@@ -731,6 +751,48 @@ def _apply_photo_actions_to_gallery(conn, fam):
     return new_gallery
 
 
+def _process_watermark_with_gemini(conn, family_id, original_url, original_index):
+    """Descarga foto, pasa por Gemini para remover watermark, sube processed a R2.
+    Retorna el processed_url o None si falló.
+    """
+    import requests
+
+    if not audit_enrich.gemini_available():
+        return None
+
+    # Strip query string (e.g. ?v=2026-04-22) para download raw
+    clean_url = original_url.split("?")[0]
+
+    try:
+        resp = requests.get(clean_url, timeout=30)
+        if resp.status_code != 200:
+            return None
+        image_bytes = resp.content
+    except Exception:
+        return None
+
+    result = audit_enrich.gemini_regen_image(image_bytes, mime_type="image/jpeg",
+                                              prompt_variant="watermark")
+    if not result.get("ok"):
+        return None
+
+    # Key en R2: families/<fid>/<NN>-cleaned.jpg
+    ord_str = f"{original_index + 1:02d}"
+    key = f"families/{family_id}/{ord_str}-cleaned.jpg"
+    upload = audit_enrich.upload_image_to_r2(result["image_bytes"], key,
+                                              content_type=result.get("mime_type", "image/jpeg"))
+    if not upload.get("ok"):
+        return None
+
+    new_url = upload["public_url"]
+    # Save processed_url en la audit_photo_actions row
+    audit_db.set_photo_action(
+        conn, family_id, original_url, original_index,
+        action="flag_watermark", processed_url=new_url,
+    )
+    return new_url
+
+
 def _render_pending_preview(conn, fam, item):
     fid = fam["family_id"]
     try:
@@ -741,6 +803,19 @@ def _render_pending_preview(conn, fam, item):
         new_gallery = json.loads(item.get("new_gallery_json") or "[]")
     except Exception:
         new_gallery = []
+
+    # Surface de fotos flaggeadas pendientes (watermark va auto al publicar,
+    # regen queda como tarea manual de Diego)
+    actions = audit_db.get_photo_actions(conn, fid)
+    wm_pending = [a for a in actions if a.get("action") == "flag_watermark" and not a.get("processed_url")]
+    regen_pending = [a for a in actions if a.get("action") == "flag_regen"]
+    if wm_pending:
+        st.info(f"💧 {len(wm_pending)} fotos con watermark → Gemini las procesa al click PUBLISH")
+    if regen_pending:
+        st.warning(
+            f"🎨 {len(regen_pending)} fotos flaggeadas para REGEN MANUAL. "
+            f"Diego: rehacelas aparte y sube a R2 con mismo path antes de publicar."
+        )
 
     pc1, pc2 = st.columns([2, 3])
     with pc1:
@@ -842,6 +917,10 @@ def _publish_family(conn, fam, claude_data, new_gallery):
         target["sku"] = claude_data["sku"]
     if claude_data.get("keywords"):
         target["keywords"] = claude_data["keywords"]
+
+    # Re-compute gallery ACTIVANDO Gemini para watermarks (solo al publicar).
+    # En el preview se usa la gallery cacheada; aquí refrescamos con procesamiento real.
+    new_gallery = _apply_photo_actions_to_gallery(conn, fam, run_gemini_watermark=True)
 
     # Apply gallery + hero
     if new_gallery:
