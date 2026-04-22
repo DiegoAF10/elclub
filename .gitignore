@@ -18,3 +18,7 @@ node_modules/
 erp/elclub.db
 erp/photos/
 erp/__pycache__/
+
+# Audit system secrets
+erp/.env
+erp/__pycache__/
