@@ -78,13 +78,15 @@ def main():
         if not modelo:
             continue  # legacy families skipped
 
-        # Criterio base: fan_adult + short + home/away
+        # Criterio base: fan_adult (short o long) + home/away
+        # s14f: incluir sleeve='long' — Diego detectó que ARG-2026-V-FL (Argentina
+        # away long) y similares quedaban excluidos de la QA priority.
         mtype = modelo.get("type")
         sleeve = modelo.get("sleeve")
         variant = (fam.get("variant") or "").lower()
         if mtype != "fan_adult":
             continue
-        if sleeve != "short":
+        if sleeve not in ("short", "long"):
             continue
         if variant not in ("home", "away"):
             continue
