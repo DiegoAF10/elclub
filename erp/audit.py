@@ -2522,10 +2522,9 @@ def render_page(conn):
         )
         del st.session_state.audit_seed_result
 
-    # Diagnostics
-    conn = audit_db.get_conn()
+    # Diagnostics — usamos el `conn` que ya recibe render_page (no abrir uno nuevo:
+    # reasignar la variable sombrea el parámetro y cerrarlo rompe render_queue).
     deleted_week = audit_db.deleted_count_since(conn, days=7)
-    conn.close()
     with st.sidebar:
         st.markdown("---")
         st.markdown("**🔍 Audit Status**")
