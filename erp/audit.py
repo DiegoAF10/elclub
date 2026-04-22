@@ -833,7 +833,11 @@ def render_queue(conn, catalog):
             help="Solo los SKUs TOP para validar visualmente post-refetch. Corré `python scripts/mark-qa-priority.py` para regenerar.",
         )
 
-    items = audit_db.queue_families(conn, catalog, tf, sf, cf)
+    # Ops s14d — si show_qa_only, bypassa el status filter (queremos ver los
+    # QA priority en CUALQUIER status, especialmente needs_rework donde cayeron
+    # los Mundial TOP tras el publish attempt fallido de Gemini).
+    effective_sf = None if show_qa_only else sf
+    items = audit_db.queue_families(conn, catalog, tf, effective_sf, cf)
 
     # Tier "(sin tier)": items cuyo tier is NULL
     if tier_filter == "(sin tier)":
