@@ -41,7 +41,7 @@ PAGE_SIZE = 50
 CATEGORIES = ["adult", "women", "kids", "baby", "jacket", "training",
               "polo", "vest", "sweatshirt"]
 TIERS = ["T1", "T2", "T3", "T4", "T5"]
-STATUSES = ["pending", "verified", "flagged", "skipped", "needs_rework"]
+STATUSES = ["pending", "verified", "flagged", "skipped", "needs_rework", "deleted"]
 CATEGORY_LABELS = {
     "adult": "👤 Adulto", "women": "♀️ Mujer", "kids": "🧒 Niño",
     "baby": "👶 Bebé", "jacket": "🧥 Chaqueta", "training": "🏋️ Training",
@@ -62,7 +62,7 @@ SHORTCUTS_HTML = """
 <span style="color:#999">Preview modal (click en la imagen):</span> <code>ESC</code> cerrar · <code>←→</code> navegar · <code>scroll</code> zoom · <code>dblclick</code> reset · <code>W/X/G/Enter</code> acciones<br>
 <span style="color:#999">Preview modal — mobile:</span> <code>swipe ←→</code> navegar · <code>pinch</code> zoom · <code>double-tap</code> reset · <code>tap fuera</code> cerrar<br>
 <span style="color:#999">Global:</span> <code>Ctrl+L</code> abrir PDP live en vault.elclub.club<br>
-<span style="color:#999">Por variante:</span> <code>V</code> verify · <code>F</code> flag<br>
+<span style="color:#999">Por variante:</span> <code>V</code> verify · <code>F</code> flag · <code>Shift+D</code> 🗑 borrar SKU<br>
 <span style="color:#999">Producto completo:</span> <code>Shift+V</code> verify todas · <code>Shift+F</code> flag todas · <code>S</code> skip · <code>Tab</code> next variante · <code>J/K</code> next/prev producto
 </div>
 """
@@ -222,6 +222,7 @@ KEYBOARD_JS = """
     let globalAction = null;
     if (shift && key === 'V') globalAction = 'verify-all';
     else if (shift && key === 'F') globalAction = 'flag-all';
+    else if (shift && (key === 'D' || key === 'd')) globalAction = 'delete-sku';
     else if (key === 'S' || key === 's') globalAction = 'skip';
     else if (key === 'V' || key === 'v') globalAction = 'verify-current';
     else if (key === 'F' || key === 'f') globalAction = 'flag-current';
@@ -785,11 +786,22 @@ def render_queue(conn, catalog):
     sf = status_filter if status_filter != "(todos)" else None
     cf = category_filter if category_filter != "(todas)" else None
 
+    # Ops s14 — toggle "Ver borrados". Default OFF: esconde status='deleted' del queue
+    # incluso cuando el status_filter es "(todos)". Turn ON para auditoría/recovery.
+    show_deleted = st.checkbox(
+        "Ver borrados", value=False, key="audit_show_deleted",
+        help="Por defecto se esconden SKUs con status=deleted. Activá para auditar/recuperar.",
+    )
+
     items = audit_db.queue_families(conn, catalog, tf, sf, cf)
 
     # Tier "(sin tier)": items cuyo tier is NULL
     if tier_filter == "(sin tier)":
         items = [i for i in items if not i.get("tier")]
+
+    # Hide deleted unless explicit (either status_filter='deleted' or show_deleted toggle)
+    if not show_deleted and sf != "deleted":
+        items = [i for i in items if i.get("status") != "deleted"]
 
     if search:
         s = search.lower()
@@ -865,7 +877,8 @@ def render_queue(conn, catalog):
             with row[2]:
                 status = it.get("status", "pending")
                 emoji = {"pending": "⏳", "verified": "🟢", "flagged": "🔴",
-                         "skipped": "⏭️", "needs_rework": "⚠️"}.get(status, "?")
+                         "skipped": "⏭️", "needs_rework": "⚠️",
+                         "deleted": "🗑"}.get(status, "?")
                 st.markdown(f"{emoji} **{status}**")
             with row[3]:
                 if st.button("Abrir", key=f"open_{it['sku']}", type="primary"):
@@ -995,7 +1008,22 @@ def render_detail(conn, catalog):
     # Render el modelo — fotos + acciones + checks + verify/flag
     modelo_view = _modelo_view_for_audit(sku, fam, modelo)
     _render_photos_and_actions(conn, modelo_view, form_key_prefix=sku)
-    _render_family_checks_and_verify(conn, {"family_id": sku})
+    # Ops s14: pasamos catalog_fam + modelo para habilitar botón 🗑 BORRAR SKU
+    _render_family_checks_and_verify(conn, {"family_id": sku},
+                                      catalog_fam=fam, modelo=modelo)
+
+    # Ops s14 — inject shortcut bindings + preview modal. Antes de s14 esto vivía
+    # sólo en el dead _render_variant_form. Moverlo acá habilita V/F/X/W/G/↑↓
+    # + el nuevo Shift+D para borrar en el camino activo.
+    components.html(
+        PHOTO_FOCUS_CSS + KEYBOARD_JS + PREVIEW_MODAL_HTML,
+        height=0,
+    )
+    _inject_tag_script({
+        "VERIFY": "verify-current",
+        "FLAG": "flag-current",
+        "BORRAR SKU": "delete-sku",
+    })
 
 
 def _find_modelo_idx(fam, sku):
@@ -1448,10 +1476,90 @@ def _render_photos_and_actions(conn, fam, form_key_prefix):
                                    key_prefix=form_key_prefix)
 
 
-def _render_family_checks_and_verify(conn, fam):
+@st.dialog("⚠️ BORRAR SKU permanentemente")
+def _borrar_sku_dialog(sku, canonical_fid, source_fid, modelo_desc,
+                        sizes, price, photo_count, actions_count, is_only_modelo):
+    """Ops s14 — modal de confirmación de delete. Recibe snapshot de metadata
+    (no conn ni fam) para evitar issues de lifecycle de Streamlit dialogs."""
+    st.markdown(f"Estás por eliminar permanentemente:")
+    st.markdown(f"- **SKU:** `{sku}`")
+    st.markdown(f"- **{photo_count}** fotos en galería")
+    st.markdown(f"- **{actions_count}** audit_photo_actions registradas")
+    st.markdown(f"- **family:** `{canonical_fid}`")
+    if modelo_desc:
+        st.markdown(f"- **variant:** {modelo_desc}")
+    if sizes or price:
+        st.markdown(f"- **size:** {sizes or '—'} · Q{price or '—'}")
+
+    if is_only_modelo:
+        st.warning(
+            "⚠️ Es el **único modelo** del family. Borrar → el family completo "
+            "queda marcado `status=deleted` y sale del catálogo público."
+        )
+
+    st.info(
+        "Si hay otro SKU hermano que debería absorber las fotos, **cancelá** "
+        "y usá MERGE (feature s15). Soft-delete: audit_photo_actions permanece → "
+        "recovery manual posible."
+    )
+
+    motivo = st.text_input(
+        "Motivo (requerido)",
+        key=f"del_motivo_{sku}",
+        placeholder="Ej. Duplicado de ARG-2026-L-PS-2",
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Cancelar", key=f"del_cancel_{sku}", use_container_width=True):
+            st.rerun()
+    with c2:
+        confirm_disabled = not (motivo or "").strip()
+        if st.button("🗑 BORRAR", key=f"del_confirm_{sku}",
+                     type="primary", use_container_width=True,
+                     disabled=confirm_disabled):
+            conn = audit_db.get_conn()
+            catalog = audit_db.load_catalog()
+            sku_idx = audit_db.build_sku_index(catalog)
+            resolved = sku_idx.get(sku)
+            if not resolved:
+                st.error(f"SKU {sku} no encontrado en catalog (pudo ya estar borrado).")
+                conn.close()
+                return
+            fam, modelo = resolved
+            try:
+                result = _delete_sku(conn, sku, fam, modelo, motivo.strip())
+                # Capturar próximo pending ANTES de cerrar conn
+                next_sku = _find_adjacent_pending(conn, sku, direction=1) if result.get("ok") else None
+            finally:
+                conn.close()
+            if result.get("ok"):
+                msg = [f"🗑 `{sku}` borrado."]
+                if result["family_deleted"]:
+                    msg.append("Family completo marcado deleted.")
+                if result["was_published"]:
+                    msg.append("commit+push " + ("✅" if result["committed"] else "⚠️ falló"))
+                else:
+                    msg.append("(no publicado → sin push, catalog mutado local)")
+                st.session_state["audit_delete_toast"] = " · ".join(msg)
+                # Navegar al siguiente pending o volver al queue
+                if next_sku:
+                    st.session_state.current_family = next_sku
+                else:
+                    st.session_state.audit_view = "queue"
+                st.rerun()
+            else:
+                st.error(f"Error: {result.get('error') or 'delete falló'}")
+
+
+def _render_family_checks_and_verify(conn, fam, catalog_fam=None, modelo=None):
     """Checks globales + verify/flag/needs-rework. UN solo set por producto madre.
     Se renderea fuera de los tabs de modelos (Ops s13) porque la decisión de
     audit es del producto completo, no por modelo.
+
+    Ops s14: `catalog_fam` + `modelo` habilitan el botón 🗑 BORRAR SKU con
+    snapshot de metadata para el dialog. Si no se pasan, el botón queda oculto
+    (compat con call sites legacy).
     """
     fid = fam["family_id"]
     st.markdown("---")
@@ -1487,6 +1595,43 @@ def _render_family_checks_and_verify(conn, fam):
         if st.button(f"🔴 FLAG {fid} (F)", key=f"flag_{fid}", use_container_width=True):
             _save_variant_decision(conn, fid, "flagged", fotos_ok, cat_ok, vers_ok, notes)
             st.rerun()
+
+    # Ops s14 — Botón 🗑 BORRAR SKU (abre modal confirmación). Estilo secundario
+    # + separado para evitar mis-clicks vs. VERIFY/FLAG.
+    if catalog_fam is not None:
+        st.markdown("")
+        # Snapshot de metadata para el dialog (no se puede cerrar sobre vars del conn)
+        canonical_fid = catalog_fam["family_id"]
+        source_fid = (modelo or {}).get("source_family_id") or canonical_fid
+        modelos = catalog_fam.get("modelos") or []
+        is_only_modelo = bool(modelo and len(modelos) == 1)
+        gallery = (modelo or {}).get("gallery") or catalog_fam.get("gallery") or []
+        photo_count = len(gallery)
+        actions_count = len(audit_db.get_photo_actions(conn, source_fid))
+        # Descripción humana del modelo
+        modelo_label_map = {"fan_adult": "Fan", "player_adult": "Player",
+                            "retro_adult": "Retro", "woman": "Mujer",
+                            "kid": "Niño", "baby": "Bebé"}
+        sleeve_label_map = {"short": "corta", "long": "larga"}
+        if modelo:
+            mdesc = modelo_label_map.get(modelo.get("type"), modelo.get("type") or "—")
+            sl = modelo.get("sleeve")
+            if sl and modelo.get("type") in ("fan_adult", "player_adult", "retro_adult"):
+                mdesc += f" · manga {sleeve_label_map.get(sl, sl)}"
+        else:
+            mdesc = catalog_fam.get("category") or "—"
+        sizes = (modelo or {}).get("sizes") if modelo else None
+        price = (modelo or {}).get("price") if modelo else None
+
+        bd = st.columns([2, 1, 2])
+        with bd[1]:
+            if st.button("🗑 BORRAR SKU (⇧D)", key=f"del_sku_{fid}",
+                         help="Borrar permanentemente el SKU (duplicado, error, etc.) — soft-delete reversible",
+                         use_container_width=True):
+                _borrar_sku_dialog(
+                    fid, canonical_fid, source_fid, mdesc,
+                    sizes, price, photo_count, actions_count, is_only_modelo,
+                )
 
 
 def _render_photo_card(conn, fid, index, url, saved_action, current_hero,
@@ -2179,6 +2324,166 @@ def _publish_family(conn, fam, claude_data, new_gallery, featured=False):
 
 
 # ═══════════════════════════════════════
+# Ops s14 — 🗑 BORRAR SKU (soft-delete)
+# ═══════════════════════════════════════
+
+def _remove_modelo_from_catalog(canonical_fid, sku):
+    """Remueve un modelo con `sku` del catalog.json.
+
+    - Unified family (modelos[]): filtra el modelo con ese SKU.
+      Si era el único → marca fam.status='deleted' y deja modelos=[].
+      Si quedan otros → re-sincroniza primary_modelo_idx + top-level gallery/hero.
+    - Legacy family (fam.sku == sku): marca fam.status='deleted'.
+
+    No elimina físicamente el object del array — usa soft-delete para recovery.
+    Escribe catalog.json. Retorna {ok, modified, family_deleted, error}.
+    """
+    catalog_path = audit_db.CATALOG_PATH
+    if not os.path.exists(catalog_path):
+        return {"ok": False, "error": f"catalog.json no existe", "modified": False, "family_deleted": False}
+
+    with open(catalog_path, "r", encoding="utf-8") as f:
+        catalog = json.load(f)
+
+    modified = False
+    family_deleted = False
+    for fam in catalog:
+        if fam.get("family_id") != canonical_fid:
+            continue
+        modelos = fam.get("modelos") or []
+        if modelos:
+            new_modelos = [m for m in modelos if m.get("sku") != sku]
+            if len(new_modelos) == len(modelos):
+                break  # SKU no encontrado en modelos[]
+            if new_modelos:
+                fam["modelos"] = new_modelos
+                prim = fam.get("primary_modelo_idx", 0) or 0
+                if prim >= len(new_modelos):
+                    fam["primary_modelo_idx"] = 0
+                prim_m = new_modelos[fam.get("primary_modelo_idx", 0)]
+                if prim_m.get("gallery"):
+                    fam["gallery"] = prim_m["gallery"]
+                    fam["hero_thumbnail"] = prim_m.get("hero_thumbnail") or prim_m["gallery"][0]
+                modified = True
+            else:
+                fam["status"] = "deleted"
+                fam["modelos"] = []
+                family_deleted = True
+                modified = True
+        else:
+            if fam.get("sku") == sku:
+                fam["status"] = "deleted"
+                family_deleted = True
+                modified = True
+        break
+
+    if not modified:
+        return {"ok": False, "error": f"SKU {sku} no encontrado en {canonical_fid}",
+                "modified": False, "family_deleted": False}
+
+    with open(catalog_path, "w", encoding="utf-8") as f:
+        json.dump(catalog, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+    return {"ok": True, "modified": True, "family_deleted": family_deleted}
+
+
+def _commit_catalog_delete(sku, canonical_fid, motivo, family_deleted):
+    """Commit + push del catalog.json tras delete. Sólo se llama si was_published=True.
+    Retorna True si push OK, False si git falló."""
+    catalog_path = audit_db.CATALOG_PATH
+    repo_dir = os.path.dirname(os.path.dirname(catalog_path))
+    verb = "delete family" if family_deleted else "delete SKU"
+    msg_motivo = (motivo or "").split("\n")[0][:60]
+    commit_msg = f"audit: {verb} {sku} ({canonical_fid}) — {msg_motivo}"
+    try:
+        subprocess.run(
+            ["git", "add", "data/catalog.json"],
+            cwd=repo_dir, capture_output=True, timeout=30,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", commit_msg],
+            cwd=repo_dir, capture_output=True, timeout=30,
+        )
+        push_result = subprocess.run(
+            ["git", "push"],
+            cwd=repo_dir, capture_output=True, timeout=60,
+        )
+        return push_result.returncode == 0
+    except Exception:
+        return False
+
+
+def _delete_sku(conn, sku, fam, modelo, motivo):
+    """Ejecuta soft-delete completo de un SKU:
+      1. audit_decisions.status='deleted' + motivo en notes
+      2. catalog.json — remueve modelo o marca family deleted
+      3. audit_delete_log — append row
+      4. Si was_published → git commit + push
+
+    audit_photo_actions NO se toca (recovery manual posible).
+
+    Returns: {ok, family_deleted, was_published, committed, error}
+    """
+    now = datetime.now().isoformat(timespec="seconds")
+    canonical_fid = fam["family_id"]
+    source_fid = (modelo or {}).get("source_family_id") or canonical_fid
+
+    pre_dec = audit_db.get_decision(conn, sku) or {}
+    was_published = bool(pre_dec.get("final_verified"))
+    existing_notes = (pre_dec.get("notes") or "").strip()
+
+    modelos = fam.get("modelos") or []
+    was_only_modelo = bool(modelo and len(modelos) == 1)
+
+    if modelo:
+        gallery = modelo.get("gallery") or []
+    else:
+        gallery = fam.get("gallery") or []
+    photo_count = len(gallery)
+
+    actions = audit_db.get_photo_actions(conn, source_fid)
+    actions_count = len(actions)
+
+    # 1. audit_decisions
+    new_notes = f"[BORRADO {now}] {motivo.strip()}"
+    if existing_notes:
+        new_notes += f"\n---\nPrev: {existing_notes}"
+    audit_db.upsert_decision(
+        conn, sku,
+        status="deleted",
+        notes=new_notes,
+        decided_at=now,
+    )
+
+    # 2. catalog mutation
+    remove_result = _remove_modelo_from_catalog(canonical_fid, sku)
+    family_deleted = remove_result.get("family_deleted", False)
+
+    # 3. append log
+    audit_db.log_delete(
+        conn, sku, canonical_fid, source_fid, motivo,
+        photo_count=photo_count, actions_count=actions_count,
+        was_only_modelo=was_only_modelo,
+        family_deleted=family_deleted,
+        was_published=was_published,
+    )
+
+    # 4. commit+push sólo si estaba publicado (SKU visible en vault)
+    committed = False
+    if was_published and remove_result.get("ok"):
+        committed = _commit_catalog_delete(sku, canonical_fid, motivo, family_deleted)
+
+    return {
+        "ok": remove_result.get("ok", False),
+        "family_deleted": family_deleted,
+        "was_published": was_published,
+        "committed": committed,
+        "error": remove_result.get("error"),
+    }
+
+
+# ═══════════════════════════════════════
 # ROUTER
 # ═══════════════════════════════════════
 
@@ -2218,12 +2523,21 @@ def render_page(conn):
         del st.session_state.audit_seed_result
 
     # Diagnostics
+    conn = audit_db.get_conn()
+    deleted_week = audit_db.deleted_count_since(conn, days=7)
+    conn.close()
     with st.sidebar:
         st.markdown("---")
         st.markdown("**🔍 Audit Status**")
         st.caption(f"Claude: {'✅' if audit_enrich.claude_available() else '❌ set ANTHROPIC_API_KEY'}")
         st.caption(f"Gemini: {'✅' if audit_enrich.gemini_available() else '❌ set GEMINI_API_KEY'}")
+        st.caption(f"🗑 {deleted_week} SKU{'s' if deleted_week != 1 else ''} borrado{'s' if deleted_week != 1 else ''} esta semana")
         st.markdown("---")
+
+    # Ops s14 — toast post-delete (set en _borrar_sku_dialog, cleared aquí)
+    toast_msg = st.session_state.pop("audit_delete_toast", None)
+    if toast_msg:
+        st.success(toast_msg)
 
     st.markdown("")
 

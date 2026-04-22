@@ -94,6 +94,27 @@ CREATE TABLE IF NOT EXISTS audit_telemetry (
 );
 
 CREATE INDEX IF NOT EXISTS idx_telemetry_verified ON audit_telemetry(verified_at);
+
+-- Ops s14 — log append-only de SKUs borrados via botón 🗑 BORRAR en audit UI.
+-- Soft-delete: audit_decisions.status='deleted' + el SKU sale del queue default,
+-- pero audit_photo_actions permanece (recovery manual posible).
+-- family_deleted=1 si el family entero quedó sin modelos post-delete.
+CREATE TABLE IF NOT EXISTS audit_delete_log (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    family_id       TEXT NOT NULL,     -- SKU borrado (PK de audit_decisions)
+    canonical_fid   TEXT,               -- family canonical en catalog
+    source_fid      TEXT,               -- modelo.source_family_id (para audit_photo_actions lookup)
+    motivo          TEXT NOT NULL,
+    photo_count     INTEGER,            -- len(modelo.gallery) al borrar
+    actions_count   INTEGER,            -- # audit_photo_actions registradas
+    was_only_modelo INTEGER DEFAULT 0,  -- 1 si era el único modelo del family
+    family_deleted  INTEGER DEFAULT 0,  -- 1 si family completo se marcó deleted
+    was_published   INTEGER DEFAULT 0,  -- 1 si final_verified=1 antes del borrar
+    timestamp       TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_delete_log_fid ON audit_delete_log(family_id);
+CREATE INDEX IF NOT EXISTS idx_delete_log_ts ON audit_delete_log(timestamp);
 """
 
 
@@ -1319,6 +1340,43 @@ def telemetry_verify(family_id):
         conn.commit()
     finally:
         conn.close()
+
+
+# ───────────────────────────────────────────
+# Ops s14 — delete log (soft-delete de SKUs duplicados/erróneos)
+# ───────────────────────────────────────────
+
+def log_delete(conn, sku, canonical_fid, source_fid, motivo,
+               photo_count=0, actions_count=0,
+               was_only_modelo=False, family_deleted=False, was_published=False):
+    """Append-only log de un SKU borrado. Ver audit_delete_log schema en AUDIT_SCHEMA."""
+    conn.execute(
+        """INSERT INTO audit_delete_log
+           (family_id, canonical_fid, source_fid, motivo, photo_count, actions_count,
+            was_only_modelo, family_deleted, was_published, timestamp)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            sku, canonical_fid, source_fid,
+            (motivo or "")[:500],
+            int(photo_count or 0),
+            int(actions_count or 0),
+            int(bool(was_only_modelo)),
+            int(bool(family_deleted)),
+            int(bool(was_published)),
+            datetime.now().isoformat(timespec="seconds"),
+        ),
+    )
+    conn.commit()
+
+
+def deleted_count_since(conn, days=7):
+    """Cantidad de SKUs borrados en los últimos N días (sidebar counter)."""
+    row = conn.execute(
+        """SELECT COUNT(*) FROM audit_delete_log
+           WHERE timestamp >= datetime('now', ?)""",
+        (f"-{int(days)} days",),
+    ).fetchone()
+    return row[0] if row else 0
 
 
 def telemetry_stats(last_n=50):
