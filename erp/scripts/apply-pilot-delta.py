@@ -22,9 +22,17 @@ import audit_db  # noqa: E402
 
 DRY_RUN = "--dry-run" in sys.argv
 
-DELTA_PATH = (
-    Path(audit_db.CATALOG_PATH).parent / "argentina-pilot-delta.json"
-)
+# --delta <path> permite aplicar cualquier delta JSON (no solo argentina pilot).
+# Default: argentina-pilot-delta.json (legacy compat).
+_delta_arg = None
+for i, a in enumerate(sys.argv):
+    if a == "--delta" and i + 1 < len(sys.argv):
+        _delta_arg = sys.argv[i + 1]
+        break
+if _delta_arg:
+    DELTA_PATH = Path(_delta_arg) if Path(_delta_arg).is_absolute() else Path(audit_db.CATALOG_PATH).parent / _delta_arg
+else:
+    DELTA_PATH = Path(audit_db.CATALOG_PATH).parent / "argentina-pilot-delta.json"
 
 
 def main():
