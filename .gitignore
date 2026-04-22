@@ -22,3 +22,6 @@ erp/__pycache__/
 # Audit system secrets
 erp/.env
 erp/__pycache__/
+
+# Audit DB backups (Ops s11) — per-machine snapshots
+erp/backups/

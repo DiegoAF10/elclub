@@ -61,6 +61,7 @@ SHORTCUTS_HTML = """
 <span style="color:#999">Por foto (click primero):</span> <code>1-9</code> foco · <code>X</code> delete · <code>W</code> watermark (→Gemini auto) · <code>G</code> marcar regen manual · <code>Enter</code> set hero · <code>↑↓</code> reorder<br>
 <span style="color:#999">Preview modal (click en la imagen):</span> <code>ESC</code> cerrar · <code>←→</code> navegar · <code>scroll</code> zoom · <code>dblclick</code> reset · <code>W/X/G/Enter</code> acciones<br>
 <span style="color:#999">Preview modal — mobile:</span> <code>swipe ←→</code> navegar · <code>pinch</code> zoom · <code>double-tap</code> reset · <code>tap fuera</code> cerrar<br>
+<span style="color:#999">Global:</span> <code>Ctrl+L</code> abrir PDP live en vault.elclub.club<br>
 <span style="color:#999">Por variante:</span> <code>V</code> verify · <code>F</code> flag<br>
 <span style="color:#999">Producto completo:</span> <code>Shift+V</code> verify todas · <code>Shift+F</code> flag todas · <code>S</code> skip · <code>Tab</code> next variante · <code>J/K</code> next/prev producto
 </div>
@@ -154,11 +155,12 @@ KEYBOARD_JS = """
     const col = parentDoc.querySelector('[data-testid="stColumn"][data-photo-idx="' + idx + '"]');
     if (!col) return false;
 
-    // Reorder via stNumberInputStepUp/StepDown (testid explícito de Streamlit).
+    // Reorder: botones ↑ / ↓ (Ops s11 reemplaza el input numérico por swap con
+    // foto adyacente). Match por texto; respeta disabled en primera/última foto.
     if (action === 'reorder-up' || action === 'reorder-down') {
-      // ↑ = subir en la lista = decrementar el número de posición
-      const targetTestId = (action === 'reorder-up') ? 'stNumberInputStepDown' : 'stNumberInputStepUp';
-      const btn = col.querySelector('[data-testid="' + targetTestId + '"]');
+      const targetChar = (action === 'reorder-up') ? '↑' : '↓';
+      const btn = Array.from(col.querySelectorAll('button[kind="secondary"]'))
+        .find(b => b.textContent.trim() === targetChar && !b.disabled);
       if (btn) { btn.click(); return true; }
       return false;
     }
@@ -193,9 +195,21 @@ KEYBOARD_JS = """
     if (e.target.isContentEditable) return;
 
     const shift = e.shiftKey;
+    const ctrl = e.ctrlKey || e.metaKey;  // Cmd en mac
     const key = e.key;
     const win = parentDoc.defaultView;
     const hasFocus = win.__focusedPhotoIdx != null;
+
+    // Ctrl+L / Cmd+L → abrir PDP live en nueva tab (Ops s11)
+    if (ctrl && (key === 'l' || key === 'L')) {
+      const marker = parentDoc.getElementById('audit-live-url');
+      const liveUrl = marker && marker.dataset.liveUrl;
+      if (liveUrl) {
+        window.open(liveUrl, '_blank');
+        e.preventDefault();
+      }
+      return;
+    }
 
     // ── Global (prioridad baja, después de per-foto) ───
     let globalAction = null;
@@ -870,12 +884,16 @@ def render_detail(conn, catalog):
         st.error(f"Family {mother_id} no encontrada en catalog.json")
         return
 
+    # Ops s11 — telemetry: marcar opened_at la PRIMERA vez que se abre este mother_id
+    # en esta sesión (idempotente — no sobreescribe si ya existe opened_at para el fid).
+    audit_db.telemetry_open(mother_id)
+
     # Header
     base = variants.get("adult") or next(iter(variants.values()))
     deci = audit_db.get_decision(conn, mother_id) or {}
     tier = deci.get("tier")
 
-    hc1, hc2, hc3 = st.columns([3, 1, 1])
+    hc1, hc2, hc3, hc4 = st.columns([3, 1, 1, 1])
     with hc1:
         team = base.get("team") or ""
         season = base.get("season") or ""
@@ -887,6 +905,16 @@ def render_detail(conn, catalog):
             st.session_state.audit_view = "queue"
             st.rerun()
     with hc3:
+        # Ops s11 — link a PDP live. Se abre en nueva tab. Shortcut Ctrl+L
+        # lo dispara también (JS lee data-url del span invisible).
+        live_url = f"https://vault.elclub.club/producto?id={mother_id}"
+        st.link_button("🔗 Ver live", live_url, use_container_width=True,
+                       help="Abre la PDP en vault.elclub.club (Ctrl+L)")
+        st.markdown(
+            f'<span id="audit-live-url" data-live-url="{live_url}" style="display:none"></span>',
+            unsafe_allow_html=True,
+        )
+    with hc4:
         # Tier change
         tiers = ["(sin)"] + TIERS
         idx = tiers.index(tier) if tier in tiers else 0
@@ -924,7 +952,70 @@ def render_detail(conn, catalog):
     # Expandable section per variant
     for cat, fam in variants.items():
         with st.expander(f"{CATEGORY_LABELS.get(cat, cat)} — `{fam['family_id']}`", expanded=(cat == "adult")):
+            _render_scraped_specs_panel(fam)
             _render_variant_form(conn, fam)
+
+
+def _render_scraped_specs_panel(fam):
+    """Ops s11 — panel colapsable con specs del scrape para validación pre-audit.
+    Expanded por default en la primera vista del item. Diego revisa team/season/
+    sizes/source_url para detectar anomalías antes de darle verify.
+    """
+    with st.expander("📋 Datos del scrape", expanded=True):
+        # Layout 2 columnas para specs básicos
+        sc1, sc2 = st.columns(2)
+        with sc1:
+            st.markdown("**🏷 Identificación**")
+            st.markdown(f"- `family_id`: `{fam.get('family_id', '—')}`")
+            st.markdown(f"- team: **{fam.get('team') or '—'}**")
+            st.markdown(f"- season: {fam.get('season') or '—'}")
+            st.markdown(f"- variant: `{fam.get('variant', '—')}`")
+            st.markdown(f"- category: `{fam.get('category', '—')}`")
+            st.markdown(f"- tier: `{fam.get('tier', '—')}`")
+        with sc2:
+            st.markdown("**🌐 Metadata (U-007)**")
+            st.markdown(f"- country: {fam.get('meta_country') or '_null_'}")
+            st.markdown(f"- league: {fam.get('meta_league') or '_null_'}")
+            st.markdown(f"- confederation: {fam.get('meta_confederation') or '_null_'}")
+            aliases = fam.get("aliases") or []
+            st.markdown(f"- aliases: {', '.join(f'`{a}`' for a in aliases) if aliases else '_none_'}")
+            st.markdown(f"- featured: `{fam.get('featured', False)}`")
+
+        # Variants (sizes raw por variant + price + album_id + title scraped)
+        variants = fam.get("variants") or []
+        if variants:
+            st.markdown("**🧥 Variantes scrapeadas**")
+            for v in variants:
+                sub_type = v.get("sub_type")
+                sub_part = f" / sub_type=`{sub_type}`" if sub_type else ""
+                line = (
+                    f"- `{v.get('type', '—')}`"
+                    f"{sub_part}"
+                    f" · sizes: `{v.get('sizes') or 'null'}`"
+                    f" · Q{v.get('price', '—')}"
+                )
+                album_id = v.get("album_id")
+                if album_id:
+                    store = v.get("store", "minkang")
+                    yupoo_url = f"https://{store}.x.yupoo.com/albums/{album_id}"
+                    line += f" · [Yupoo ↗]({yupoo_url})"
+                st.markdown(line)
+                title = v.get("title")
+                if title:
+                    st.caption(f"  _title_: {title}")
+
+        # Texto actual (title/description/historia) si existen (de un audit previo)
+        title = fam.get("title")
+        desc = fam.get("description")
+        hist = fam.get("historia")
+        if any((title, desc, hist)):
+            st.markdown("**✍️ Texto actual (si hay)**")
+            if title:
+                st.markdown(f"- **title**: {title}")
+            if desc:
+                st.markdown(f"- **description**: {desc}")
+            if hist:
+                st.markdown(f"- **historia**: {hist[:200]}{'…' if len(hist) > 200 else ''}")
 
     st.markdown("---")
 
@@ -1016,7 +1107,20 @@ def _render_variant_form(conn, fam):
 
     # Decoder UI para cada foto
     if gallery:
-        st.caption(f"{len(gallery)} fotos en galería · click para ampliar · set hero vía botón")
+        st.caption(f"{len(gallery)} fotos en galería · click para ampliar · ↑↓ reordenar · 👑 set hero")
+        # Computar display order actual (excluyendo deletes) — fuente de verdad para ↑↓ swap.
+        # Ops s11: reemplaza el input numérico por flechas que swappean posiciones adyacentes.
+        non_deleted = [
+            i for i in range(len(gallery))
+            if saved_actions.get(i, {}).get("action") != "delete"
+        ]
+        def _sort_key(i):
+            ni = saved_actions.get(i, {}).get("new_index")
+            return (ni if ni is not None else i, i)
+        display_order = sorted(non_deleted, key=_sort_key)
+        # Map: original_index → display_position (0-indexed) en la galería visible
+        display_pos_of = {idx: pos for pos, idx in enumerate(display_order)}
+
         cols_per_row = 4
         for row_start in range(0, len(gallery), cols_per_row):
             cols = st.columns(cols_per_row)
@@ -1025,7 +1129,9 @@ def _render_variant_form(conn, fam):
                 if i >= len(gallery):
                     break
                 with cols[col_idx]:
-                    _render_photo_card(conn, fid, i, gallery[i], saved_actions.get(i), current_hero)
+                    _render_photo_card(conn, fid, i, gallery[i], saved_actions.get(i),
+                                       current_hero, display_order=display_order,
+                                       display_pos=display_pos_of.get(i))
 
     st.markdown("")
     # Checks globales
@@ -1064,15 +1170,22 @@ def _render_variant_form(conn, fam):
             st.rerun()
 
 
-def _render_photo_card(conn, fid, index, url, saved_action, current_hero):
-    """Una foto con controles: delete, watermark, regen-Gemini, hero, reorder."""
+def _render_photo_card(conn, fid, index, url, saved_action, current_hero,
+                        display_order=None, display_pos=None):
+    """Una foto con controles: delete, watermark, regen-Gemini, hero, reorder.
+
+    Ops s11: display_order (lista de original_index en orden visual) y display_pos
+    (int 0-indexed en display_order) son requeridos para ↑↓ swap con vecinos.
+    """
     action = (saved_action or {}).get("action", "keep")
-    new_index = (saved_action or {}).get("new_index")
     is_hero = bool((saved_action or {}).get("is_new_hero")) or (url == current_hero)
 
-    # Position visible
-    display_pos = new_index if new_index is not None else index + 1
-    crown = "👑" if is_hero else f"#{display_pos}"
+    # Position visible: 1-indexed en display_order (ej "#3/5"). Fallback al idx original.
+    if display_pos is not None and display_order:
+        pos_label = f"#{display_pos + 1}/{len(display_order)}"
+    else:
+        pos_label = f"#{index + 1}"
+    crown = "👑" if is_hero else pos_label
 
     # Anchor para keyboard shortcuts y preview modal (Tarea 1+2 de Ops s10).
     # KEYBOARD_JS usa `data-photo-idx` para saber qué foto está focusada y
@@ -1115,26 +1228,53 @@ def _render_photo_card(conn, fid, index, url, saved_action, current_hero):
             audit_db.set_photo_action(conn, fid, url, index, action="flag_regen")
             st.rerun()
 
-    # Reorder input
-    new_pos = st.number_input(
-        "Pos", min_value=1, max_value=20,
-        value=int(display_pos),
-        key=f"pos_{fid}_{index}",
-        step=1, label_visibility="collapsed",
-    )
-    if new_pos != display_pos:
-        audit_db.set_photo_action(
-            conn, fid, url, index,
-            action=action if action in ("delete", "flag_watermark", "flag_regen") else "keep",
-            new_index=int(new_pos) - 1,
-        )
-        st.rerun()
+    # Reorder con flechas ↑↓ (Ops s11) — swap con foto adyacente en display_order.
+    # Requiere display_order + display_pos del parent. Si la foto está deleteada
+    # o sin contexto, no muestra flechas.
+    if display_order is not None and display_pos is not None and action != "delete":
+        rc = st.columns(2)
+        is_first = (display_pos == 0)
+        is_last = (display_pos == len(display_order) - 1)
+        with rc[0]:
+            if st.button("↑", key=f"up_{fid}_{index}", disabled=is_first, use_container_width=True,
+                         help="Subir una posición (swap con anterior)"):
+                _swap_photos(conn, fid, display_order, display_pos, display_pos - 1)
+                st.rerun()
+        with rc[1]:
+            if st.button("↓", key=f"dn_{fid}_{index}", disabled=is_last, use_container_width=True,
+                         help="Bajar una posición (swap con siguiente)"):
+                _swap_photos(conn, fid, display_order, display_pos, display_pos + 1)
+                st.rerun()
 
     # Reset a keep
     if action in ("delete", "flag_watermark", "flag_regen"):
         if st.button("↺ reset", key=f"reset_{fid}_{index}"):
             audit_db.set_photo_action(conn, fid, url, index, action="keep")
             st.rerun()
+
+
+def _swap_photos(conn, fid, display_order, pos_a, pos_b):
+    """Swap dos fotos adyacentes reescribiendo new_index para TODA la galería.
+    Esto asegura orden estable: pre-swap algunas fotos pueden tener new_index=None
+    (default) y el sort las coloca por original_index. Post-swap asignamos new_index
+    explícito a cada foto de display_order, para que sucesivos swaps funcionen bien.
+    """
+    # Reordenar display_order mutando una copia
+    new_order = list(display_order)
+    new_order[pos_a], new_order[pos_b] = new_order[pos_b], new_order[pos_a]
+    # Cargar estado actual para preservar action / is_new_hero / processed_url / original_url
+    existing = {a["original_index"]: a for a in audit_db.get_photo_actions(conn, fid)}
+    for new_pos, orig_idx in enumerate(new_order):
+        row = existing.get(orig_idx, {})
+        audit_db.set_photo_action(
+            conn, fid,
+            original_url=row.get("original_url") or "",  # vacío si nunca tuvo row
+            original_index=orig_idx,
+            action=row.get("action") or "keep",
+            new_index=new_pos,
+            is_new_hero=row.get("is_new_hero") or 0,
+            processed_url=row.get("processed_url"),
+        )
 
 
 def _set_hero(conn, fid, url, index):
@@ -1164,6 +1304,12 @@ def _save_variant_decision(conn, fid, status, fotos_ok, cat_ok, vers_ok, notes):
         notes=(notes or "").strip(),
         decided_at=datetime.now().isoformat(timespec="seconds"),
     )
+    # Ops s11 — telemetry: al verify, registrar duration_sec para el mother_id.
+    # Solo el mother_id es el "producto" para métricas (una variant no es un item
+    # completo de audit).
+    if status == "verified":
+        mother_id = audit_db.mother_family_id(fid)
+        audit_db.telemetry_verify(mother_id)
 
 
 # ═══════════════════════════════════════
@@ -1200,6 +1346,23 @@ def render_pending_review(conn, catalog):
         st.info("Vacío. Verificá items en el queue y procesa con Claude.")
         return
 
+    # Ops s11 — Batch publish button. Items elegibles: pending_review sin approved_at
+    # que tengan final_verified=1 en audit_decisions (explícito, o implícito si status=verified).
+    unapproved = [p for p in pending if not p.get("approved_at")]
+    bp1, bp2 = st.columns([1, 3])
+    with bp1:
+        batch_disabled = len(unapproved) == 0
+        if st.button(
+            f"✅ Publish all verified ({len(unapproved)})",
+            type="primary", disabled=batch_disabled, use_container_width=True,
+            key="batch_publish_all",
+            help="Procesa en secuencia todos los items del pending review. Si un item falla, el batch para ahí."
+        ):
+            _run_batch_publish(conn, catalog, unapproved)
+            st.rerun()
+    with bp2:
+        st.caption("Procesa cada item: apply Claude enrichment + Gemini watermark (retry interno) + commit + push. Si Gemini falla en alguna foto, el item se marca `needs_rework` y el batch para — los items previos quedan publicados.")
+
     for item in pending:
         fid = item["family_id"]
         fam = audit_db.get_family(catalog, fid)
@@ -1209,6 +1372,73 @@ def render_pending_review(conn, catalog):
         with st.expander(f"{fid}  ·  {TIER_LABELS.get(item.get('tier'), 'Sin tier')}",
                           expanded=False):
             _render_pending_preview(conn, fam, item)
+
+
+def _run_batch_publish(conn, catalog, items):
+    """Ops s11 — corre publish 1-a-1 sobre la lista de items pending review.
+    Muestra progress bar + log streaming. Si un item falla (publish retorna por
+    needs_rework u otro error), rompe el batch ahí.
+    """
+    if not items:
+        st.info("Nada para publicar en batch.")
+        return
+    total = len(items)
+    progress = st.progress(0.0, text=f"Batch publish: 0/{total}")
+    log_area = st.empty()
+    results = {"ok": [], "failed": [], "aborted": False}
+
+    log_lines = []
+    def _log(line):
+        log_lines.append(line)
+        log_area.code("\n".join(log_lines[-15:]))
+
+    for i, item in enumerate(items, start=1):
+        fid = item["family_id"]
+        fam = audit_db.get_family(catalog, fid)
+        if not fam:
+            _log(f"[{i}/{total}] {fid} — SKIP (no está en catalog)")
+            continue
+
+        try:
+            claude_data = json.loads(item.get("claude_enriched_json") or "{}")
+        except Exception:
+            claude_data = {}
+        new_gallery = _apply_photo_actions_to_gallery(conn, fam)
+
+        _log(f"[{i}/{total}] {fid} — publishing…")
+        # _publish_family re-lee catalog, aplica cambios y hace git push. Si detecta
+        # gemini failure, mark needs_rework + st.error + return sin publicar.
+        pre_dec = audit_db.get_decision(conn, fid) or {}
+
+        # Capturar si publish aborta por needs_rework. _publish_family hace st.error
+        # internamente y cambia status. Chequeamos post-call.
+        _publish_family(conn, fam, claude_data, new_gallery, featured=bool(fam.get("featured")))
+        post_dec = audit_db.get_decision(conn, fid) or {}
+
+        if post_dec.get("status") == "needs_rework" and pre_dec.get("status") != "needs_rework":
+            _log(f"[{i}/{total}] {fid} — ❌ needs_rework (Gemini watermark fail). BATCH ABORTA.")
+            results["failed"].append(fid)
+            results["aborted"] = True
+            break
+
+        if post_dec.get("final_verified"):
+            _log(f"[{i}/{total}] {fid} — ✅ publicado")
+            results["ok"].append(fid)
+        else:
+            _log(f"[{i}/{total}] {fid} — ⚠️ no publicó (estado: {post_dec.get('status')}). BATCH ABORTA.")
+            results["failed"].append(fid)
+            results["aborted"] = True
+            break
+
+        progress.progress(i / total, text=f"Batch publish: {i}/{total}")
+
+    # Resumen final
+    progress.progress(1.0 if not results["aborted"] else (len(results["ok"]) / total),
+                       text=f"Batch terminó: {len(results['ok'])}/{total} OK")
+    if results["aborted"]:
+        st.error(f"🚨 Batch abortado. Publicados OK: {len(results['ok'])}. Falló en: {results['failed'][-1] if results['failed'] else '?'}. Revisá el log + `audit_api_errors` + reintentá.")
+    else:
+        st.success(f"🎉 Batch completo. {len(results['ok'])}/{total} items publicados.")
 
 
 def _run_claude_batch(conn, catalog):
@@ -1321,12 +1551,24 @@ def _apply_photo_actions_to_gallery(conn, fam, run_gemini_watermark=False):
 
 def _process_watermark_with_gemini(conn, family_id, original_url, original_index):
     """Descarga foto, pasa por Gemini para remover watermark, sube processed a R2.
-    Retorna el processed_url o None si falló.
+    Retorna el processed_url o None si falló. Ops s11: logging explícito de
+    cada path de fallo en `audit_api_errors` para evitar failures silenciosos.
     """
     import requests
 
-    if not audit_enrich.gemini_available():
+    def _fail(stage, detail):
+        audit_db.log_api_error(
+            family_id=family_id,
+            photo_index=original_index,
+            api="gemini_pipeline",
+            error=f"{stage}: {detail}",
+            attempt_n=1,
+            final_failure=True,
+        )
         return None
+
+    if not audit_enrich.gemini_available():
+        return _fail("availability", "GEMINI_API_KEY no seteada")
 
     # Strip query string (e.g. ?v=2026-04-22) para download raw
     clean_url = original_url.split("?")[0]
@@ -1334,15 +1576,20 @@ def _process_watermark_with_gemini(conn, family_id, original_url, original_index
     try:
         resp = requests.get(clean_url, timeout=30)
         if resp.status_code != 200:
-            return None
+            return _fail("download", f"HTTP {resp.status_code} para {clean_url}")
         image_bytes = resp.content
-    except Exception:
-        return None
+    except Exception as exc:
+        return _fail("download", f"{type(exc).__name__}: {exc}")
 
-    result = audit_enrich.gemini_regen_image(image_bytes, mime_type="image/jpeg",
-                                              prompt_variant="watermark")
+    # gemini_regen_image ya tiene retry interno + logueo propio en 'gemini'.
+    result = audit_enrich.gemini_regen_image(
+        image_bytes, mime_type="image/jpeg", prompt_variant="watermark",
+        family_id=family_id, photo_index=original_index,
+    )
     if not result.get("ok"):
-        return None
+        # El error detallado ya quedó logueado por audit_enrich._with_retry.
+        # Acá agregamos una entrada de pipeline para facilitar query.
+        return _fail("gemini_inpaint", result.get("error", "unknown"))
 
     # Key en R2: families/<fid>/<NN>-cleaned.jpg
     ord_str = f"{original_index + 1:02d}"
@@ -1350,7 +1597,7 @@ def _process_watermark_with_gemini(conn, family_id, original_url, original_index
     upload = audit_enrich.upload_image_to_r2(result["image_bytes"], key,
                                               content_type=result.get("mime_type", "image/jpeg"))
     if not upload.get("ok"):
-        return None
+        return _fail("r2_upload", upload.get("error", "unknown"))
 
     new_url = upload["public_url"]
     # Save processed_url en la audit_photo_actions row
@@ -1502,6 +1749,31 @@ def _publish_family(conn, fam, claude_data, new_gallery, featured=False):
     # Re-compute gallery ACTIVANDO Gemini para watermarks (solo al publicar).
     # En el preview se usa la gallery cacheada; aquí refrescamos con procesamiento real.
     new_gallery = _apply_photo_actions_to_gallery(conn, fam, run_gemini_watermark=True)
+
+    # Ops s11 — abort si alguna foto con flag_watermark no pudo procesarse con Gemini.
+    # Pre-s11: se publicaba silencioso con la URL original (watermark residual visible).
+    # Root cause del bug albania-2026-third: download/Gemini/R2 fallaba y fallback
+    # silencioso. Ahora: mark needs_rework + no publicar hasta que Diego reintente.
+    fid = fam["family_id"]
+    actions = audit_db.get_photo_actions(conn, fid)
+    unprocessed_watermarks = [
+        a for a in actions
+        if a.get("action") == "flag_watermark" and not a.get("processed_url")
+    ]
+    if unprocessed_watermarks:
+        idxs = [a["original_index"] for a in unprocessed_watermarks]
+        audit_db.upsert_decision(
+            conn, fid,
+            status="needs_rework",
+            decided_at=datetime.now().isoformat(timespec="seconds"),
+        )
+        st.error(
+            f"🚨 Gemini watermark falló en {len(unprocessed_watermarks)} foto(s) "
+            f"(índices {idxs}). Family marcada `needs_rework` — no se publicó. "
+            f"Revisá `audit_api_errors` para ver el detalle, y reintentá con "
+            f"'🔄 Re-run Gemini' o re-publish cuando Gemini esté disponible."
+        )
+        return  # abort publish
 
     # Apply gallery + hero
     if new_gallery:

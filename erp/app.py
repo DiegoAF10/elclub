@@ -113,6 +113,38 @@ _conn_sb.close()
 st.sidebar.markdown("---")
 st.sidebar.caption(f"📦 {_total} camisetas ({_avail} disponibles)")
 
+# Audit velocity stats (Ops s11 — últimos 50 items verified)
+try:
+    import audit_db as _audit_db_sb
+    _audit_db_sb.init_audit_schema()
+    _tel = _audit_db_sb.telemetry_stats(last_n=50)
+    if _tel.get("count", 0) > 0:
+        def _fmt(sec):
+            if sec is None:
+                return "—"
+            if sec < 60:
+                return f"{sec:.0f}s"
+            m = sec // 60
+            s = sec % 60
+            return f"{int(m)}m{int(s):02d}s"
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("**⏱ Velocidad audit**")
+        st.sidebar.caption(f"Últimos {_tel['count']}: avg {_fmt(_tel['avg_sec'])} · med {_fmt(_tel['median_sec'])} · P90 {_fmt(_tel['p90_sec'])}")
+except Exception:
+    pass  # silencio — es UX no crítico
+
+# DB backup (runnable on-demand, retention 20 copies — Ops s11)
+st.sidebar.markdown("---")
+if st.sidebar.button("💾 Backup DB", use_container_width=True, help="Copia elclub.db a erp/backups/ con timestamp. Retention: últimos 20."):
+    from scripts.backup_audit import run_backup
+    _b = run_backup()
+    if _b.get("ok"):
+        st.sidebar.success(f"✅ Backup OK ({_b['size_mb']} MB). Retained: {_b['retained']}/20")
+        if _b.get("deleted"):
+            st.sidebar.caption(f"Rotated: {len(_b['deleted'])} viejos")
+    else:
+        st.sidebar.error(f"❌ {_b.get('error')}")
+
 
 # ═══════════════════════════════════════
 # HELPERS

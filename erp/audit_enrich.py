@@ -12,8 +12,18 @@ Manejo de errores: si una API falla o la key no está seteada, degrada gracefull
 import base64
 import json
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
+
+# Import lazy de audit_db para log de errores (evita circular si audit_db hace import
+# de este módulo en el futuro).
+def _log_api_err(family_id, photo_index, api, error, attempt_n, final_failure=False):
+    try:
+        import audit_db
+        audit_db.log_api_error(family_id, photo_index, api, error, attempt_n, final_failure)
+    except Exception:
+        pass  # no romper el flow por un fallo de log
 
 
 # ───────────────────────────────────────────
@@ -55,6 +65,57 @@ GEMINI_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 CLAUDE_MODEL = "claude-haiku-4-5"
 CLAUDE_MAX_TOKENS = 1500
 CLAUDE_TEMPERATURE = 0.3
+
+# Ops s11 — retry config
+RETRY_MAX_ATTEMPTS = 3
+RETRY_BASE_DELAY_SEC = 1.0   # multiplicado por 2^(attempt-1): 1, 2, 4
+CLAUDE_TIMEOUT_SEC = 30
+GEMINI_TIMEOUT_SEC = 60
+
+# Excepciones "retriables" — transient errors. Otras (e.g. permission denied,
+# 400 bad request) no se retrían.
+def _is_retriable(exc):
+    name = type(exc).__name__.lower()
+    msg = str(exc).lower()
+    # Anthropic + google-genai suelen usar nombres estándar
+    if any(s in name for s in ("timeout", "connection", "apierror", "apiconnectionerror",
+                                "internalservererror", "overloadederror", "rateelimiterror",
+                                "ratelimiterror", "serviceunavailable")):
+        return True
+    if any(s in msg for s in ("timeout", "timed out", "connection reset", "overloaded",
+                               "rate limit", "429", "500", "502", "503", "504",
+                               "temporarily unavailable")):
+        return True
+    return False
+
+
+def _with_retry(fn, api_name, family_id=None, photo_index=None):
+    """Ejecuta fn() con exponential backoff. Si todos los intentos fallan,
+    registra en audit_api_errors y re-raise. Si un error NO es retriable,
+    falla al primer intento pero aún loguea.
+
+    fn: callable sin args
+    api_name: 'claude' o 'gemini'
+    family_id / photo_index: contexto para el log
+    """
+    last_exc = None
+    for attempt in range(1, RETRY_MAX_ATTEMPTS + 1):
+        try:
+            return fn()
+        except Exception as exc:
+            last_exc = exc
+            retriable = _is_retriable(exc)
+            is_final = (not retriable) or (attempt == RETRY_MAX_ATTEMPTS)
+            _log_api_err(family_id, photo_index, api_name,
+                         f"{type(exc).__name__}: {exc}", attempt, final_failure=is_final)
+            if not retriable:
+                # Error no-retriable: fallar de una
+                raise
+            if attempt < RETRY_MAX_ATTEMPTS:
+                sleep_sec = RETRY_BASE_DELAY_SEC * (2 ** (attempt - 1))
+                time.sleep(sleep_sec)
+    # Agotó todos los retries
+    raise last_exc
 
 
 def claude_available():
@@ -130,18 +191,24 @@ def claude_enrich(family, checks=None, notes=""):
     except ImportError:
         return {"ok": False, "error": "anthropic package no instalado. pip install anthropic"}
 
-    client = Anthropic(api_key=ANTHROPIC_KEY)
+    client = Anthropic(api_key=ANTHROPIC_KEY, timeout=CLAUDE_TIMEOUT_SEC)
     prompt = _build_claude_prompt(family, checks, notes)
 
+    fid = (family or {}).get("family_id")
     try:
-        resp = client.messages.create(
-            model=CLAUDE_MODEL,
-            max_tokens=CLAUDE_MAX_TOKENS,
-            temperature=CLAUDE_TEMPERATURE,
-            messages=[{"role": "user", "content": prompt}],
+        resp = _with_retry(
+            lambda: client.messages.create(
+                model=CLAUDE_MODEL,
+                max_tokens=CLAUDE_MAX_TOKENS,
+                temperature=CLAUDE_TEMPERATURE,
+                messages=[{"role": "user", "content": prompt}],
+            ),
+            api_name="claude",
+            family_id=fid,
+            photo_index=None,
         )
     except Exception as e:
-        return {"ok": False, "error": f"Claude API error: {type(e).__name__}: {e}"}
+        return {"ok": False, "error": f"Claude API error tras {RETRY_MAX_ATTEMPTS} intentos: {type(e).__name__}: {e}"}
 
     raw_text = ""
     for block in resp.content:
@@ -206,9 +273,11 @@ GEMINI_REGEN_PROMPT_QUALITY = (
 )
 
 
-def gemini_regen_image(image_bytes, mime_type="image/jpeg", prompt_variant="watermark"):
+def gemini_regen_image(image_bytes, mime_type="image/jpeg", prompt_variant="watermark",
+                        family_id=None, photo_index=None):
     """Llama Gemini para re-generar una imagen. Input bytes, output bytes.
     prompt_variant: 'watermark' o 'quality'
+    family_id / photo_index: contexto para retry error log.
     Retorna dict { ok, image_bytes, mime_type, error }
     """
     if not gemini_available():
@@ -222,24 +291,35 @@ def gemini_regen_image(image_bytes, mime_type="image/jpeg", prompt_variant="wate
             # Fallback al package viejo
             import google.generativeai as genai_legacy
             return _gemini_regen_image_legacy(
-                image_bytes, mime_type, prompt_variant, genai_legacy
+                image_bytes, mime_type, prompt_variant, genai_legacy,
+                family_id=family_id, photo_index=photo_index,
             )
         except ImportError:
             return {"ok": False, "error": "google-genai package no instalado. pip install google-genai"}
 
     prompt = GEMINI_REGEN_PROMPT_WATERMARK if prompt_variant == "watermark" else GEMINI_REGEN_PROMPT_QUALITY
 
-    try:
+    def _call():
         client = genai.Client(api_key=GEMINI_KEY)
-        response = client.models.generate_content(
-            model=GEMINI_IMAGE_MODEL,
-            contents=[
+        http_options = gtypes.HttpOptions(timeout=GEMINI_TIMEOUT_SEC * 1000) if hasattr(gtypes, "HttpOptions") else None
+        kwargs = {
+            "model": GEMINI_IMAGE_MODEL,
+            "contents": [
                 gtypes.Part.from_bytes(data=image_bytes, mime_type=mime_type),
                 prompt,
             ],
-        )
+        }
+        if http_options is not None:
+            kwargs["config"] = gtypes.GenerateContentConfig(http_options=http_options) if hasattr(gtypes, "GenerateContentConfig") else None
+        # Algunos SDKs no aceptan config aún — intento sin config si falla el primer uso
+        if kwargs.get("config") is None:
+            kwargs.pop("config", None)
+        return client.models.generate_content(**kwargs)
+
+    try:
+        response = _with_retry(_call, api_name="gemini", family_id=family_id, photo_index=photo_index)
     except Exception as e:
-        return {"ok": False, "error": f"Gemini error: {type(e).__name__}: {e}"}
+        return {"ok": False, "error": f"Gemini error tras {RETRY_MAX_ATTEMPTS} intentos: {type(e).__name__}: {e}"}
 
     # Extrae la imagen de la respuesta
     for candidate in (response.candidates or []):
@@ -251,21 +331,29 @@ def gemini_regen_image(image_bytes, mime_type="image/jpeg", prompt_variant="wate
                 out_mime = getattr(inline, "mime_type", "image/jpeg")
                 return {"ok": True, "image_bytes": out_bytes, "mime_type": out_mime}
 
+    # Gemini respondió pero sin imagen útil — log + signal a caller para reintentar en
+    # otro contexto o marcar needs_rework
+    _log_api_err(family_id, photo_index, "gemini",
+                 "empty_response (no inline_data in candidates)",
+                 RETRY_MAX_ATTEMPTS, final_failure=True)
     return {"ok": False, "error": "Gemini no devolvio imagen en la respuesta"}
 
 
-def _gemini_regen_image_legacy(image_bytes, mime_type, prompt_variant, genai_legacy):
+def _gemini_regen_image_legacy(image_bytes, mime_type, prompt_variant, genai_legacy,
+                                 family_id=None, photo_index=None):
     """Fallback con google-generativeai viejo."""
     prompt = GEMINI_REGEN_PROMPT_WATERMARK if prompt_variant == "watermark" else GEMINI_REGEN_PROMPT_QUALITY
-    try:
+    def _call():
         genai_legacy.configure(api_key=GEMINI_KEY)
         model = genai_legacy.GenerativeModel(GEMINI_IMAGE_MODEL)
-        response = model.generate_content([
+        return model.generate_content([
             {"mime_type": mime_type, "data": image_bytes},
             prompt,
         ])
+    try:
+        response = _with_retry(_call, api_name="gemini", family_id=family_id, photo_index=photo_index)
     except Exception as e:
-        return {"ok": False, "error": f"Gemini legacy error: {type(e).__name__}: {e}"}
+        return {"ok": False, "error": f"Gemini legacy error tras {RETRY_MAX_ATTEMPTS} intentos: {type(e).__name__}: {e}"}
 
     # Intenta extraer imagen
     for candidate in (response.candidates or []):
@@ -276,6 +364,9 @@ def _gemini_regen_image_legacy(image_bytes, mime_type, prompt_variant, genai_leg
                     "image_bytes": part.inline_data.data,
                     "mime_type": getattr(part.inline_data, "mime_type", "image/jpeg"),
                 }
+    _log_api_err(family_id, photo_index, "gemini",
+                 "empty_response_legacy (no inline_data)",
+                 RETRY_MAX_ATTEMPTS, final_failure=True)
     return {"ok": False, "error": "Gemini legacy no devolvio imagen"}
 
 

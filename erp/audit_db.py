@@ -68,6 +68,32 @@ CREATE TABLE IF NOT EXISTS pending_review (
     rejected_at             TEXT,
     rejection_notes         TEXT
 );
+
+-- Ops s11 — log estructurado de errores en Claude/Gemini retries
+CREATE TABLE IF NOT EXISTS audit_api_errors (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    family_id       TEXT,
+    photo_index     INTEGER,          -- null para errores de Claude (texto, no foto)
+    api             TEXT,              -- 'claude' | 'gemini'
+    error           TEXT,
+    attempt_n       INTEGER,           -- 1, 2, 3... dónde empezó a fallar
+    final_failure   INTEGER DEFAULT 0, -- 1 si agotó todos los retries
+    timestamp       TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_err_family ON audit_api_errors(family_id);
+CREATE INDEX IF NOT EXISTS idx_api_err_api ON audit_api_errors(api);
+CREATE INDEX IF NOT EXISTS idx_api_err_final ON audit_api_errors(final_failure);
+
+-- Ops s11 — telemetry tiempo-por-item para medir velocidad del audit
+CREATE TABLE IF NOT EXISTS audit_telemetry (
+    family_id       TEXT PRIMARY KEY,
+    opened_at       TEXT,
+    verified_at     TEXT,
+    duration_sec    INTEGER           -- computed al verify
+);
+
+CREATE INDEX IF NOT EXISTS idx_telemetry_verified ON audit_telemetry(verified_at);
 """
 
 
@@ -877,3 +903,144 @@ def queue_stats(conn):
            FROM audit_decisions"""
     ).fetchone()
     return dict(r) if r else {}
+
+
+# ───────────────────────────────────────────
+# Ops s11 — API error log (Claude/Gemini retries)
+# ───────────────────────────────────────────
+
+def log_api_error(family_id, photo_index, api, error, attempt_n, final_failure=False):
+    """Inserta una row en audit_api_errors. Abre su propia conn para no
+    interferir con transacciones del caller."""
+    from datetime import datetime
+    conn = get_conn()
+    try:
+        conn.execute(
+            """INSERT INTO audit_api_errors
+               (family_id, photo_index, api, error, attempt_n, final_failure, timestamp)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                family_id, photo_index, api,
+                str(error)[:500],  # truncar stacks largos
+                int(attempt_n), int(bool(final_failure)),
+                datetime.now().isoformat(timespec="seconds"),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_api_errors(family_id=None, api=None, only_final=False, limit=50):
+    conn = get_conn()
+    try:
+        where = []
+        args = []
+        if family_id:
+            where.append("family_id = ?")
+            args.append(family_id)
+        if api:
+            where.append("api = ?")
+            args.append(api)
+        if only_final:
+            where.append("final_failure = 1")
+        sql = "SELECT * FROM audit_api_errors"
+        if where:
+            sql += " WHERE " + " AND ".join(where)
+        sql += " ORDER BY id DESC LIMIT ?"
+        args.append(int(limit))
+        rows = conn.execute(sql, args).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+# ───────────────────────────────────────────
+# Ops s11 — telemetry tiempo-por-item
+# ───────────────────────────────────────────
+
+def telemetry_open(family_id):
+    """Marca apertura de un family en audit. Idempotente: si ya tiene
+    `opened_at` no lo sobreescribe (respeta el primer open)."""
+    from datetime import datetime
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT opened_at FROM audit_telemetry WHERE family_id = ?", (family_id,)
+        ).fetchone()
+        if row and row["opened_at"]:
+            return  # ya tiene open — respetar
+        conn.execute(
+            """INSERT INTO audit_telemetry (family_id, opened_at)
+               VALUES (?, ?)
+               ON CONFLICT(family_id) DO UPDATE SET opened_at = excluded.opened_at
+               WHERE audit_telemetry.opened_at IS NULL""",
+            (family_id, datetime.now().isoformat(timespec="seconds")),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def telemetry_verify(family_id):
+    """Marca verify y computa duration_sec desde opened_at."""
+    from datetime import datetime
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT opened_at FROM audit_telemetry WHERE family_id = ?", (family_id,)
+        ).fetchone()
+        if not row or not row["opened_at"]:
+            # Sin opened_at — insertar con duration 0 para registrar al menos verify
+            conn.execute(
+                """INSERT OR REPLACE INTO audit_telemetry
+                   (family_id, opened_at, verified_at, duration_sec)
+                   VALUES (?, ?, ?, 0)""",
+                (family_id, datetime.now().isoformat(timespec="seconds"),
+                 datetime.now().isoformat(timespec="seconds")),
+            )
+        else:
+            opened = datetime.fromisoformat(row["opened_at"])
+            now = datetime.now()
+            dur = int((now - opened).total_seconds())
+            conn.execute(
+                """UPDATE audit_telemetry
+                   SET verified_at = ?, duration_sec = ?
+                   WHERE family_id = ?""",
+                (now.isoformat(timespec="seconds"), dur, family_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def telemetry_stats(last_n=50):
+    """Stats sobre los últimos N items verified: avg / median / P90 / count.
+    Retorna dict con claves: count, avg_sec, median_sec, p90_sec, items (list[dict])."""
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            """SELECT family_id, duration_sec, verified_at
+               FROM audit_telemetry
+               WHERE verified_at IS NOT NULL AND duration_sec > 0
+               ORDER BY verified_at DESC
+               LIMIT ?""",
+            (int(last_n),),
+        ).fetchall()
+        durations = sorted([r["duration_sec"] for r in rows])
+        n = len(durations)
+        if n == 0:
+            return {"count": 0, "avg_sec": None, "median_sec": None, "p90_sec": None, "items": []}
+        avg = sum(durations) / n
+        median = durations[n // 2] if n % 2 == 1 else (durations[n // 2 - 1] + durations[n // 2]) / 2
+        p90_idx = max(0, int(n * 0.9) - 1)
+        p90 = durations[p90_idx]
+        return {
+            "count": n,
+            "avg_sec": round(avg, 1),
+            "median_sec": round(median, 1),
+            "p90_sec": p90,
+            "items": [dict(r) for r in rows[:10]],
+        }
+    finally:
+        conn.close()
