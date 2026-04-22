@@ -1955,7 +1955,7 @@ def _run_batch_publish(conn, catalog, items):
         _log(f"[{i}/{total}] {fid} — publishing…")
         pre_dec = audit_db.get_decision(conn, fid) or {}
 
-        _publish_family(conn, fam, claude_data, new_gallery, featured=bool(fam.get("featured")))
+        _publish_family(conn, fam, claude_data, new_gallery, featured=bool(fam.get("featured")), sku=fid)
         post_dec = audit_db.get_decision(conn, fid) or {}
 
         if post_dec.get("status") == "needs_rework" and pre_dec.get("status") != "needs_rework":
@@ -2292,7 +2292,7 @@ def _render_pending_preview(conn, fam, item):
     ac1, ac2, ac3 = st.columns(3)
     with ac1:
         if st.button(f"✅ PUBLISH", key=f"publish_{sku}", type="primary", use_container_width=True):
-            _publish_family(conn, fam, claude_data, new_gallery, featured=featured)
+            _publish_family(conn, fam, claude_data, new_gallery, featured=featured, sku=sku)
             st.rerun()
     with ac2:
         if st.button(f"❌ REJECT", key=f"reject_{sku}", use_container_width=True):
@@ -2334,8 +2334,14 @@ def _render_pending_preview(conn, fam, item):
 # COMPONENT 4: Publish flow
 # ═══════════════════════════════════════
 
-def _publish_family(conn, fam, claude_data, new_gallery, featured=False):
-    """Aplica cambios al catalog.json + git commit + push."""
+def _publish_family(conn, fam, claude_data, new_gallery, featured=False, sku=None):
+    """Aplica cambios al catalog.json + git commit + push.
+
+    sku: el SKU que Diego publica (post-s13 audit_decisions + pending_review
+    están keyed por SKU). Si None (compat legacy), usa fam["family_id"] como
+    key de mark_approved. Mutations al catalog.json siguen siendo por
+    canonical fam["family_id"].
+    """
     catalog_path = audit_db.CATALOG_PATH
     if not os.path.exists(catalog_path):
         st.error(f"catalog.json no encontrado en {catalog_path}")
@@ -2451,8 +2457,10 @@ def _publish_family(conn, fam, claude_data, new_gallery, featured=False):
         json.dump(catalog, f, ensure_ascii=False, indent=2)
         f.write("\n")
 
-    # Mark approved
-    audit_db.mark_approved(conn, fam["family_id"])
+    # Mark approved — keyed por SKU post-s13 (pending_review + audit_decisions).
+    # Si sku no se pasa (compat legacy), falls back a fam.family_id (canonical).
+    approved_key = sku or fam["family_id"]
+    audit_db.mark_approved(conn, approved_key)
 
     # Git commit + push
     repo_dir = os.path.dirname(os.path.dirname(catalog_path))
