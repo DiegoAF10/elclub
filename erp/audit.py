@@ -818,10 +818,20 @@ def render_queue(conn, catalog):
 
     # Ops s14 — toggle "Ver borrados". Default OFF: esconde status='deleted' del queue
     # incluso cuando el status_filter es "(todos)". Turn ON para auditoría/recovery.
-    show_deleted = st.checkbox(
-        "Ver borrados", value=False, key="audit_show_deleted",
-        help="Por defecto se esconden SKUs con status=deleted. Activá para auditar/recuperar.",
-    )
+    tfc1, tfc2 = st.columns([1, 1])
+    with tfc1:
+        show_deleted = st.checkbox(
+            "Ver borrados", value=False, key="audit_show_deleted",
+            help="Por defecto se esconden SKUs con status=deleted. Activá para auditar/recuperar.",
+        )
+    with tfc2:
+        # Ops s14d — toggle "🎯 Solo QA priority" — los ~136 SKUs críticos post-refetch
+        # (Mundial 48 × home/away fan short + Top-20 clubs 25/26 × home/away fan short).
+        # Marcados via scripts/mark-qa-priority.py.
+        show_qa_only = st.checkbox(
+            "🎯 Solo QA priority", value=False, key="audit_qa_only",
+            help="Solo los SKUs TOP para validar visualmente post-refetch. Corré `python scripts/mark-qa-priority.py` para regenerar.",
+        )
 
     items = audit_db.queue_families(conn, catalog, tf, sf, cf)
 
@@ -832,6 +842,10 @@ def render_queue(conn, catalog):
     # Hide deleted unless explicit (either status_filter='deleted' or show_deleted toggle)
     if not show_deleted and sf != "deleted":
         items = [i for i in items if i.get("status") != "deleted"]
+
+    # QA priority filter — solo los marcados por mark-qa-priority.py
+    if show_qa_only:
+        items = [i for i in items if i.get("qa_priority")]
 
     if search:
         s = search.lower()
@@ -884,7 +898,8 @@ def render_queue(conn, catalog):
                     st.caption(f"📷 {it['n_photos']}")
             with row[1]:
                 tier_badge = TIER_LABELS.get(it.get("tier"), "❓ Sin tier")
-                st.markdown(f"**`{it['sku']}`**  \n{tier_badge}")
+                qa_badge = " · 🎯 **QA**" if it.get("qa_priority") else ""
+                st.markdown(f"**`{it['sku']}`**{qa_badge}  \n{tier_badge}")
                 team = it.get("team") or ""
                 season = it.get("season") or ""
                 variant_label = it.get("variant_label") or it.get("variant") or ""

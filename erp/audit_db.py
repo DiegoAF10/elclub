@@ -402,6 +402,13 @@ def resolve_catalog_skus(catalog):
 def init_audit_schema():
     conn = get_conn()
     conn.executescript(AUDIT_SCHEMA)
+    # Ops s14d — ADD COLUMN qa_priority (idempotente — check si ya existe).
+    # Identifica SKUs TOP que Diego debe validar visualmente post-refetch
+    # (Mundial 48 × home/away fan short + Top-20 clubs 25/26 × home/away fan short).
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(audit_decisions)").fetchall()}
+    if "qa_priority" not in cols:
+        conn.execute("ALTER TABLE audit_decisions ADD COLUMN qa_priority INTEGER DEFAULT 0")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_qa_priority ON audit_decisions(qa_priority)")
     conn.commit()
     conn.close()
 
@@ -1144,7 +1151,7 @@ def queue_families(conn, catalog, tier_filter=None, status_filter=None, category
     # Default sort: T1 → T2 → T3 → T4 → T5 → None (via tier_rank), tiebreaker family_id ASC.
     # Asegura que la primera página del queue siempre muestre lo más prioritario
     # (Diego arranca por Mundial 2026, luego Europa top-5, etc.).
-    q = """SELECT family_id, tier, status FROM audit_decisions WHERE 1=1"""
+    q = """SELECT family_id, tier, status, COALESCE(qa_priority, 0) AS qa_priority FROM audit_decisions WHERE 1=1"""
     params = []
     if tier_filter:
         q += " AND tier = ?"
@@ -1201,6 +1208,7 @@ def queue_families(conn, catalog, tier_filter=None, status_filter=None, category
             "sku": sku,                              # redundant pero explícito
             "tier": r["tier"],
             "status": r["status"],
+            "qa_priority": bool(r["qa_priority"]) if "qa_priority" in r.keys() else False,
             "category": fam.get("category"),
             "team": fam.get("team"),
             "season": fam.get("season"),
