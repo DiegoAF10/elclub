@@ -1,18 +1,25 @@
-"""Ops s14d — marca SKUs críticos con qa_priority=1 para QA visual post-refetch.
+"""Ops s14d+s14i — marca SKUs críticos con qa_priority=1 para QA visual.
 
-Criterios:
-  T1 — TODAS las selecciones Mundial 2026 × variant ∈ {home, away} × fan_adult/short
-       (~96 SKUs: 48 selecciones × 2 variants)
-  T2 — Top-20 clubes Europa temporada 25/26 o 26/27 × variant ∈ {home, away} × fan_adult/short
-       (~40 SKUs: 20 clubs × 2 variants × typical 1 fan_short modelo per canonical)
+Criterios (s14i — ajustado por Diego post-pilot Argentina):
 
-Total esperado: ~136 SKUs.
+  Scope: SOLO Mundial 2026.
+  Whitelist de selecciones: data/wc2026-classified.json (47-48 países).
 
-Estos son los SKUs de MAYOR prioridad comercial — si alguno tiene mis-labeling
-(ej. sleeve, type, variant) o fotos equivocadas, bloqueará launch.
+  Variantes de family válidas: home, away, third, goalkeeper.
+  NO: training, special (concept/limited), shorts, vest, jacket, polo,
+  sweatshirt, other.
 
-Uso: cd el-club/erp && python scripts/mark-qa-priority.py [--dry-run]
+  Tipos de modelo válidos (las formas del jersey):
+    fan_adult, player_adult, woman, kid, baby
+  NO: retro_adult (Mundial 2026 es presente, no histórico).
+
+  Sleeves válidos: short, long.
+
+Total esperado: ~300-400 SKUs (48 countries × ~8 variantes típicas).
+
+Usage: cd el-club/erp && python scripts/mark-qa-priority.py [--dry-run]
 """
+import json
 import sys
 from pathlib import Path
 
@@ -23,45 +30,41 @@ import audit_db  # noqa: E402
 
 DRY_RUN = "--dry-run" in sys.argv
 
-# Top-20 clubes Europa canonical prefixes (kebab-case)
-TOP_20_CLUBS = {
-    "barcelona", "real-madrid", "bayern-munich", "paris-saint-germain",
-    "arsenal", "chelsea", "liverpool", "manchester-united", "manchester-city",
-    "ac-milan", "inter-milan", "juventus", "napoli", "borussia-dortmund",
-    "atletico-madrid", "tottenham", "bayer-leverkusen", "leverkusen",
-    "ajax", "benfica", "porto", "sporting-lisbon",  # incluye variantes
+WC2026_JSON_PATH = (
+    Path(audit_db.CATALOG_PATH).parent / "wc2026-classified.json"
+)
+
+# Criterios
+ALLOWED_VARIANTS = {"home", "away", "third", "goalkeeper"}
+ALLOWED_TYPES = {"fan_adult", "player_adult", "woman", "kid", "baby"}
+ALLOWED_SLEEVES = {"short", "long"}
+# Categorías de family que siempre excluimos (son "accesorios" no jerseys principales)
+EXCLUDED_CATEGORIES = {
+    "jacket", "vest", "polo", "sweatshirt", "training", "shorts", "other",
 }
 
-# Seasons TOP prioridad (current + upcoming)
-TOP_SEASONS = {"25/26", "26/27", "2025", "2026"}
 
-
-def fid_prefix(fid):
-    """Reusa _fid_prefix de audit_db."""
-    return audit_db._fid_prefix(fid or "")
-
-
-def is_national_team(fid):
-    return audit_db._fid_prefix_match(fid, audit_db.NATIONAL_TEAMS_FID)
-
-
-def is_top_20_club(fid):
-    prefix = fid_prefix(fid)
-    return prefix in TOP_20_CLUBS
-
-
-def season_is_current(season):
-    if not season:
-        return False
-    s = season.strip().replace("/", "-")
-    return s in {"25-26", "26-27"} or season in TOP_SEASONS
+def load_wc2026_fid_prefixes():
+    """Devuelve set de fid_prefixes válidos según whitelist WC2026."""
+    if not WC2026_JSON_PATH.exists():
+        print(f"WARNING: {WC2026_JSON_PATH} no encontrado — fallback a NATIONAL_TEAMS_FID (permisivo)")
+        return None  # None = no filter (legacy)
+    data = json.loads(WC2026_JSON_PATH.read_text(encoding="utf-8"))
+    prefixes = set()
+    for entry in data.get("classified", []):
+        for alias in entry.get("fid_aliases", []):
+            prefixes.add(alias)
+    return prefixes
 
 
 def main():
-    audit_db.init_audit_schema()  # ensures qa_priority column exists
+    audit_db.init_audit_schema()
     catalog = audit_db.load_catalog()
     sku_idx = audit_db.build_sku_index(catalog)
     conn = audit_db.get_conn()
+
+    wc2026 = load_wc2026_fid_prefixes()
+    print(f"WC2026 whitelist: {len(wc2026) if wc2026 else 'fallback legacy'} prefixes")
 
     rows = conn.execute(
         "SELECT family_id, tier FROM audit_decisions WHERE status != 'deleted'"
@@ -70,55 +73,66 @@ def main():
     qa_skus = []
     for r in rows:
         sku = r["family_id"]
-        tier = r["tier"]
         resolved = sku_idx.get(sku)
         if not resolved:
             continue
         fam, modelo = resolved
         if not modelo:
-            continue  # legacy families skipped
+            continue
 
-        # Criterio base: fan_adult (short o long) + home/away
-        # s14f: incluir sleeve='long' — Diego detectó que ARG-2026-V-FL (Argentina
-        # away long) y similares quedaban excluidos de la QA priority.
-        mtype = modelo.get("type")
-        sleeve = modelo.get("sleeve")
+        # Filter 1: family.variant debe ser home/away/third/goalkeeper
         variant = (fam.get("variant") or "").lower()
-        if mtype != "fan_adult":
-            continue
-        if sleeve not in ("short", "long"):
-            continue
-        if variant not in ("home", "away"):
+        if variant not in ALLOWED_VARIANTS:
             continue
 
+        # Filter 2: family.category no debe ser accesorio
+        cat = (fam.get("category") or "adult").lower()
+        if cat in EXCLUDED_CATEGORIES:
+            continue
+
+        # Filter 3: modelo.type in allowed jerseys
+        mtype = modelo.get("type")
+        if mtype not in ALLOWED_TYPES:
+            continue
+
+        # Filter 4: modelo.sleeve valid
+        sleeve = modelo.get("sleeve")
+        if sleeve not in ALLOWED_SLEEVES:
+            continue
+
+        # Filter 5: fid prefix en WC2026 whitelist
         fid = fam.get("family_id", "")
+        fid_prefix = audit_db._fid_prefix(fid)
+        if wc2026 is not None:
+            if fid_prefix not in wc2026:
+                continue
+        else:
+            # Fallback: usar NATIONAL_TEAMS_FID (más permisivo)
+            if not audit_db._fid_prefix_match(fid, audit_db.NATIONAL_TEAMS_FID):
+                continue
 
-        # T1 Mundial: selección nacional + season 2026/2027 o cualquier año en 2026/2027
-        if tier == "T1" and is_national_team(fid):
-            qa_skus.append((sku, tier, fam.get("team"), fam.get("season"), variant, mtype, sleeve))
-            continue
+        qa_skus.append((sku, r["tier"], fam.get("team"), fam.get("season"), variant, mtype, sleeve))
 
-        # T2 Top-20 clubs: club en TOP_20 + season current
-        if tier == "T2" and is_top_20_club(fid) and season_is_current(fam.get("season")):
-            qa_skus.append((sku, tier, fam.get("team"), fam.get("season"), variant, mtype, sleeve))
-            continue
-
-    print(f"QA priority SKUs detectados: {len(qa_skus)}")
-    t1_count = sum(1 for q in qa_skus if q[1] == "T1")
-    t2_count = sum(1 for q in qa_skus if q[1] == "T2")
-    print(f"  T1 (Mundial): {t1_count}")
-    print(f"  T2 (Top-20 clubs): {t2_count}")
-
-    print("\nSample (first 15):")
-    for s in qa_skus[:15]:
-        print(f"  [{s[1]}] {s[0]}: {s[2]} {s[3]} {s[4]}")
+    print(f"\nQA priority SKUs detectados: {len(qa_skus)}")
+    # Breakdown
+    by_type = {}
+    by_country = {}
+    for s in qa_skus:
+        by_type[s[5]] = by_type.get(s[5], 0) + 1
+        by_country[s[2] or "—"] = by_country.get(s[2] or "—", 0) + 1
+    print(f"\nBy modelo type:")
+    for k, v in sorted(by_type.items(), key=lambda kv: -kv[1]):
+        print(f"  {k}: {v}")
+    print(f"\nCountries covered: {len(by_country)}")
+    # Top 15 by SKU count
+    for country, n in sorted(by_country.items(), key=lambda kv: -kv[1])[:15]:
+        print(f"  {country}: {n}")
 
     if DRY_RUN:
         print("\n--dry-run: no DB write")
         conn.close()
         return
 
-    # First unset all, then set selected → idempotent
     conn.execute("UPDATE audit_decisions SET qa_priority = 0")
     for s in qa_skus:
         conn.execute(
@@ -126,11 +140,10 @@ def main():
             (s[0],),
         )
     conn.commit()
-
     total = conn.execute(
         "SELECT COUNT(*) FROM audit_decisions WHERE qa_priority = 1"
     ).fetchone()[0]
-    print(f"\nDB updated: {total} rows marked qa_priority=1")
+    print(f"\nDB updated: {total} rows qa_priority=1")
     conn.close()
 
 
