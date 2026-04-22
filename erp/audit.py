@@ -760,7 +760,7 @@ def render_queue(conn, catalog):
     _render_shortcuts_box()
     st.markdown("")
 
-    # Filters
+    # Filters — Ops s13+: default filter = pending para que Diego vea primero lo que falta
     fc1, fc2, fc3, fc4 = st.columns(4)
     with fc1:
         tier_filter = st.selectbox(
@@ -768,8 +768,10 @@ def render_queue(conn, catalog):
             format_func=lambda t: t if t.startswith("(") else TIER_LABELS.get(t, t),
         )
     with fc2:
+        status_options = ["(todos)"] + STATUSES
         status_filter = st.selectbox(
-            "Status", ["(todos)"] + STATUSES,
+            "Status", status_options,
+            index=status_options.index("pending"),  # default pending
         )
     with fc3:
         category_filter = st.selectbox(
@@ -777,7 +779,7 @@ def render_queue(conn, catalog):
             format_func=lambda c: c if c.startswith("(") else CATEGORY_LABELS.get(c, c),
         )
     with fc4:
-        search = st.text_input("Buscar", placeholder="team, family_id…")
+        search = st.text_input("Buscar", placeholder="SKU, team, season…")
 
     tf = tier_filter if tier_filter not in ("(todos)", "(sin tier)") else None
     sf = status_filter if status_filter != "(todos)" else None
@@ -793,11 +795,12 @@ def render_queue(conn, catalog):
         s = search.lower()
         items = [
             i for i in items
-            if s in (i.get("family_id", "").lower())
+            if s in (i.get("sku", "").lower())
             or s in (i.get("team", "") or "").lower()
+            or s in (i.get("season", "") or "").lower()
         ]
 
-    st.caption(f"**{len(items)} productos madre** en queue (post-filtros)")
+    st.caption(f"**{len(items)} items auditables** en queue (post-filtros) · cada uno es 1 modelo independiente")
 
     # Pagination
     total_pages = max(1, (len(items) + PAGE_SIZE - 1) // PAGE_SIZE)
@@ -821,7 +824,13 @@ def render_queue(conn, catalog):
     end = start + PAGE_SIZE
     page_items = items[start:end]
 
-    # Render list
+    # Render list — Ops s13+: 1 card por SKU (modelo independiente)
+    modelo_label_map = {
+        "fan_adult": "Fan", "player_adult": "Player", "retro_adult": "Retro",
+        "woman": "Mujer", "kid": "Niño", "baby": "Bebé",
+    }
+    sleeve_label_map = {"short": "manga corta", "long": "manga larga"}
+
     for i, it in enumerate(page_items):
         with st.container(border=True):
             row = st.columns([1, 3, 2, 1, 1, 1])
@@ -829,43 +838,59 @@ def render_queue(conn, catalog):
             with row[0]:
                 if hero:
                     st.image(hero, width=80)
+                if it.get("n_photos"):
+                    st.caption(f"📷 {it['n_photos']}")
             with row[1]:
                 tier_badge = TIER_LABELS.get(it.get("tier"), "❓ Sin tier")
-                st.markdown(f"**{it['family_id']}**  \n{tier_badge}")
+                st.markdown(f"**`{it['sku']}`**  \n{tier_badge}")
                 team = it.get("team") or ""
                 season = it.get("season") or ""
-                variant = it.get("variant") or ""
-                st.caption(f"{team} · {season} · {variant}")
+                variant_label = it.get("variant_label") or it.get("variant") or ""
+                # Modelo descriptivo
+                mt = it.get("modelo_type")
+                sl = it.get("sleeve")
+                modelo_desc = ""
+                if mt:
+                    modelo_desc = modelo_label_map.get(mt, mt)
+                    if sl and mt in ("fan_adult", "player_adult", "retro_adult"):
+                        modelo_desc += f" {sleeve_label_map.get(sl, sl)}"
+                elif it.get("category") and it.get("category") != "adult":
+                    modelo_desc = f"[{it['category']}]"
+                label = f"{team} · {season} · {variant_label}"
+                if modelo_desc:
+                    label += f" · **{modelo_desc}**"
+                st.markdown(label)
+                if it.get("sizes") or it.get("price"):
+                    st.caption(f"{it.get('sizes') or '—'} · Q{it.get('price') or '—'}")
             with row[2]:
                 status = it.get("status", "pending")
                 emoji = {"pending": "⏳", "verified": "🟢", "flagged": "🔴",
                          "skipped": "⏭️", "needs_rework": "⚠️"}.get(status, "?")
                 st.markdown(f"{emoji} **{status}**")
             with row[3]:
-                if st.button("Abrir", key=f"open_{it['family_id']}", type="primary"):
+                if st.button("Abrir", key=f"open_{it['sku']}", type="primary"):
                     st.session_state.audit_view = "detail"
-                    st.session_state.current_family = it["family_id"]
+                    st.session_state.current_family = it["sku"]
                     st.rerun()
             with row[4]:
-                # Quick tier change (para families sin tier)
                 current_tier = it.get("tier") or "(sin)"
                 new_tier = st.selectbox(
                     "Tier",
                     ["(sin)"] + TIERS,
                     index=(["(sin)"] + TIERS).index(current_tier) if current_tier in (["(sin)"] + TIERS) else 0,
-                    key=f"tier_{it['family_id']}",
+                    key=f"tier_{it['sku']}",
                     label_visibility="collapsed",
                 )
                 if new_tier != current_tier:
                     audit_db.upsert_decision(
-                        conn, it["family_id"],
+                        conn, it["sku"],
                         tier=None if new_tier == "(sin)" else new_tier,
                     )
                     st.rerun()
             with row[5]:
-                if st.button("⏭️", key=f"skip_{it['family_id']}", help="Skip"):
+                if st.button("⏭️", key=f"skip_{it['sku']}", help="Skip"):
                     audit_db.upsert_decision(
-                        conn, it["family_id"],
+                        conn, it["sku"],
                         status="skipped",
                         decided_at=datetime.now().isoformat(timespec="seconds"),
                     )
@@ -877,90 +902,160 @@ def render_queue(conn, catalog):
 # ═══════════════════════════════════════
 
 def render_detail(conn, catalog):
-    fid = st.session_state.get("current_family")
-    if not fid:
-        st.warning("No hay family seleccionada.")
+    """Ops s13+ — detail de UN SKU (un modelo auditable) con sus fotos propias.
+    No hay tabs: cada SKU es una vista independiente. Flechas ← → navegan al
+    pending anterior/siguiente del mismo scope.
+    """
+    sku = st.session_state.get("current_family")
+    if not sku:
+        st.warning("No hay item seleccionado.")
         if st.button("← Volver al queue"):
             st.session_state.audit_view = "queue"
             st.rerun()
         return
 
-    mother_id = audit_db.mother_family_id(fid)
-    variants = audit_db.find_related_variants(catalog, mother_id)
-    if not variants:
-        st.error(f"Family {mother_id} no encontrada en catalog.json")
+    sku_idx = audit_db.build_sku_index(catalog)
+    resolved = sku_idx.get(sku)
+    if not resolved:
+        st.error(f"SKU `{sku}` no encontrado en catalog.json")
+        if st.button("← Volver al queue"):
+            st.session_state.audit_view = "queue"
+            st.rerun()
         return
+    fam, modelo = resolved
 
-    # Ops s11 — telemetry: marcar opened_at la PRIMERA vez que se abre este mother_id
-    # en esta sesión (idempotente — no sobreescribe si ya existe opened_at para el fid).
-    audit_db.telemetry_open(mother_id)
+    # Telemetry hook (por SKU)
+    audit_db.telemetry_open(sku)
+
+    deci = audit_db.get_decision(conn, sku) or {}
+    tier = deci.get("tier")
+    status = deci.get("status", "pending")
 
     # Header
-    base = variants.get("adult") or next(iter(variants.values()))
-    deci = audit_db.get_decision(conn, mother_id) or {}
-    tier = deci.get("tier")
+    team = fam.get("team") or ""
+    season = fam.get("season") or ""
+    variant_label = fam.get("variant_label") or fam.get("variant") or ""
+    modelo_type = (modelo or {}).get("type") if modelo else fam.get("category", "legacy")
+    sleeve = (modelo or {}).get("sleeve") if modelo else None
+    modelo_label_map = {"fan_adult": "Fan", "player_adult": "Player",
+                        "retro_adult": "Retro", "woman": "Mujer", "kid": "Niño", "baby": "Bebé"}
+    sleeve_label_map = {"short": "manga corta", "long": "manga larga"}
+    modelo_desc = modelo_label_map.get(modelo_type, modelo_type or "—")
+    if sleeve and modelo_type in ("fan_adult", "player_adult", "retro_adult"):
+        modelo_desc += f" {sleeve_label_map.get(sleeve, sleeve)}"
 
-    hc1, hc2, hc3, hc4 = st.columns([3, 1, 1, 1])
+    hc1, hc2, hc3, hc4, hc5 = st.columns([4, 0.7, 0.7, 1, 1])
     with hc1:
-        team = base.get("team") or ""
-        season = base.get("season") or ""
-        variant = base.get("variant") or ""
-        st.markdown(f"## {team} {season} — {variant}")
-        st.caption(f"`{mother_id}` · {TIER_LABELS.get(tier, 'Sin tier')}")
+        st.markdown(f"## {team} {season} — {variant_label} · {modelo_desc}")
+        st.caption(f"SKU `{sku}` · {TIER_LABELS.get(tier, 'Sin tier')} · canonical `{fam['family_id']}`")
     with hc2:
+        # Flecha ← anterior pending
+        prev_sku = _find_adjacent_pending(conn, sku, direction=-1)
+        if st.button("◀", key="nav_prev_pending", disabled=(prev_sku is None),
+                     help="Anterior pending (K)", use_container_width=True):
+            st.session_state.current_family = prev_sku
+            st.rerun()
+    with hc3:
+        # Flecha → siguiente pending
+        next_sku = _find_adjacent_pending(conn, sku, direction=1)
+        if st.button("▶", key="nav_next_pending", disabled=(next_sku is None),
+                     help="Siguiente pending (J)", use_container_width=True):
+            st.session_state.current_family = next_sku
+            st.rerun()
+    with hc4:
         if st.button("← Queue", key="back_queue"):
             st.session_state.audit_view = "queue"
             st.rerun()
-    with hc3:
-        # Ops s11 — link a PDP live. Se abre en nueva tab. Shortcut Ctrl+L
-        # lo dispara también (JS lee data-url del span invisible).
-        live_url = f"https://vault.elclub.club/producto?id={mother_id}"
-        st.link_button("🔗 Ver live", live_url, use_container_width=True,
-                       help="Abre la PDP en vault.elclub.club (Ctrl+L)")
-        st.markdown(
-            f'<span id="audit-live-url" data-live-url="{live_url}" style="display:none"></span>',
-            unsafe_allow_html=True,
-        )
-    with hc4:
+    with hc5:
         # Tier change
-        tiers = ["(sin)"] + TIERS
-        idx = tiers.index(tier) if tier in tiers else 0
-        new_tier = st.selectbox("Tier", tiers, index=idx, key="detail_tier")
+        tiers_opts = ["(sin)"] + TIERS
+        idx = tiers_opts.index(tier) if tier in tiers_opts else 0
+        new_tier = st.selectbox("Tier", tiers_opts, index=idx, key="detail_tier",
+                                label_visibility="collapsed")
         if new_tier != (tier or "(sin)"):
-            audit_db.upsert_decision(
-                conn, mother_id,
-                tier=None if new_tier == "(sin)" else new_tier,
-            )
+            audit_db.upsert_decision(conn, sku,
+                                      tier=None if new_tier == "(sin)" else new_tier)
             st.rerun()
+
+    # Link a PDP live (canonical family para que matchee la URL de vault)
+    live_url = f"https://vault.elclub.club/producto?id={fam['family_id']}"
+    st.link_button(f"🔗 Ver live {fam['family_id']}", live_url,
+                   help="Abre la PDP del producto madre en vault.elclub.club (Ctrl+L)")
+    st.markdown(
+        f'<span id="audit-live-url" data-live-url="{live_url}" style="display:none"></span>',
+        unsafe_allow_html=True,
+    )
 
     _render_shortcuts_box()
     st.markdown("")
 
-    # Variants summary row
-    st.markdown("### Variantes del producto madre")
-    var_cols = st.columns(len(variants))
-    for idx, (cat, fam) in enumerate(variants.items()):
-        with var_cols[idx]:
-            label = CATEGORY_LABELS.get(cat, cat)
-            hero = fam.get("hero_thumbnail")
-            if hero:
-                st.image(hero, use_container_width=True)
-            st.markdown(f"**{label}**")
-            st.caption(f"`{fam.get('family_id')}`")
-            fam_dec = audit_db.get_decision(conn, fam["family_id"]) or {}
-            status_emoji = {"pending": "⏳", "verified": "🟢", "flagged": "🔴",
-                            "skipped": "⏭️", "needs_rework": "⚠️"}.get(
-                fam_dec.get("status", "pending"), "⏳")
-            st.caption(f"{status_emoji} {fam_dec.get('status', 'pending')}")
+    # Panel specs editable (scope: esta family / este modelo)
+    _render_scraped_specs_panel(fam, modelo_idx=_find_modelo_idx(fam, sku))
 
-    st.markdown("---")
-    st.markdown("### 🔍 Audit por variante")
+    # Render el modelo — fotos + acciones + checks + verify/flag
+    modelo_view = _modelo_view_for_audit(sku, fam, modelo)
+    _render_photos_and_actions(conn, modelo_view, form_key_prefix=sku)
+    _render_family_checks_and_verify(conn, {"family_id": sku})
 
-    # Expandable section per variant
-    for cat, fam in variants.items():
-        with st.expander(f"{CATEGORY_LABELS.get(cat, cat)} — `{fam['family_id']}`", expanded=(cat == "adult")):
-            _render_scraped_specs_panel(fam)
-            _render_variant_form(conn, fam)
+
+def _find_modelo_idx(fam, sku):
+    """Retorna el índice del modelo en fam.modelos con SKU dado, o None."""
+    modelos = fam.get("modelos") or []
+    for i, m in enumerate(modelos):
+        if m.get("sku") == sku:
+            return i
+    return None
+
+
+def _modelo_view_for_audit(sku, fam, modelo):
+    """Construye la 'vista' con family_id=SKU + gallery/hero del modelo (o del
+    fam si legacy). _render_photos_and_actions escribe/lee audit_photo_actions
+    keyed por SKU, así que cada modelo tiene sus acciones independientes.
+    """
+    if modelo:
+        return {
+            "family_id": sku,
+            "gallery": modelo.get("gallery") or [],
+            "hero_thumbnail": modelo.get("hero_thumbnail"),
+            "team": fam.get("team"),
+            "season": fam.get("season"),
+            "variant": fam.get("variant"),
+        }
+    # Legacy
+    return {
+        "family_id": sku,
+        "gallery": fam.get("gallery") or [],
+        "hero_thumbnail": fam.get("hero_thumbnail"),
+        "team": fam.get("team"),
+        "season": fam.get("season"),
+        "variant": fam.get("variant"),
+    }
+
+
+def _find_adjacent_pending(conn, current_sku, direction=1):
+    """Retorna el SKU del próximo (direction=1) o anterior (direction=-1) item
+    con status='pending' en el MISMO tier (o en el global order si current no tiene tier).
+    Sort: tier asc, family_id asc (mismo orden que queue_families).
+    """
+    q = """
+        SELECT family_id FROM audit_decisions
+        WHERE status='pending'
+        ORDER BY
+          CASE tier
+            WHEN 'T1' THEN 1 WHEN 'T2' THEN 2 WHEN 'T3' THEN 3
+            WHEN 'T4' THEN 4 WHEN 'T5' THEN 5 ELSE 6
+          END ASC, family_id ASC
+    """
+    rows = [r["family_id"] for r in conn.execute(q).fetchall()]
+    if not rows: return None
+    if current_sku not in rows:
+        # Not in pending list → return first pending
+        return rows[0] if direction > 0 else rows[-1]
+    i = rows.index(current_sku)
+    j = i + direction
+    if 0 <= j < len(rows):
+        return rows[j]
+    return None
 
 
 VARIANT_OPTIONS = ["home", "away", "third", "special", "goalkeeper", "training"]
@@ -1039,15 +1134,11 @@ def _save_family_edits(family_id, new_team, new_season, new_variant, modelo_edit
     return {"ok": True, "fields": changed_fields}
 
 
-def _render_scraped_specs_panel(fam):
+def _render_scraped_specs_panel(fam, modelo_idx=None):
     """Ops s13 — panel editable con datos del scrape + unificación.
 
-    Diego puede corregir team/season/variant (la llave de unificación) y,
-    por cada modelo del schema unified, ajustar type + sleeve. Al guardar,
-    se re-escribe catalog.json con los cambios para ESTE family_id.
-
-    No re-unifica con otras families automáticamente — si Diego quiere mergear
-    dos, lo hace en una sesión aparte (scope fuera de este form).
+    Si `modelo_idx` se provee, SOLO muestra editable ese modelo (el contexto
+    del SKU abierto). Si None, muestra todos los modelos (legacy multi-tab behavior).
     """
     fid = fam.get("family_id", "")
     is_unified = bool(fam.get("modelos"))
@@ -1079,14 +1170,24 @@ def _render_scraped_specs_panel(fam):
 
         # ── Modelos (editable type + sleeve) o variants legacy ──
         modelos = fam.get("modelos") or []
-        modelo_edits = []  # lista de (nuevo_type, nuevo_sleeve) por modelo
+        # Ops s13+ — si modelo_idx especificado, solo mostrar ese modelo
+        visible_indices = range(len(modelos))
+        if modelo_idx is not None and 0 <= modelo_idx < len(modelos):
+            visible_indices = [modelo_idx]
+        modelo_edits = []  # lista de (nuevo_type, nuevo_sleeve) por modelo (completa — None si skip)
         if is_unified:
-            st.markdown(f"**🧥 Modelos ({len(modelos)})** — ajustá type/sleeve si algo está mal clasificado.")
+            if modelo_idx is not None:
+                st.markdown(f"**🧥 Modelo actual (foco)** — ajustá type/sleeve si está mal clasificado.")
+            else:
+                st.markdown(f"**🧥 Modelos ({len(modelos)})** — ajustá type/sleeve si algo está mal clasificado.")
             unified_from = fam.get("_unified_from") or []
             if len(unified_from) > 1:
                 st.caption(f"_unificó:_ {' + '.join(f'`{x}`' for x in unified_from)}")
 
-            for i, m in enumerate(modelos):
+            # Inicializar modelo_edits con valores actuales (para los no-visibles, copia actual)
+            modelo_edits = [(m.get("type"), m.get("sleeve")) for m in modelos]
+            for i in visible_indices:
+                m = modelos[i]
                 mc1, mc2, mc3, mc4, mc5 = st.columns([2, 1, 1.2, 1.5, 2])
                 with mc1:
                     cur_type = m.get("type") or "fan_adult"
@@ -1117,7 +1218,10 @@ def _render_scraped_specs_panel(fam):
                         st.markdown(f"[Yupoo ↗]({yupoo})")
                     n_gallery = len(m.get("gallery") or [])
                     st.caption(f"{n_gallery} fotos")
-                modelo_edits.append((new_type, new_sleeve))
+                    # Mostrar el SKU del modelo
+                    if m.get("sku"):
+                        st.caption(f"SKU: `{m['sku']}`")
+                modelo_edits[i] = (new_type, new_sleeve)
         else:
             # Legacy family — muestra variants[] read-only
             variants = fam.get("variants") or []

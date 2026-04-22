@@ -97,6 +97,287 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_verified ON audit_telemetry(verified_at
 """
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# SKU generator (Ops s13 post-normalize) — identificador semántico legible.
+# Formato: {TEAM}-{SEASON}-{VARIANT}-{MODELO}[-N]
+#   TEAM    → 2-4 letras uppercase del prefix del family_id, override para famous
+#   SEASON  → compact year(s): 2026 (selecciones) o 2526 (YY/YY compacto)
+#   VARIANT → 1 letra: L=home V=away R=third E=special G=goalkeeper T=training
+#   MODELO  → FS=fan short, FL=fan long, PS=player short, PL=player long,
+#             RE=retro, W=woman, K=kid, B=baby. Legacy cats → 3 letras del slug.
+#   -N      → sufijo colisión dentro del mismo (team,season,variant) si hay
+#             duplicados de (type, sleeve).
+# ═══════════════════════════════════════════════════════════════════════
+
+TEAM_ABBR_OVERRIDES = {
+    # UEFA top-5
+    "manchester-united": "MU", "manchester-city": "MC",
+    "paris-saint-germain": "PSG", "psg": "PSG",
+    "real-madrid": "RM", "bayern-munich": "BAY",
+    "barcelona": "BAR", "ac-milan": "ACM",
+    "inter-milan": "INT",  # Inter Milan = "INT"
+    "boca-juniors": "BOC", "river-plate": "RIV",
+    "club-america": "AME", "atletico-madrid": "ATM",
+    "athletic-bilbao": "ATH", "borussia-dortmund": "BVB",
+    "juventus": "JUV", "chelsea": "CHE", "liverpool": "LIV",
+    "arsenal": "ARS", "tottenham": "TOT",
+    "napoli": "NAP", "roma": "ROM", "as-roma": "ROM",
+    "lazio": "LAZ", "fiorentina": "FIO", "atalanta": "ATA",
+    "flamengo": "FLA", "palmeiras": "PAL", "corinthians": "COR",
+    "santos": "SAN", "sao-paulo": "SAO", "s-o-paulo": "SAO",
+    "porto": "POR", "benfica": "BEN", "sporting": "SCP",
+    "ajax": "AJA", "psv": "PSV",
+    "celtic": "CEL", "rangers": "RAN",
+    "villarreal": "VLL", "valencia": "VAL", "sevilla": "SEV",
+    "real-betis": "BET", "betis": "BET",
+    "leicester": "LEI", "leicester-city": "LEI",
+    "newcastle": "NEW", "newcastle-united": "NEW",
+    "west-ham": "WHU", "west-ham-united": "WHU",
+    "inter-miami": "MIA", "inter-miami-cf": "MIA",
+    # Disambiguation overrides (collisions detectados)
+    "atl-tico-mineiro": "MIN",       # Atlético Mineiro (vs Atlético Madrid=ATM)
+    "atletico-mineiro": "MIN",
+    "internacional": "POA",           # Internacional Porto Alegre (vs Inter Milan=INT)
+    "coritiba": "CTB",                # Coritiba (vs Corinthians=COR, Córdoba=CDB)
+    "cordoba": "CDB", "c-rdoba": "CDB",  # Córdoba CF
+    "braga": "BRG", "sc-braga": "BRG",   # Braga (vs Brazil=BRA)
+    "americas": "AMS",                # Americas (vs América=AME)
+    "atletico-nacional": "ATN",       # Atlético Nacional (Colombia)
+    "atl-tico-nacional": "ATN",
+    "universidad-catolica": "UCA",    # U. Católica Chile
+    "universidad-cat-lica": "UCA",
+    "universidad-de-chile": "UCH", "u-de-chile": "UCH",
+    "universidad-chile": "UCH",
+    "chivas-de-guadalajara": "CHI", "chivas": "CHI", "guadalajara": "CHI",
+    "cruz-azul": "CRZ",
+    "pumas": "PUM", "pumas-unam": "PUM",
+    "tigres": "TIG", "tigres-uanl": "TIG",
+    "monterrey": "MTY",
+}
+
+_CATEGORY_SUFFIXES = (
+    "-women", "-kids", "-baby", "-jacket-pants", "-jacket",
+    "-training", "-polo", "-vest", "-sweatshirt", "-shorts",
+)
+
+_VARIANT_SKU_LETTER = {
+    "home": "L", "away": "V", "third": "R",
+    "special": "E", "goalkeeper": "G", "training": "T",
+    "fourth": "4",
+    # Non-táctico (históricos/ediciones) — letters no conflictivas con el
+    # modelo code ni con home/away/third.
+    "anniversary": "AN",
+    "windbreaker": "WB",
+    "retro": "RT",     # ≠ third (R) y ≠ retro_adult modelo (RE)
+    "originals": "OG",
+    "concept": "CC",
+    "limited": "LI",
+}
+
+_MODELO_SKU_CODE = {
+    ("fan_adult", "short"): "FS",
+    ("fan_adult", "long"): "FL",
+    ("player_adult", "short"): "PS",
+    ("player_adult", "long"): "PL",
+    ("retro_adult", "short"): "RE",
+    ("retro_adult", "long"): "RL",
+    ("woman", "short"): "W",
+    ("woman", "long"): "WL",
+    ("kid", "short"): "K",
+    ("kid", "long"): "KL",
+    ("baby", "short"): "B",
+}
+
+
+def _strip_category_suffix(prefix):
+    for s in _CATEGORY_SUFFIXES:
+        if prefix.endswith(s):
+            return prefix[: -len(s)]
+    return prefix
+
+
+def _derive_team_code(family_id):
+    """Extrae el prefix del slug + genera código 2-4 letras."""
+    import re
+    m = re.match(r"^(.*?)-(\d{2,4}(?:-\d{2,4})?|noseason)", (family_id or "").lower())
+    prefix = m.group(1) if m else (family_id or "").lower()
+    prefix = _strip_category_suffix(prefix)
+    if prefix in TEAM_ABBR_OVERRIDES:
+        return TEAM_ABBR_OVERRIDES[prefix]
+    words = [w for w in prefix.split("-") if w]
+    if not words:
+        return "XXX"
+    if len(words) == 1:
+        return words[0][:3].upper()
+    # Multi-word: primera letra de cada palabra (max 4)
+    abbr = "".join(w[0] for w in words)[:4].upper()
+    return abbr if len(abbr) >= 2 else words[0][:3].upper()
+
+
+def _compact_season(season):
+    """'2026' → '2026', '25-26' → '2526', '25/26' → '2526'. noseason → NS."""
+    if not season: return "NS"
+    s = str(season).strip()
+    if s == "noseason" or not s: return "NS"
+    # YYYY (selecciones): devolver tal cual
+    if len(s) == 4 and s.isdigit():
+        return s
+    # YY-YY o YY/YY: 4 dígitos
+    parts = s.replace("/", "-").split("-")
+    if len(parts) == 2 and all(p.isdigit() for p in parts):
+        return f"{parts[0].zfill(2)}{parts[1].zfill(2)}"
+    # fallback: solo dígitos
+    digits = "".join(c for c in s if c.isdigit())
+    return digits[:4] if digits else "NS"
+
+
+def _variant_letter(variant):
+    if not variant: return "X"
+    return _VARIANT_SKU_LETTER.get(variant.lower(), variant[0].upper())
+
+
+def _modelo_code(modelo_type, sleeve):
+    """Código de modelo. Para tipos unificados usa map fijo; fallback a 2 letras."""
+    key = (modelo_type or "", sleeve or "short")
+    if key in _MODELO_SKU_CODE:
+        return _MODELO_SKU_CODE[key]
+    # Legacy/extraño: primeras 2 letras del type
+    t = (modelo_type or "XX").replace("_", "")[:2].upper()
+    sl = "L" if sleeve == "long" else ""
+    return t + sl
+
+
+def sku_base(family, modelo=None):
+    """SKU base sin disambiguador de colisión. Es responsabilidad del caller
+    verificar duplicados dentro de la family y agregar sufijo -N.
+
+    Si modelo=None (legacy family sin modelos[]), usa el `category` del family
+    como "modelo".
+    """
+    team = _derive_team_code(family.get("family_id", ""))
+    season = _compact_season(family.get("season", ""))
+    variant = _variant_letter(family.get("variant", ""))
+    if modelo is None:
+        # Legacy: category como modelo code
+        cat = (family.get("category") or "OTH")[:3].upper()
+        modelo_code = cat
+    else:
+        modelo_code = _modelo_code(modelo.get("type"), modelo.get("sleeve"))
+    return f"{team}-{season}-{variant}-{modelo_code}"
+
+
+def generate_skus_for_family(family):
+    """Asigna SKU único a cada modelo de una family (o UN SKU si legacy).
+
+    Retorna lista de SKUs en el mismo orden que family.modelos (o 1 elemento
+    si legacy). Maneja colisiones dentro del mismo (team,season,variant) con
+    sufijo -2, -3...
+
+    NOTA: este método solo maneja colisiones INTRA-family. Colisiones
+    cross-family (ej. 2 teams con mismo abbr) se detectan al nivel de catalog
+    completo — ver `resolve_catalog_skus(catalog)`.
+    """
+    modelos = family.get("modelos") or []
+    if not modelos:
+        return [sku_base(family, None)]
+    bases = [sku_base(family, m) for m in modelos]
+    seen = {}
+    result = []
+    for base in bases:
+        if base not in seen:
+            seen[base] = 1
+            result.append(base)
+        else:
+            seen[base] += 1
+            result.append(f"{base}-{seen[base]}")
+    return result
+
+
+def resolve_sku(catalog, sku):
+    """Busca un SKU en el catalog. Retorna (family, modelo) donde:
+    - family = la family (unified o legacy) que contiene el SKU
+    - modelo = el modelo dict si es unified, o None si legacy
+
+    Retorna (None, None) si el SKU no existe.
+
+    Optimización: si el caller va a hacer muchos lookups, conviene construir
+    un índice en una sola pasada. Esta función es O(N × avg_modelos_per_family).
+    """
+    for fam in catalog:
+        modelos = fam.get("modelos") or []
+        if modelos:
+            for m in modelos:
+                if m.get("sku") == sku:
+                    return fam, m
+        else:
+            if fam.get("sku") == sku:
+                return fam, None
+    return None, None
+
+
+def build_sku_index(catalog):
+    """Retorna dict SKU → (family, modelo | None) para lookups O(1).
+    Usar esto al inicio de render_queue / render_detail."""
+    idx = {}
+    for fam in catalog:
+        modelos = fam.get("modelos") or []
+        if modelos:
+            for m in modelos:
+                if m.get("sku"):
+                    idx[m["sku"]] = (fam, m)
+        else:
+            if fam.get("sku"):
+                idx[fam["sku"]] = (fam, None)
+    return idx
+
+
+def resolve_catalog_skus(catalog):
+    """Asigna SKUs finales a todo el catalog, resolviendo colisiones cross-family
+    con sufijo estable `-Xn` (X=collision marker) basado en orden del family_id.
+
+    Retorna dict: {family_id: [skus...]}. Modifica fam/modelos in-place si
+    encuentra modelos[] (setea m['sku']) o top-level (setea fam['sku']).
+    """
+    # Pass 1: generar SKUs base por family
+    per_family = {}
+    for fam in catalog:
+        per_family[fam["family_id"]] = generate_skus_for_family(fam)
+
+    # Pass 2: detectar colisiones cross-family y resolver con sufijo -Xn
+    # Ordenamos families por family_id para determinismo. El primero en aparecer
+    # mantiene el SKU base; los siguientes obtienen sufijo -X1, -X2, ...
+    import collections
+    sku_to_families = collections.defaultdict(list)
+    ordered_fids = sorted(per_family.keys())
+    for fid in ordered_fids:
+        for s in per_family[fid]:
+            sku_to_families[s].append(fid)
+
+    # Para cada SKU con ≥2 families, los 2nd+ se renombran
+    reassignments = {}  # (family_id, original_sku) → new_sku
+    for sku, fids in sku_to_families.items():
+        if len(fids) <= 1: continue
+        for i, fid in enumerate(fids[1:], start=1):
+            reassignments[(fid, sku)] = f"{sku}-X{i}"
+
+    # Apply reassignments
+    final = {}
+    for fid, skus in per_family.items():
+        final[fid] = [reassignments.get((fid, s), s) for s in skus]
+
+    # Pass 3: escribir al catalog in-place
+    for fam in catalog:
+        skus = final[fam["family_id"]]
+        modelos = fam.get("modelos") or []
+        if modelos:
+            for m, s in zip(modelos, skus):
+                m["sku"] = s
+        else:
+            fam["sku"] = skus[0] if skus else None
+
+    return final
+
+
 def init_audit_schema():
     conn = get_conn()
     conn.executescript(AUDIT_SCHEMA)
@@ -826,11 +1107,17 @@ def mark_rejected(conn, family_id, notes=""):
 # ───────────────────────────────────────────
 
 def queue_families(conn, catalog, tier_filter=None, status_filter=None, category_filter=None):
-    """Devuelve lista de families para el queue, aplicando filtros + agrupando
-    por 'producto madre' (solo family_ids adulto/base, sin sufijo de categoría).
+    """Ops s13+ — Devuelve lista de items auditables (per-SKU) con metadata
+    derivada de catalog. audit_decisions.family_id ahora contiene un SKU (ej
+    ARG-2026-L-FS), que resolvemos vía build_sku_index.
 
-    Retorna: list of dicts { family_id, tier, status, category, team, season, variant, hero }
+    Retorna: list of dicts {
+      family_id (=SKU), tier, status, category, team, season, variant, variant_label,
+      modelo_type, sleeve, hero, sizes, price, canonical_fid, source_family_id
+    }
     """
+    sku_idx = build_sku_index(catalog)
+    # Compat legacy: algunas rows pueden seguir con family_id tradicional.
     by_id = {f["family_id"]: f for f in catalog}
 
     # Default sort: T1 → T2 → T3 → T4 → T5 → None (via tier_rank), tiebreaker family_id ASC.
@@ -859,33 +1146,53 @@ def queue_families(conn, catalog, tier_filter=None, status_filter=None, category
     rows = conn.execute(q, params).fetchall()
 
     out = []
-    mother_seen = set()
     for r in rows:
-        fid = r["family_id"]
-        fam = by_id.get(fid)
+        sku = r["family_id"]  # Ahora es SKU, no family_id tradicional
+        resolved = sku_idx.get(sku)
+        fam = None
+        modelo = None
+        if resolved:
+            fam, modelo = resolved
+        else:
+            # Compat: row legacy con family_id tradicional (pre-migration)
+            fam = by_id.get(sku)
+            modelo = None
+
         if not fam:
-            continue
+            continue  # audit_decisions row sin match en catalog (huérfano)
+
         if category_filter and fam.get("category") != category_filter:
             continue
-        # Agrupa por 'producto madre' — mostramos solo el adulto base como entry del queue
-        # El detail view muestra todas las variantes relacionadas
-        mother = mother_family_id(fid)
-        if mother != fid:
-            # Es una variante, la saltamos (se ve dentro del detail del madre)
-            continue
-        if mother in mother_seen:
-            continue
-        mother_seen.add(mother)
+
+        # Extract display fields
+        modelo_type = (modelo or {}).get("type") if modelo else None
+        sleeve = (modelo or {}).get("sleeve") if modelo else None
+        # Hero del modelo si unified, sino del family
+        hero = (modelo or {}).get("hero_thumbnail") if modelo else None
+        if not hero:
+            hero = fam.get("hero_thumbnail")
+        # Gallery length (para badge de # fotos en card)
+        gallery = (modelo or {}).get("gallery") if modelo else fam.get("gallery")
+        n_photos = len(gallery) if gallery else 0
 
         out.append({
-            "family_id": fid,
+            "family_id": sku,                       # SKU como PK (nombre del campo preservado por compat)
+            "sku": sku,                              # redundant pero explícito
             "tier": r["tier"],
             "status": r["status"],
             "category": fam.get("category"),
             "team": fam.get("team"),
             "season": fam.get("season"),
             "variant": fam.get("variant"),
-            "hero": fam.get("hero_thumbnail"),
+            "variant_label": fam.get("variant_label") or fam.get("variant"),
+            "modelo_type": modelo_type,
+            "sleeve": sleeve,
+            "hero": hero,
+            "n_photos": n_photos,
+            "sizes": (modelo or {}).get("sizes") if modelo else None,
+            "price": (modelo or {}).get("price") if modelo else None,
+            "canonical_fid": fam["family_id"],
+            "source_family_id": (modelo or {}).get("source_family_id") if modelo else fam["family_id"],
         })
     return out
 
