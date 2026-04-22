@@ -840,10 +840,20 @@ def _render_pending_preview(conn, fam, item):
         if val:
             st.warning(f"Validation: {', '.join(val)}")
 
+    # Featured toggle — marca como "TOP" para el badge destacado en la Card del catálogo.
+    # El flag persiste al publicar (catalog.json.featured=true).
+    current_featured = bool(fam.get("featured", False))
+    featured = st.checkbox(
+        "⭐ Destacar (TOP badge en la Card)",
+        value=current_featured,
+        key=f"featured_{fid}",
+        help="Marca esta family como TOP. El badge aparece en la Card del catálogo. Default: off.",
+    )
+
     ac1, ac2, ac3 = st.columns(3)
     with ac1:
         if st.button(f"✅ PUBLISH", key=f"publish_{fid}", type="primary", use_container_width=True):
-            _publish_family(conn, fam, claude_data, new_gallery)
+            _publish_family(conn, fam, claude_data, new_gallery, featured=featured)
             st.rerun()
     with ac2:
         if st.button(f"❌ REJECT", key=f"reject_{fid}", use_container_width=True):
@@ -885,7 +895,7 @@ def _render_pending_preview(conn, fam, item):
 # COMPONENT 4: Publish flow
 # ═══════════════════════════════════════
 
-def _publish_family(conn, fam, claude_data, new_gallery):
+def _publish_family(conn, fam, claude_data, new_gallery, featured=False):
     """Aplica cambios al catalog.json + git commit + push."""
     catalog_path = audit_db.CATALOG_PATH
     if not os.path.exists(catalog_path):
@@ -917,6 +927,9 @@ def _publish_family(conn, fam, claude_data, new_gallery):
         target["sku"] = claude_data["sku"]
     if claude_data.get("keywords"):
         target["keywords"] = claude_data["keywords"]
+
+    # Featured toggle (U-001) — persiste el TOP badge
+    target["featured"] = bool(featured)
 
     # Re-compute gallery ACTIVANDO Gemini para watermarks (solo al publicar).
     # En el preview se usa la gallery cacheada; aquí refrescamos con procesamiento real.
