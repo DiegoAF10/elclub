@@ -134,6 +134,25 @@ def migrate_db(conn):
         GROUP BY j.jersey_id;
     """)
 
+    # ─── Comercial v2: imports tracking ───
+    # Add import_id + item_type to sale_items
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(sale_items)").fetchall()]
+    if cols:  # only if table exists (created by schema.sql run)
+        if "import_id" not in cols:
+            conn.execute("ALTER TABLE sale_items ADD COLUMN import_id TEXT")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_sale_items_import ON sale_items(import_id)")
+            conn.commit()
+        if "item_type" not in cols:
+            conn.execute("ALTER TABLE sale_items ADD COLUMN item_type TEXT DEFAULT 'jersey'")
+            conn.commit()
+
+    # Add import_id to jerseys
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(jerseys)").fetchall()]
+    if "import_id" not in cols:
+        conn.execute("ALTER TABLE jerseys ADD COLUMN import_id TEXT")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_jerseys_import ON jerseys(import_id)")
+        conn.commit()
+
 
 def update_jersey(conn, jersey_id, **fields):
     """Update jersey fields. Only updates provided keys."""

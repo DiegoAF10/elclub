@@ -266,3 +266,28 @@ JOIN sales s ON i.sale_id = s.sale_id
 WHERE s.fulfillment_status != 'cancelled'
 GROUP BY i.team, i.season, i.variant_label, i.version
 ORDER BY units_sold DESC;
+
+-- ═══════════════════════════════════════
+-- IMPORTS (batches de pedidos al proveedor)
+-- Bucket "Comercial" — 2026-04-22 PM
+-- ═══════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS imports (
+    import_id        TEXT PRIMARY KEY,   -- 'IMP-2026-04-07'
+    paid_at          TEXT,
+    arrived_at       TEXT,
+    supplier         TEXT DEFAULT 'Bond Soccer Jersey',
+    bruto_usd        REAL,
+    shipping_gtq     REAL,
+    fx               REAL DEFAULT 7.70,
+    total_landed_gtq REAL,
+    n_units          INTEGER,
+    unit_cost        REAL,
+    status           TEXT DEFAULT 'in_transit'
+        CHECK(status IN ('draft','paid','in_transit','arrived','closed','cancelled')),
+    notes            TEXT,
+    created_at       TEXT DEFAULT (datetime('now', 'localtime'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_imports_status ON imports(status);
+CREATE INDEX IF NOT EXISTS idx_imports_paid_at ON imports(paid_at);

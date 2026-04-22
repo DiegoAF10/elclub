@@ -488,6 +488,147 @@ def get_pipeline_kpis(conn) -> dict:
     }
 
 
+# ═══════════════════════════════════════
+# P&L — Estado de Resultados
+# ═══════════════════════════════════════
+
+def get_pnl(conn) -> dict:
+    """Full P&L breakdown.
+
+    - realized:   revenue/cogs de shipped/delivered (Cerradas)
+    - pipeline:   revenue potencial + cost estimado en pipeline
+    - sunken:     cost hundido (jerseys sold con venta cancelled)
+    - internal:   consumo interno/regalos (total=0, con jersey linked o items con cost futuro)
+    """
+    # Realized (cerradas)
+    realized = conn.execute(
+        f"""SELECT
+                COALESCE(SUM(s.total), 0) AS revenue,
+                COUNT(DISTINCT s.sale_id) AS n_sales
+            FROM sales s
+            WHERE s.fulfillment_status IN {CLOSED_STATUSES_SQL}"""
+    ).fetchone()
+    realized_cogs = conn.execute(
+        f"""SELECT COALESCE(SUM(i.unit_cost), 0) AS cogs
+            FROM sales s JOIN sale_items i ON i.sale_id = s.sale_id
+            WHERE s.fulfillment_status IN {CLOSED_STATUSES_SQL}"""
+    ).fetchone()
+
+    # Cash (cash basis)
+    cash = conn.execute(
+        """SELECT COALESCE(SUM(total), 0) AS amount, COUNT(*) AS n
+           FROM sales
+           WHERE payment_method IS NOT NULL AND fulfillment_status != 'cancelled'"""
+    ).fetchone()
+    pending = conn.execute(
+        """SELECT COALESCE(SUM(total), 0) AS amount, COUNT(*) AS n
+           FROM sales
+           WHERE payment_method IS NULL AND fulfillment_status != 'cancelled'"""
+    ).fetchone()
+
+    # Pipeline (potencial si todo entrega)
+    pipe = conn.execute(
+        f"""SELECT COALESCE(SUM(s.total), 0) AS revenue,
+                   COALESCE(SUM(i.unit_cost), 0) AS cost,
+                   COUNT(DISTINCT s.sale_id) AS n
+            FROM sales s JOIN sale_items i ON i.sale_id = s.sale_id
+            WHERE s.fulfillment_status IN {PIPELINE_STATUSES_SQL}"""
+    ).fetchone()
+
+    # Sunken costs: items de sales cancelled con unit_cost > 0 o con jersey_id sold
+    sunken_items = conn.execute(
+        """SELECT COALESCE(SUM(i.unit_cost), 0) AS cost,
+                  COUNT(DISTINCT s.sale_id) AS n
+           FROM sales s JOIN sale_items i ON i.sale_id = s.sale_id
+           WHERE s.fulfillment_status = 'cancelled' AND i.jersey_id IS NOT NULL"""
+    ).fetchone()
+
+    # Internal consumption: items de sales con total=0 non-cancelled
+    internal = conn.execute(
+        f"""SELECT COUNT(*) AS n,
+                   COALESCE(SUM(i.unit_cost), 0) AS cost_realized
+            FROM sales s JOIN sale_items i ON i.sale_id = s.sale_id
+            WHERE s.total = 0 AND s.fulfillment_status != 'cancelled'"""
+    ).fetchone()
+
+    revenue = realized["revenue"] or 0
+    cogs = realized_cogs["cogs"] or 0
+    margin = revenue - cogs
+    margin_pct = (margin / revenue * 100) if revenue else 0
+
+    # Potential scenario (if all pipeline converts and closes)
+    pipeline_revenue = pipe["revenue"] or 0
+    pipeline_cost = pipe["cost"] or 0
+    potential_revenue = revenue + pipeline_revenue
+    potential_cost = cogs + pipeline_cost
+    potential_margin = potential_revenue - potential_cost
+    potential_margin_pct = (potential_margin / potential_revenue * 100) if potential_revenue else 0
+
+    return {
+        "realized_revenue": revenue,
+        "realized_cogs": cogs,
+        "realized_margin": margin,
+        "realized_margin_pct": margin_pct,
+        "realized_n_sales": realized["n_sales"] or 0,
+
+        "cash_collected": cash["amount"] or 0,
+        "cash_n": cash["n"] or 0,
+        "pending_collection": pending["amount"] or 0,
+        "pending_n": pending["n"] or 0,
+
+        "pipeline_revenue": pipeline_revenue,
+        "pipeline_cost": pipeline_cost,
+        "pipeline_n": pipe["n"] or 0,
+
+        "sunken_cost": sunken_items["cost"] or 0,
+        "sunken_n": sunken_items["n"] or 0,
+
+        "internal_n": internal["n"] or 0,
+        "internal_cost_realized": internal["cost_realized"] or 0,
+
+        "potential_revenue": potential_revenue,
+        "potential_cost": potential_cost,
+        "potential_margin": potential_margin,
+        "potential_margin_pct": potential_margin_pct,
+    }
+
+
+def get_pnl_by_import(conn) -> pd.DataFrame:
+    """P&L per import batch."""
+    rows = conn.execute(
+        f"""SELECT
+                imp.import_id,
+                imp.status,
+                imp.total_landed_gtq,
+                imp.n_units,
+                imp.unit_cost AS q_unit,
+                COUNT(DISTINCT i.sale_id) AS n_sales_linked,
+                COALESCE(SUM(CASE WHEN s.fulfillment_status IN {CLOSED_STATUSES_SQL}
+                                  THEN s.total ELSE 0 END), 0) AS revenue_realized,
+                COALESCE(SUM(CASE WHEN s.payment_method IS NOT NULL
+                                       AND s.fulfillment_status != 'cancelled'
+                                  THEN s.total ELSE 0 END), 0) AS cash_collected,
+                COALESCE(SUM(CASE WHEN s.fulfillment_status IN {CLOSED_STATUSES_SQL}
+                                  THEN i.unit_cost ELSE 0 END), 0) AS cogs_realized,
+                COALESCE(SUM(CASE WHEN s.fulfillment_status IN {PIPELINE_STATUSES_SQL}
+                                  THEN s.total ELSE 0 END), 0) AS revenue_pipeline,
+                COALESCE(SUM(CASE WHEN s.fulfillment_status IN {PIPELINE_STATUSES_SQL}
+                                  THEN i.unit_cost ELSE 0 END), 0) AS cost_pipeline
+            FROM imports imp
+            LEFT JOIN sale_items i ON i.import_id = imp.import_id
+            LEFT JOIN sales s ON i.sale_id = s.sale_id
+            GROUP BY imp.import_id
+            ORDER BY imp.paid_at DESC"""
+    ).fetchall()
+    df = pd.DataFrame([dict(r) for r in rows])
+    if df.empty:
+        return df
+    df["margen_realizado"] = df["revenue_realized"] - df["cogs_realized"]
+    df["margen_potencial"] = (df["revenue_realized"] + df["revenue_pipeline"]) - (df["cogs_realized"] + df["cost_pipeline"])
+    df["margen_pct"] = (df["margen_realizado"] / df["revenue_realized"] * 100).where(df["revenue_realized"] > 0, 0).round(1)
+    return df
+
+
 def get_cash_kpis(conn) -> dict:
     """Cash basis: plata que ya entró (payment_method NOT NULL) vs pendiente."""
     cash = conn.execute(
@@ -505,6 +646,247 @@ def get_cash_kpis(conn) -> dict:
         "cash_amount": cash["amount"] or 0,
         "pending_n": pending["n"] or 0,
         "pending_amount": pending["amount"] or 0,
+    }
+
+
+# ═══════════════════════════════════════
+# IMPORTS — batches de pedidos al proveedor
+# ═══════════════════════════════════════
+
+IMPORT_STATUSES = ["draft", "paid", "in_transit", "arrived", "closed", "cancelled"]
+
+IMPORT_STATUS_LABELS = {
+    "draft":      "📝 Borrador",
+    "paid":       "💰 Pagada al proveedor",
+    "in_transit": "✈️ En tránsito",
+    "arrived":    "🇬🇹 Llegó a GT",
+    "closed":     "✅ Cerrada (costos aplicados)",
+    "cancelled":  "❌ Cancelada",
+}
+
+
+def create_import(conn, *, import_id: str, paid_at: Optional[str] = None,
+                  arrived_at: Optional[str] = None, supplier: str = "Bond Soccer Jersey",
+                  bruto_usd: Optional[float] = None, shipping_gtq: Optional[float] = None,
+                  fx: float = 7.70, status: str = "in_transit",
+                  notes: Optional[str] = None) -> str:
+    """Create an import batch row. Returns import_id."""
+    total_landed = None
+    if bruto_usd is not None and shipping_gtq is not None:
+        total_landed = bruto_usd * fx + shipping_gtq
+    conn.execute(
+        """INSERT INTO imports (import_id, paid_at, arrived_at, supplier,
+                                bruto_usd, shipping_gtq, fx, total_landed_gtq,
+                                status, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(import_id) DO UPDATE SET
+               paid_at = excluded.paid_at, arrived_at = excluded.arrived_at,
+               supplier = excluded.supplier, bruto_usd = excluded.bruto_usd,
+               shipping_gtq = excluded.shipping_gtq, fx = excluded.fx,
+               total_landed_gtq = excluded.total_landed_gtq,
+               status = excluded.status, notes = excluded.notes""",
+        (import_id, paid_at, arrived_at, supplier,
+         bruto_usd, shipping_gtq, fx, total_landed,
+         status, notes),
+    )
+    conn.commit()
+    _refresh_import_unit_cost(conn, import_id)
+    return import_id
+
+
+def _refresh_import_unit_cost(conn, import_id: str) -> None:
+    """Recompute n_units + unit_cost from current items/jerseys."""
+    n_items = conn.execute(
+        "SELECT COUNT(*) FROM sale_items WHERE import_id = ?", (import_id,)
+    ).fetchone()[0]
+    n_jerseys = conn.execute(
+        "SELECT COUNT(*) FROM jerseys WHERE import_id = ?", (import_id,)
+    ).fetchone()[0]
+    n_total = n_items + n_jerseys
+    row = conn.execute(
+        "SELECT total_landed_gtq FROM imports WHERE import_id = ?", (import_id,)
+    ).fetchone()
+    landed = row["total_landed_gtq"] if row else None
+    unit_cost = round(landed / n_total) if (landed and n_total) else None
+    conn.execute(
+        "UPDATE imports SET n_units = ?, unit_cost = ? WHERE import_id = ?",
+        (n_total, unit_cost, import_id),
+    )
+    conn.commit()
+
+
+def close_import(conn, import_id: str) -> dict:
+    """Finalize: prorrateo unit_cost to all items + jerseys linked, mark closed."""
+    row = conn.execute(
+        "SELECT total_landed_gtq FROM imports WHERE import_id = ?", (import_id,)
+    ).fetchone()
+    if not row or not row["total_landed_gtq"]:
+        return {"ok": False, "error": "Import sin total_landed_gtq."}
+
+    _refresh_import_unit_cost(conn, import_id)
+    row = conn.execute(
+        "SELECT unit_cost FROM imports WHERE import_id = ?", (import_id,)
+    ).fetchone()
+    unit_cost = row["unit_cost"]
+    if not unit_cost:
+        return {"ok": False, "error": "No hay units linked."}
+
+    n_items = conn.execute(
+        "UPDATE sale_items SET unit_cost = ? WHERE import_id = ?",
+        (unit_cost, import_id),
+    ).rowcount
+    n_jerseys = conn.execute(
+        "UPDATE jerseys SET cost = ? WHERE import_id = ?",
+        (unit_cost, import_id),
+    ).rowcount
+    conn.execute(
+        "UPDATE imports SET status = 'closed' WHERE import_id = ?", (import_id,)
+    )
+    conn.commit()
+    return {"ok": True, "n_items": n_items, "n_jerseys": n_jerseys, "unit_cost": unit_cost}
+
+
+def list_imports(conn) -> pd.DataFrame:
+    rows = conn.execute(
+        """SELECT i.*,
+                  (SELECT COUNT(*) FROM sale_items WHERE import_id = i.import_id) AS n_sale_items,
+                  (SELECT COUNT(*) FROM jerseys    WHERE import_id = i.import_id) AS n_jerseys
+           FROM imports i ORDER BY COALESCE(i.paid_at, i.created_at) DESC"""
+    ).fetchall()
+    return pd.DataFrame([dict(r) for r in rows])
+
+
+def get_import_items_df(conn, import_id: str) -> pd.DataFrame:
+    """Build the editable data_editor DataFrame for an import."""
+    rows = conn.execute(
+        """SELECT s.ref AS ref,
+                  i.item_id,
+                  s.sale_id,
+                  i.item_type,
+                  i.team, i.season, i.variant_label, i.version, i.size,
+                  i.personalization_json,
+                  c.name AS customer, c.phone AS phone,
+                  s.total, s.payment_method, s.fulfillment_status,
+                  s.notes AS sale_notes, i.notes AS item_notes
+           FROM sale_items i
+           JOIN sales s ON i.sale_id = s.sale_id
+           LEFT JOIN customers c ON s.customer_id = c.customer_id
+           WHERE i.import_id = ?
+           ORDER BY s.ref""",
+        (import_id,),
+    ).fetchall()
+    records = []
+    for r in rows:
+        r = dict(r)
+        pers = {}
+        try:
+            pers = json.loads(r["personalization_json"] or "{}")
+        except json.JSONDecodeError:
+            pass
+        records.append({
+            "ref": r["ref"],
+            "item_type": r["item_type"] or "jersey",
+            "team": r["team"] or "",
+            "variant": r["variant_label"] or "home",
+            "version": r["version"] or "Fan",
+            "size": r["size"] or "",
+            "pers_name": pers.get("name") or "",
+            "pers_number": pers.get("number") or "",
+            "customer": r["customer"] or "",
+            "phone": r["phone"] or "",
+            "total_Q": int(r["total"] or 0),
+            "paid": bool(r["payment_method"]),
+            "status": r["fulfillment_status"] or "pending",
+            "notes": r["item_notes"] or r["sale_notes"] or "",
+            "_item_id": r["item_id"],
+            "_sale_id": r["sale_id"],
+        })
+    return pd.DataFrame(records)
+
+
+def apply_import_edits(conn, import_id: str, edited_df: pd.DataFrame) -> dict:
+    """Apply data_editor changes to DB. Returns summary."""
+    updated_sales = 0
+    updated_items = 0
+    new_customers = 0
+
+    for _, row in edited_df.iterrows():
+        item_id = row.get("_item_id")
+        sale_id = row.get("_sale_id")
+        if pd.isna(item_id) or pd.isna(sale_id):
+            continue
+
+        # Resolve or create customer
+        cust_name = str(row.get("customer") or "").strip()
+        cust_phone = str(row.get("phone") or "").strip() or None
+        customer_id = None
+        if cust_name:
+            # Check existing
+            existing = conn.execute(
+                "SELECT customer_id FROM customers WHERE name = ?", (cust_name,)
+            ).fetchone()
+            if existing:
+                customer_id = existing["customer_id"]
+                if cust_phone:
+                    conn.execute(
+                        "UPDATE customers SET phone = ? WHERE customer_id = ? AND (phone IS NULL OR phone = '')",
+                        (normalize_phone(cust_phone), customer_id),
+                    )
+            else:
+                customer_id = get_or_create_customer(
+                    conn, name=cust_name, phone=cust_phone, source="f&f", tags=["f&f"],
+                )
+                new_customers += 1
+
+        # Update sale
+        paid = bool(row.get("paid"))
+        payment = "transferencia" if paid else None
+        total = int(row.get("total_Q") or 0)
+        status = str(row.get("status") or "pending")
+
+        conn.execute(
+            """UPDATE sales
+               SET customer_id = ?, total = ?, payment_method = ?, fulfillment_status = ?
+               WHERE sale_id = ?""",
+            (customer_id, total, payment, status, int(sale_id)),
+        )
+        updated_sales += 1
+
+        # Update item
+        pers = {
+            "name": str(row.get("pers_name") or "").strip() or None,
+            "number": row.get("pers_number") if row.get("pers_number") not in (None, "", 0) else None,
+        }
+        conn.execute(
+            """UPDATE sale_items
+               SET item_type = ?, team = ?, variant_label = ?, version = ?, size = ?,
+                   personalization_json = ?, notes = ?
+               WHERE item_id = ?""",
+            (
+                str(row.get("item_type") or "jersey"),
+                str(row.get("team") or ""),
+                str(row.get("variant") or "home"),
+                str(row.get("version") or "Fan"),
+                str(row.get("size") or ""),
+                json.dumps({k: v for k, v in pers.items() if v}, ensure_ascii=False),
+                str(row.get("notes") or "") or None,
+                int(item_id),
+            ),
+        )
+        updated_items += 1
+
+    conn.commit()
+    # Clean up any now-orphan placeholder customers
+    conn.execute(
+        """DELETE FROM customers
+           WHERE name LIKE 'F&F Pre-order%'
+             AND NOT EXISTS (SELECT 1 FROM sales WHERE sales.customer_id = customers.customer_id)"""
+    )
+    conn.commit()
+    return {
+        "updated_sales": updated_sales,
+        "updated_items": updated_items,
+        "new_customers": new_customers,
     }
 
 
@@ -696,13 +1078,261 @@ def render_page(conn) -> None:
     st.markdown("# 💰 Comercial")
     st.caption("Tracking central de ventas · TODO El Club · mystery · stock · ondemand")
 
-    tab1, tab2, tab3 = st.tabs(["📝 Registrar venta", "📊 Dashboard", "📜 Histórico"])
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📝 Registrar venta",
+        "📊 Dashboard",
+        "📜 Histórico",
+        "📦 Importaciones",
+    ])
     with tab1:
         _render_registrar_tab(conn)
     with tab2:
         _render_dashboard_tab(conn)
     with tab3:
         _render_historico_tab(conn)
+    with tab4:
+        _render_importaciones_tab(conn)
+
+
+# ─── Tab 4: Importaciones ─────────────────────────
+
+def _render_importaciones_tab(conn):
+    st.markdown("### 📦 Importaciones al proveedor")
+    st.caption("Cada importación agrupa un pedido con N unidades. "
+               "Editás las filas en la tabla → guardás cambios → cerrás la importación cuando tengas los costos finales.")
+
+    # Lista de imports
+    df_imports = list_imports(conn)
+    if df_imports.empty:
+        st.info("No hay importaciones. Usá el botón abajo para crear una.")
+    else:
+        display = df_imports.copy()
+        display["status_label"] = display["status"].map(lambda s: IMPORT_STATUS_LABELS.get(s, s))
+        display["total_landed_gtq"] = display["total_landed_gtq"].apply(
+            lambda q: f"Q{q:,.0f}" if pd.notna(q) else "—"
+        )
+        display["unit_cost"] = display["unit_cost"].apply(
+            lambda q: f"Q{q:,.0f}" if pd.notna(q) else "—"
+        )
+        display["bruto_usd"] = display["bruto_usd"].apply(
+            lambda q: f"${q:,.2f}" if pd.notna(q) else "—"
+        )
+        display["shipping_gtq"] = display["shipping_gtq"].apply(
+            lambda q: f"Q{q:,.0f}" if pd.notna(q) else "—"
+        )
+        display = display[[
+            "import_id", "paid_at", "arrived_at", "status_label",
+            "bruto_usd", "shipping_gtq", "total_landed_gtq",
+            "n_units", "unit_cost", "n_sale_items", "n_jerseys",
+        ]]
+        display.columns = ["ID", "Pagada", "Llegó a GT", "Status",
+                           "Bruto USD", "Shipping GTQ", "Total landed",
+                           "Units", "Q/unit", "# items (sales)", "# jerseys (stock)"]
+        st.dataframe(display, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+    # Selector para abrir una importación
+    import_ids = df_imports["import_id"].tolist() if not df_imports.empty else []
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        selected_import = st.selectbox(
+            "Abrir importación para editar items",
+            [""] + import_ids,
+            format_func=lambda x: x or "— seleccioná —",
+        )
+    with col2:
+        with st.popover("➕ Nueva importación", use_container_width=True):
+            _render_new_import_form(conn)
+
+    if selected_import:
+        st.markdown("---")
+        _render_import_detail(conn, selected_import)
+
+
+def _render_new_import_form(conn):
+    st.markdown("### Nueva importación")
+    new_id = st.text_input("Import ID (ej. `IMP-2026-05-15`)", key="new_imp_id")
+    new_paid = st.date_input("Fecha pago proveedor", value=date.today(), key="new_imp_paid")
+    col1, col2 = st.columns(2)
+    with col1:
+        new_bruto = st.number_input("Bruto USD (opcional)", min_value=0.0, step=10.0,
+                                    value=0.0, key="new_imp_bruto")
+    with col2:
+        new_ship = st.number_input("Shipping GTQ (opcional)", min_value=0.0, step=10.0,
+                                   value=0.0, key="new_imp_ship")
+    new_fx = st.number_input("FX", value=7.70, step=0.05, format="%.2f", key="new_imp_fx")
+    new_notes = st.text_area("Notas", key="new_imp_notes")
+
+    if st.button("Crear", type="primary", key="new_imp_create"):
+        if not new_id.strip():
+            st.error("Import ID requerido.")
+            return
+        create_import(
+            conn,
+            import_id=new_id.strip(),
+            paid_at=new_paid.isoformat(),
+            bruto_usd=new_bruto if new_bruto > 0 else None,
+            shipping_gtq=new_ship if new_ship > 0 else None,
+            fx=new_fx,
+            status="paid",
+            notes=new_notes or None,
+        )
+        st.success(f"✓ Creada {new_id}")
+        st.rerun()
+
+
+def _render_import_detail(conn, import_id: str):
+    row = conn.execute(
+        "SELECT * FROM imports WHERE import_id = ?", (import_id,)
+    ).fetchone()
+    if not row:
+        st.error("Importación no encontrada.")
+        return
+    imp = dict(row)
+
+    st.markdown(f"## {import_id}")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Status", IMPORT_STATUS_LABELS.get(imp["status"], imp["status"]))
+    c2.metric("Units", imp["n_units"] or 0)
+    c3.metric("Total landed",
+              f"Q{imp['total_landed_gtq']:,.0f}" if imp["total_landed_gtq"] else "—")
+    c4.metric("Q/unit", f"Q{imp['unit_cost']:,.0f}" if imp["unit_cost"] else "—")
+
+    # Metadata editor (expander)
+    with st.expander("⚙️ Metadata de la importación"):
+        col1, col2 = st.columns(2)
+        with col1:
+            e_paid = st.date_input(
+                "Fecha pago", key=f"e_paid_{import_id}",
+                value=date.fromisoformat(imp["paid_at"]) if imp["paid_at"] else date.today(),
+            )
+            e_bruto = st.number_input(
+                "Bruto USD", key=f"e_bruto_{import_id}",
+                min_value=0.0, step=10.0, format="%.2f",
+                value=float(imp["bruto_usd"] or 0),
+            )
+            e_fx = st.number_input(
+                "FX", key=f"e_fx_{import_id}",
+                value=float(imp["fx"] or 7.70), step=0.05, format="%.2f",
+            )
+        with col2:
+            e_arrived = st.date_input(
+                "Fecha llegada GT", key=f"e_arr_{import_id}",
+                value=date.fromisoformat(imp["arrived_at"]) if imp["arrived_at"] else None,
+            )
+            e_ship = st.number_input(
+                "Shipping GTQ", key=f"e_ship_{import_id}",
+                min_value=0.0, step=10.0, format="%.2f",
+                value=float(imp["shipping_gtq"] or 0),
+            )
+            e_status = st.selectbox(
+                "Status", IMPORT_STATUSES, key=f"e_status_{import_id}",
+                index=IMPORT_STATUSES.index(imp["status"]),
+                format_func=lambda s: IMPORT_STATUS_LABELS[s],
+            )
+        e_notes = st.text_area("Notas", key=f"e_notes_{import_id}",
+                               value=imp["notes"] or "")
+        if st.button("💾 Guardar metadata", key=f"btn_meta_{import_id}"):
+            create_import(
+                conn, import_id=import_id,
+                paid_at=e_paid.isoformat() if e_paid else None,
+                arrived_at=e_arrived.isoformat() if e_arrived else None,
+                bruto_usd=e_bruto if e_bruto > 0 else None,
+                shipping_gtq=e_ship if e_ship > 0 else None,
+                fx=e_fx, status=e_status, notes=e_notes or None,
+            )
+            st.success("✓ Metadata actualizada.")
+            st.rerun()
+
+    # Data editor con los items
+    st.markdown("#### 🧾 Items (editar directamente)")
+    st.caption("Editá cada fila → click «Guardar cambios» al final. "
+               "Si cambiás `customer`, el cliente se crea automáticamente. "
+               "El tick `paid` se mapea a `payment_method=transferencia`.")
+
+    df = get_import_items_df(conn, import_id)
+    if df.empty:
+        st.warning("Esta importación no tiene items. Agregalos desde «Registrar venta» con ref manual `{import_id}-NNN`.")
+        return
+
+    edited = st.data_editor(
+        df,
+        key=f"editor_{import_id}",
+        use_container_width=True,
+        num_rows="fixed",  # fixed para no permitir delete/add desde acá (evita confusión)
+        column_config={
+            "ref": st.column_config.TextColumn("Ref", disabled=True, width="small"),
+            "item_type": st.column_config.SelectboxColumn(
+                "Tipo",
+                options=["jersey", "jacket", "hat", "shorts", "socks", "set"],
+                width="small",
+            ),
+            "team": st.column_config.TextColumn("Equipo", width="medium"),
+            "variant": st.column_config.SelectboxColumn(
+                "Variant",
+                options=["home", "away", "third", "special", "retro-home", "retro-away"],
+                width="small",
+            ),
+            "version": st.column_config.SelectboxColumn(
+                "Version",
+                options=["Fan", "Player", "Women Fan", "Retro", "Kid", "Baby"],
+                width="small",
+            ),
+            "size": st.column_config.TextColumn("Talla", width="small"),
+            "pers_name": st.column_config.TextColumn("Nombre camisa", width="medium"),
+            "pers_number": st.column_config.TextColumn("Número", width="small"),
+            "customer": st.column_config.TextColumn("Cliente", width="medium"),
+            "phone": st.column_config.TextColumn("Tel", width="small"),
+            "total_Q": st.column_config.NumberColumn("Total Q", min_value=0, step=10),
+            "paid": st.column_config.CheckboxColumn("Pagado"),
+            "status": st.column_config.SelectboxColumn(
+                "Fulfillment",
+                options=FULFILLMENT_STATUSES,
+                width="small",
+            ),
+            "notes": st.column_config.TextColumn("Notas", width="large"),
+            "_item_id": None,  # hide
+            "_sale_id": None,  # hide
+        },
+        column_order=["ref", "team", "size", "version", "variant",
+                      "pers_name", "pers_number", "customer", "phone",
+                      "total_Q", "paid", "status", "item_type", "notes"],
+    )
+
+    col1, col2, col3 = st.columns([1, 1, 2])
+    with col1:
+        if st.button("💾 Guardar cambios", type="primary",
+                     key=f"save_{import_id}", use_container_width=True):
+            result = apply_import_edits(conn, import_id, edited)
+            _refresh_import_unit_cost(conn, import_id)
+            st.success(
+                f"✓ {result['updated_sales']} sales + {result['updated_items']} items actualizados · "
+                f"{result['new_customers']} customers nuevos creados."
+            )
+            st.rerun()
+
+    with col2:
+        # Close import (apply prorrateo)
+        can_close = imp["total_landed_gtq"] is not None and imp["status"] != "closed"
+        if st.button(
+            "🔒 Cerrar (aplicar prorrateo)",
+            key=f"close_{import_id}",
+            disabled=not can_close,
+            use_container_width=True,
+            help="Aplica unit_cost prorrateado a todos los items + jerseys linkeados, marca status=closed.",
+        ):
+            res = close_import(conn, import_id)
+            if res.get("ok"):
+                st.success(
+                    f"✓ Cerrada. {res['n_items']} items + {res['n_jerseys']} jerseys → Q{res['unit_cost']}/unit."
+                )
+                st.rerun()
+            else:
+                st.error(res.get("error"))
+
+    with col3:
+        st.caption(f"Editado en Streamlit data_editor. "
+                   f"Para agregar items a esta importación: creá venta manual en tab «Registrar» con origin `f&f`.")
 
 
 # ─── Tab 1: Registrar venta ─────────────────────────
@@ -1422,6 +2052,92 @@ def _render_dashboard_tab(conn):
         st.caption("Ninguna venta con attribution a campaña. Tildar al registrar → se acumula acá.")
     else:
         st.dataframe(cac, use_container_width=True, hide_index=True)
+
+    # ═══ Estado de Resultados ═══
+    st.markdown("---")
+    st.markdown("## 📈 Estado de Resultados")
+    pnl = get_pnl(conn)
+
+    st.markdown("### 💰 Ingresos")
+    i1, i2, i3, i4 = st.columns(4)
+    i1.metric("Revenue cerrado",
+              f"Q{pnl['realized_revenue']:,}",
+              f"{pnl['realized_n_sales']} sales delivered")
+    i2.metric("Cash real en cuenta",
+              f"Q{pnl['cash_collected']:,}",
+              f"{pnl['cash_n']} pagadas")
+    i3.metric("Por cobrar",
+              f"Q{pnl['pending_collection']:,}",
+              f"{pnl['pending_n']} pendientes", delta_color="inverse")
+    i4.metric("Pipeline expected",
+              f"Q{pnl['pipeline_revenue']:,}",
+              f"{pnl['pipeline_n']} pedidos")
+
+    st.markdown("### 💸 COGS (Costo de Mercadería)")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("COGS realizado", f"Q{pnl['realized_cogs']:,}")
+    c2.metric("Cost pipeline (estimado)", f"Q{pnl['pipeline_cost']:,}")
+    c3.metric("Sunken cost",
+              f"Q{pnl['sunken_cost']:,}",
+              f"{pnl['sunken_n']} ventas fallidas",
+              delta_color="inverse")
+    c4.metric("Consumo interno",
+              f"Q{pnl['internal_cost_realized']:,}",
+              f"{pnl['internal_n']} items Q0")
+
+    st.markdown("### 🎯 Margen Bruto")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Margen realizado",
+              f"Q{pnl['realized_margin']:,}",
+              f"{pnl['realized_margin_pct']:.1f}%")
+    m2.metric("Margen potencial (si todo entrega + cobra)",
+              f"Q{pnl['potential_margin']:,}",
+              f"{pnl['potential_margin_pct']:.1f}%")
+    # Riesgo de no cobrar
+    at_risk = pnl["pending_collection"] + pnl["pipeline_revenue"]
+    m3.metric("En riesgo (por cobrar + pipeline)",
+              f"Q{at_risk:,}",
+              delta_color="inverse")
+
+    st.markdown("### 📦 P&L por importación")
+    df_imp = get_pnl_by_import(conn)
+    if df_imp.empty:
+        st.info("Sin importaciones registradas.")
+    else:
+        display = df_imp.copy()
+        display["status"] = display["status"].map(lambda s: IMPORT_STATUS_LABELS.get(s, s))
+        for col in ["total_landed_gtq", "q_unit", "revenue_realized", "cash_collected",
+                    "cogs_realized", "revenue_pipeline", "cost_pipeline",
+                    "margen_realizado", "margen_potencial"]:
+            display[col] = display[col].apply(
+                lambda q: f"Q{q:,.0f}" if pd.notna(q) and q != 0 else ("—" if pd.isna(q) else "Q0")
+            )
+        display["margen_pct"] = display["margen_pct"].apply(lambda p: f"{p:.1f}%" if p else "—")
+        display = display[[
+            "import_id", "status", "n_units", "q_unit", "total_landed_gtq",
+            "revenue_realized", "cogs_realized", "margen_realizado", "margen_pct",
+            "revenue_pipeline", "cost_pipeline", "margen_potencial",
+            "cash_collected",
+        ]]
+        display.columns = [
+            "Import", "Status", "Units", "Q/unit", "Landed",
+            "Rev. real", "COGS real", "Margen real", "%",
+            "Rev. pipe", "Cost pipe", "Margen pot.",
+            "Cash in",
+        ]
+        st.dataframe(display, use_container_width=True, hide_index=True)
+
+    # Caveats
+    with st.expander("ℹ️ Cómo leer este P&L"):
+        st.markdown("""
+- **Revenue cerrado** = ventas con status `shipped` o `delivered` (contabilidad accrual).
+- **Cash real en cuenta** = plata efectivamente cobrada (`payment_method IS NOT NULL`), independiente de entrega.
+- **Pipeline** = ventas aún en `pending/sent/in_production`. No es revenue real — es expectativa.
+- **Sunken cost** = costo de jerseys que se perdieron (ej. Forza no entregó → venta cancelled pero jersey sold).
+- **Consumo interno** = items con Q0 revenue (regalos familia, consumo personal). El cost se absorbe cuando cierres la importación. **Pérdida operativa intencional**.
+- **Margen potencial** = suma optimista: si todo el pipeline entrega y cobra. Límite teórico.
+- **En riesgo** = cuánta plata depende de que cobres pendientes + entreguen pipeline. Si nada entra → perdés este monto en expected revenue.
+        """)
 
     # ═══ Batch cost adjustment tool ═══
     st.markdown("---")
