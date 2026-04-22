@@ -963,53 +963,196 @@ def render_detail(conn, catalog):
             _render_variant_form(conn, fam)
 
 
-def _render_scraped_specs_panel(fam):
-    """Ops s11 — panel colapsable con specs del scrape para validación pre-audit.
-    Expanded por default en la primera vista del item. Diego revisa team/season/
-    sizes/source_url para detectar anomalías antes de darle verify.
-    """
-    with st.expander("📋 Datos del scrape", expanded=True):
-        # Layout 2 columnas para specs básicos
-        sc1, sc2 = st.columns(2)
-        with sc1:
-            st.markdown("**🏷 Identificación**")
-            st.markdown(f"- `family_id`: `{fam.get('family_id', '—')}`")
-            st.markdown(f"- team: **{fam.get('team') or '—'}**")
-            st.markdown(f"- season: {fam.get('season') or '—'}")
-            st.markdown(f"- variant: `{fam.get('variant', '—')}`")
-            st.markdown(f"- category: `{fam.get('category', '—')}`")
-            st.markdown(f"- tier: `{fam.get('tier', '—')}`")
-        with sc2:
-            st.markdown("**🌐 Metadata (U-007)**")
-            st.markdown(f"- country: {fam.get('meta_country') or '_null_'}")
-            st.markdown(f"- league: {fam.get('meta_league') or '_null_'}")
-            st.markdown(f"- confederation: {fam.get('meta_confederation') or '_null_'}")
-            aliases = fam.get("aliases") or []
-            st.markdown(f"- aliases: {', '.join(f'`{a}`' for a in aliases) if aliases else '_none_'}")
-            st.markdown(f"- featured: `{fam.get('featured', False)}`")
+VARIANT_OPTIONS = ["home", "away", "third", "special", "goalkeeper", "training"]
+MODELO_TYPE_OPTIONS = ["fan_adult", "player_adult", "retro_adult", "woman", "kid", "baby"]
+SLEEVE_OPTIONS = ["short", "long"]
 
-        # Variants (sizes raw por variant + price + album_id + title scraped)
-        variants = fam.get("variants") or []
-        if variants:
-            st.markdown("**🧥 Variantes scrapeadas**")
-            for v in variants:
-                sub_type = v.get("sub_type")
-                sub_part = f" / sub_type=`{sub_type}`" if sub_type else ""
-                line = (
-                    f"- `{v.get('type', '—')}`"
-                    f"{sub_part}"
-                    f" · sizes: `{v.get('sizes') or 'null'}`"
-                    f" · Q{v.get('price', '—')}"
-                )
-                album_id = v.get("album_id")
-                if album_id:
-                    store = v.get("store", "minkang")
-                    yupoo_url = f"https://{store}.x.yupoo.com/albums/{album_id}"
-                    line += f" · [Yupoo ↗]({yupoo_url})"
-                st.markdown(line)
-                title = v.get("title")
-                if title:
-                    st.caption(f"  _title_: {title}")
+# Mapeo variant → variant_label (denormalizado en catalog para UI frontend)
+_VARIANT_LABEL_MAP = {
+    "home": "Local", "away": "Visita", "third": "Reserva",
+    "special": "Especial", "goalkeeper": "Portero", "training": "Training",
+}
+
+
+def _save_family_edits(family_id, new_team, new_season, new_variant, modelo_edits=None):
+    """Ops s13 — persiste ediciones manuales a catalog.json para una family.
+    Escribe sólo los campos que cambiaron. modelo_edits es lista de (type, sleeve)
+    por modelo (None si family legacy).
+
+    Retorna dict {ok, fields: [list of changed field names], error}
+    """
+    catalog_path = audit_db.CATALOG_PATH
+    if not os.path.exists(catalog_path):
+        return {"ok": False, "error": f"catalog.json no existe en {catalog_path}"}
+
+    try:
+        with open(catalog_path, "r", encoding="utf-8") as f:
+            catalog = json.load(f)
+    except Exception as e:
+        return {"ok": False, "error": f"Error leyendo catalog: {e}"}
+
+    target = None
+    for fam in catalog:
+        if fam.get("family_id") == family_id:
+            target = fam
+            break
+    if not target:
+        return {"ok": False, "error": f"family_id '{family_id}' no encontrado en catalog.json"}
+
+    changed_fields = []
+
+    # Top-level keys
+    if new_team and new_team != (target.get("team") or ""):
+        target["team"] = new_team
+        changed_fields.append("team")
+    if new_season and new_season != (target.get("season") or ""):
+        target["season"] = new_season
+        changed_fields.append("season")
+    if new_variant and new_variant != (target.get("variant") or ""):
+        target["variant"] = new_variant
+        target["variant_label"] = _VARIANT_LABEL_MAP.get(new_variant, new_variant)
+        changed_fields.append("variant")
+
+    # Modelos
+    if modelo_edits and target.get("modelos"):
+        for i, (new_type, new_sleeve) in enumerate(modelo_edits):
+            if i >= len(target["modelos"]):
+                continue
+            m = target["modelos"][i]
+            if new_type and new_type != (m.get("type") or ""):
+                m["type"] = new_type
+                changed_fields.append(f"modelos[{i}].type")
+            if new_sleeve and new_sleeve != (m.get("sleeve") or ""):
+                m["sleeve"] = new_sleeve
+                changed_fields.append(f"modelos[{i}].sleeve")
+
+    if not changed_fields:
+        return {"ok": True, "fields": []}  # Nothing to persist
+
+    try:
+        with open(catalog_path, "w", encoding="utf-8") as f:
+            json.dump(catalog, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+    except Exception as e:
+        return {"ok": False, "error": f"Error escribiendo catalog: {e}"}
+
+    return {"ok": True, "fields": changed_fields}
+
+
+def _render_scraped_specs_panel(fam):
+    """Ops s13 — panel editable con datos del scrape + unificación.
+
+    Diego puede corregir team/season/variant (la llave de unificación) y,
+    por cada modelo del schema unified, ajustar type + sleeve. Al guardar,
+    se re-escribe catalog.json con los cambios para ESTE family_id.
+
+    No re-unifica con otras families automáticamente — si Diego quiere mergear
+    dos, lo hace en una sesión aparte (scope fuera de este form).
+    """
+    fid = fam.get("family_id", "")
+    is_unified = bool(fam.get("modelos"))
+
+    with st.expander("📋 Datos del scrape (editable)", expanded=True):
+        st.caption(f"`family_id` (no editable): `{fid}` · categoría: `{fam.get('category', '—')}` · tier: `{fam.get('tier', '—')}`")
+
+        # ── Llave de unificación (team, season, variant) ──
+        st.markdown("**🔑 Llave de unificación** — si estas 3 coinciden en otra family, son la misma camisa.")
+        k1, k2, k3 = st.columns([2, 1, 1])
+        with k1:
+            new_team = st.text_input("Equipo", value=fam.get("team") or "", key=f"edit_team_{fid}")
+        with k2:
+            new_season = st.text_input("Temporada / año", value=fam.get("season") or "", key=f"edit_season_{fid}")
+        with k3:
+            cur_variant = fam.get("variant") or "home"
+            options = list(VARIANT_OPTIONS)
+            if cur_variant not in options:
+                options.append(cur_variant)
+            new_variant = st.selectbox("Variante", options, index=options.index(cur_variant), key=f"edit_variant_{fid}")
+
+        # ── Metadata secundaria (read-only) ──
+        st.caption(
+            f"🌐 country: **{fam.get('meta_country') or '—'}** · "
+            f"league: {fam.get('meta_league') or '—'} · "
+            f"confederation: {fam.get('meta_confederation') or '—'} · "
+            f"featured: `{fam.get('featured', False)}`"
+        )
+
+        # ── Modelos (editable type + sleeve) o variants legacy ──
+        modelos = fam.get("modelos") or []
+        modelo_edits = []  # lista de (nuevo_type, nuevo_sleeve) por modelo
+        if is_unified:
+            st.markdown(f"**🧥 Modelos ({len(modelos)})** — ajustá type/sleeve si algo está mal clasificado.")
+            unified_from = fam.get("_unified_from") or []
+            if len(unified_from) > 1:
+                st.caption(f"_unificó:_ {' + '.join(f'`{x}`' for x in unified_from)}")
+
+            for i, m in enumerate(modelos):
+                mc1, mc2, mc3, mc4, mc5 = st.columns([2, 1, 1.2, 1.5, 2])
+                with mc1:
+                    cur_type = m.get("type") or "fan_adult"
+                    opts = list(MODELO_TYPE_OPTIONS)
+                    if cur_type not in opts:
+                        opts.append(cur_type)
+                    new_type = st.selectbox(
+                        f"Modelo {i+1} — type", opts, index=opts.index(cur_type),
+                        key=f"edit_mtype_{fid}_{i}",
+                    )
+                with mc2:
+                    cur_sleeve = m.get("sleeve") or "short"
+                    opts_s = list(SLEEVE_OPTIONS)
+                    if cur_sleeve not in opts_s:
+                        opts_s.append(cur_sleeve)
+                    new_sleeve = st.selectbox(
+                        "sleeve", opts_s, index=opts_s.index(cur_sleeve),
+                        key=f"edit_msleeve_{fid}_{i}",
+                    )
+                with mc3:
+                    st.caption(f"sizes: `{m.get('sizes') or '—'}`")
+                    st.caption(f"Q{m.get('price') or '—'}")
+                with mc4:
+                    st.caption(f"src: `{m.get('source_family_id') or '—'}`")
+                with mc5:
+                    yupoo = m.get("source_url_yupoo")
+                    if yupoo:
+                        st.markdown(f"[Yupoo ↗]({yupoo})")
+                    n_gallery = len(m.get("gallery") or [])
+                    st.caption(f"{n_gallery} fotos")
+                modelo_edits.append((new_type, new_sleeve))
+        else:
+            # Legacy family — muestra variants[] read-only
+            variants = fam.get("variants") or []
+            if variants:
+                st.markdown("**🧥 Variantes (legacy — no editable)**")
+                for v in variants:
+                    sub_type = v.get("sub_type")
+                    sub_part = f" / sub_type=`{sub_type}`" if sub_type else ""
+                    line = (
+                        f"- `{v.get('type', '—')}`{sub_part}"
+                        f" · sizes: `{v.get('sizes') or 'null'}`"
+                        f" · Q{v.get('price', '—')}"
+                    )
+                    album_id = v.get("album_id")
+                    if album_id:
+                        store = v.get("store", "minkang")
+                        line += f" · [Yupoo ↗](https://{store}.x.yupoo.com/albums/{album_id})"
+                    st.markdown(line)
+
+        # ── Botón guardar ──
+        st.markdown("")
+        if st.button("💾 Guardar cambios a catalog.json", key=f"save_edits_{fid}",
+                     type="secondary", use_container_width=True):
+            changes = _save_family_edits(
+                fid,
+                new_team=new_team.strip(),
+                new_season=new_season.strip(),
+                new_variant=new_variant,
+                modelo_edits=modelo_edits if is_unified else None,
+            )
+            if changes["ok"]:
+                st.success(f"✅ Guardado. Campos modificados: {', '.join(changes['fields']) or '(ninguno)'}")
+                st.rerun()
+            else:
+                st.error(f"❌ {changes['error']}")
 
         # Texto actual (title/description/historia) si existen (de un audit previo)
         title = fam.get("title")
