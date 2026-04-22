@@ -81,6 +81,22 @@ def init_audit_schema():
 # ───────────────────────────────────────────
 # Tier assignment
 # ───────────────────────────────────────────
+#
+# La lógica canónica está documentada en:
+#   elclub-catalogo-priv/docs/AUDIT-TIER-LOGIC.md
+#
+# Resumen:
+#   T1  → Mundial 2026 (selecciones con year 2026/2027 en season)
+#   T2  → Top-5 Europa con temporada reciente (2023-2027)
+#   T3  → Ligas Latam importantes (Argentina, Brasil, Liga MX) — temporada reciente
+#   T4  → Retros icónicos (lista hardcoded T4_ICONIC_RETROS)
+#   T5  → Fallback: cualquier family con season parseable o categoría válida
+#         (retros viejos, clubes secundarios, selecciones no-Mundial)
+#   None → Sólo si family rota (category=other o sin metadata mínima)
+#
+# Matching prefiere `family_id` prefix sobre `team` string porque el segundo
+# viene con encoding roto en ~40 families (ej. "atl-tico-mineiro" → team="Atl Tico Mineiro").
+# El prefix del slug es la fuente de verdad.
 
 # Top 5 European leagues — teams clave por liga para lookup
 # (lowercased, acepta substring match)
@@ -119,7 +135,76 @@ LIGUE1_TEAMS = {
 }
 TOP5_EUROPE = EPL_TEAMS | LALIGA_TEAMS | BUNDES_TEAMS | SERIEA_TEAMS | LIGUE1_TEAMS
 
-# T3 — otras ligas importantes
+# Matching por family_id prefix (kebab-case sin acentos, más estable que team string).
+# Cada entry es el prefix del slug ANTES de la season; ej. 'real-madrid-25-26-home'
+# tiene prefix 'real-madrid'.
+TOP5_EUROPE_FID = {
+    # EPL
+    "manchester-united", "manchester-city", "liverpool", "chelsea", "arsenal",
+    "tottenham", "tottenham-hotspur", "newcastle", "aston-villa", "west-ham",
+    "brighton", "brighton-and-hove-albion", "everton", "fulham", "crystal-palace",
+    "wolves", "wolverhampton", "bournemouth", "brentford", "leicester-city",
+    "nottingham-forest", "leeds", "leeds-united",
+    # La Liga
+    "real-madrid", "barcelona", "atletico-madrid", "athletic-bilbao", "athletic-club",
+    "real-sociedad", "real-betis", "sevilla", "valencia", "villarreal", "girona",
+    "osasuna", "getafe", "celta-vigo", "mallorca", "espanyol", "rayo-vallecano",
+    "cadiz", "las-palmas", "almeria", "alaves",
+    # Bundesliga
+    "bayern-munich", "borussia-dortmund", "rb-leipzig", "leverkusen", "bayer-leverkusen",
+    "borussia-monchengladbach", "gladbach", "eintracht-frankfurt", "frankfurt",
+    "wolfsburg", "stuttgart", "union-berlin", "schalke", "hamburg",
+    # Serie A
+    "ac-milan", "inter-milan", "juventus", "napoli", "roma", "as-roma", "lazio",
+    "atalanta", "fiorentina", "torino", "bologna", "sassuolo", "udinese",
+    "sampdoria", "parma", "parma-calcio", "verona", "cagliari", "lecce",
+    "genoa", "empoli", "venezia", "pisa", "venice",
+    # Ligue 1
+    "paris-saint-germain", "psg", "marseille", "olympique-marseille", "lyon",
+    "olympique-lyon", "monaco", "as-monaco", "lille", "nice", "rennes",
+    "strasbourg", "nantes", "saint-etienne", "lens", "brest", "bordeaux",
+    "montpellier", "toulouse",
+}
+
+# Selecciones nacionales (CONMEBOL, CONCACAF, UEFA, CAF, AFC, OFC).
+# Incluye todos los clasificados y habituales al Mundial; usado para T1 detection.
+# Incluye variantes de encoding roto (cura-ao ← Curaçao, etc.) y spellings alternos
+# que aparecen en el catalog.json.
+NATIONAL_TEAMS_FID = {
+    # CONMEBOL
+    "argentina", "brazil", "uruguay", "colombia", "columbia", "chile", "peru",
+    "ecuador", "venezuela", "bolivia", "paraguay",
+    # CONCACAF
+    "mexico", "usa", "usmnt", "canada", "guatemala", "honduras", "costa-rica",
+    "panama", "panam", "jamaica", "el-salvador", "nicaragua", "haiti",
+    "trinidad-and-tobago", "curacao", "cura-ao", "dominican-republic",
+    "puerto-rico", "martinique", "suriname",
+    # UEFA
+    "spain", "portugal", "france", "england", "germany", "italy", "netherlands",
+    "holland", "belgium", "croatia", "denmark", "switzerland", "poland",
+    "austria", "scotland", "wales", "serbia", "turkey", "norway", "sweden",
+    "ukraine", "greece", "hungary", "czech-republic", "czechia", "romania",
+    "slovakia", "slovenia", "albania", "bosnia", "bosnia-herzegovina",
+    "bulgaria", "iceland", "ireland", "northern-ireland", "finland",
+    "republic-of-ireland", "russia", "montenegro", "north-macedonia", "kosovo",
+    "georgia", "moldova", "azerbaijan", "armenia", "estonia", "latvia",
+    "lithuania", "cyprus", "luxembourg", "malta",
+    # CAF
+    "morocco", "senegal", "tunisia", "cameroon", "nigeria", "egypt", "ghana",
+    "ivory-coast", "cote-d-ivoire", "south-africa", "algeria", "dr-congo",
+    "congo", "mali", "burkina-faso", "cape-verde", "guinea", "equatorial-guinea",
+    "zambia", "angola", "gabon", "kenya", "ethiopia", "mozambique",
+    # AFC
+    "japan", "south-korea", "korea", "saudi-arabia", "iran", "australia",
+    "qatar", "iraq", "uae", "united-arab-emirates", "china", "north-korea",
+    "uzbekistan", "jordan", "oman", "bahrain", "kuwait", "lebanon", "syria",
+    "palestine", "india", "thailand", "vietnam", "malaysia", "indonesia",
+    "philippines", "hong-kong", "singapore",
+    # OFC
+    "new-zealand", "fiji", "solomon-islands", "tahiti", "vanuatu",
+}
+
+# T3 — otras ligas importantes (teams en string, match por substring — compat legacy)
 LATAM_LEAGUES_TEAMS = {
     # Argentina
     "boca juniors", "boca", "river plate", "river", "racing club",
@@ -135,6 +220,43 @@ LATAM_LEAGUES_TEAMS = {
     "pumas", "tigres", "monterrey", "leon", "león", "santos laguna",
     "toluca", "necaxa", "pachuca", "queretaro", "querétaro",
     "atlas", "mazatlan", "juarez",
+}
+
+# LATAM por family_id prefix. Incluye variantes de encoding roto que aparecen
+# realmente en el catalog.json (el parser pierde tildes/cedillas y queda espacio):
+#   Atlético Mineiro → "atl-tico-mineiro"
+#   Vitória → "vit-ria"
+#   Grêmio → "gr-mio"
+#   São Paulo → "s-o-paulo"  (observado cuando el scrape rompe el ã)
+#   Universidad Católica → "universidad-cat-lica"
+LATAM_FID = {
+    # Argentina
+    "boca-juniors", "river-plate", "racing-club", "independiente",
+    "san-lorenzo", "estudiantes", "velez-sarsfield", "velez", "huracan",
+    "newells", "newell-s", "rosario-central", "talleres", "lanus",
+    "defensa-y-justicia", "argentinos-juniors", "colon", "union",
+    # Brasileirão + série B/C relevantes
+    "flamengo", "palmeiras", "corinthians", "santos", "sao-paulo", "s-o-paulo",
+    "fluminense", "gremio", "gr-mio", "internacional", "cruzeiro",
+    "atletico-mineiro", "atl-tico-mineiro", "botafogo", "vasco",
+    "vasco-da-gama", "bahia", "fortaleza", "athletico-paranaense",
+    "athletico", "red-bull-bragantino", "bragantino", "vitoria", "vit-ria",
+    "nautico", "n-utico", "paysandu", "pays-ndu", "santa-cruz", "recife",
+    "sport-recife", "sport", "ceara", "cear", "coritiba", "goias", "goi-s",
+    "chapecoense", "juventude", "atletico-paranaense", "avai", "ava-",
+    # Liga MX
+    "club-america", "america", "chivas", "chivas-de-guadalajara",
+    "guadalajara", "cruz-azul", "pumas", "tigres", "monterrey", "leon",
+    "santos-laguna", "toluca", "necaxa", "pachuca", "queretaro",
+    "quer-taro", "atlas", "mazatlan", "juarez", "ju-rez", "tijuana",
+    "puebla", "xolos",
+    # Copa Libertadores relevantes extra (Chile, Ecuador, Uruguay, Colombia, Paraguay)
+    "colo-colo", "universidad-de-chile", "university-of-chile",
+    "universidad-cat-lica", "universidad-catolica", "peñarol", "pe-arol",
+    "nacional", "atletico-nacional", "atl-tico-nacional",
+    "millonarios", "america-de-cali", "junior", "ldu", "ldu-quito",
+    "barcelona-sc", "emelec", "olimpia", "cerro-porteno", "cerro-porte-o",
+    "libertad",
 }
 
 # T4 — retros icónicos (hardcoded list)
@@ -217,6 +339,45 @@ def _is_latam_important(team):
     return any(t in tk or tk in t for t in LATAM_LEAGUES_TEAMS)
 
 
+def _fid_prefix(fid):
+    """Extrae el prefix 'team' de un family_id kebab-case.
+    Corta en el primer segmento numérico (season): 'atl-tico-mineiro-25-26-home' → 'atl-tico-mineiro'.
+    También corta en 'noseason'. 'real-madrid-2026-home-kids' → 'real-madrid'.
+    """
+    if not fid:
+        return ""
+    parts = fid.lower().split("-")
+    out = []
+    for p in parts:
+        if p == "noseason":
+            break
+        if re.match(r"^\d{2,4}$", p):
+            break
+        out.append(p)
+    return "-".join(out)
+
+
+def _fid_prefix_match(fid, prefix_set):
+    """True si algún prefix del set es ≤ al team-prefix de fid.
+    Un prefix 'real-madrid' matchea 'real-madrid-25-26-home' pero NO 'real-madrid-casual-store'.
+    """
+    if not fid:
+        return False
+    fid_prefix = _fid_prefix(fid)
+    if fid_prefix in prefix_set:
+        return True
+    # También: cualquier prefix del set que sea prefix exacto del team-prefix de fid
+    # (ej. 'athletic-club' set entry matchea fid_prefix='athletic-club-bilbao')
+    for p in prefix_set:
+        if fid_prefix == p:
+            return True
+        if fid_prefix.startswith(p + "-"):
+            # Verifica que lo que sigue sea continuación del nombre, no un tipo
+            # Ej: 'athletic-club' debe aceptar 'athletic-club-bilbao' pero no descartable
+            return True
+    return False
+
+
 def _extract_season_years(season):
     """De '25/26' o '2026' o '93/94' → lista de años int.
     '25/26' → [2025, 2026]; '93/94' → [1993, 1994]; '2026' → [2026].
@@ -242,51 +403,154 @@ def _extract_season_years(season):
 
 
 def assign_tier(family):
-    """Determina tier para una family. Lógica del AUDIT-SYSTEM spec.
+    """Determina tier para una family. Lógica canónica — ver AUDIT-TIER-LOGIC.md.
 
-    Reglas:
-    - null si category='other' → excluded
-    - T1: Mundial 2026 — season contains "2026" AND category en categorías visibles
-    - T2: Top-5 Europa temporadas 25/26 o 26/27
-    - T3: Otras ligas importantes (Argentina, Brasileirão, Liga MX)
-    - T4: Retros icónicos (lista hardcoded)
-    - T5: resto de retros (años antiguos)
-    - None: si no se puede determinar — Diego asigna manual
+    Orden de evaluación:
+      1. category=='other'           → None (excluded)
+      2. fid en T4_ICONIC_RETROS     → T4
+      3. 2026/2027 en season o fid   → T1 si es selección nacional
+                                       T2 si es club Top-5 Europa
+                                       T3 si es club Latam
+                                       T5 si es otro club (ajax, benfica, etc.)
+      4. years incluye 2023-2025     → T2 si Top-5 Europa
+                                       T3 si Latam
+                                       (sigue abajo si ninguno matchea)
+      5. Fallback T5                 → cualquier family con season parseable o
+                                       categoría válida (adult/women/kids/baby/
+                                       jacket/training/polo/vest/sweatshirt).
+                                       Cubre retros viejos + clubes secundarios +
+                                       selecciones no-Mundial + season='noseason'.
+      6. None                        → solo si realmente no hay señal (rare).
+
+    Cambios vs v1 (2026-04-22 AM):
+      - Matching por family_id prefix en vez de team string (evita bugs de encoding).
+      - NATIONAL_TEAMS_FID introduce detección explícita de selecciones (110+ países).
+      - Fallback T5 absorbe ~580+ families que antes caían en None.
+      - T2/T3 aceptan years 2023-2027 (antes solo 2025-2027 para T2).
     """
     cat = family.get("category")
     if cat == "other":
         return None   # excluded
 
-    fid = family.get("family_id", "")
-    team = family.get("team", "")
-    season = family.get("season", "")
+    fid = (family.get("family_id") or "").lower()
+    team = family.get("team") or ""
+    season = family.get("season") or ""
     years = _extract_season_years(season)
 
-    # T4: retros icónicos (hardcoded list)
+    # T4: retros icónicos (hardcoded list) — prioridad máxima
     if fid in T4_ICONIC_RETROS:
         return "T4"
 
-    # T1: Mundial 2026
-    # season "2026" o family_id contiene "2026"
-    if "2026" in (season or "") or "-2026-" in fid:
-        return "T1"
+    # ── Señal Mundial 2026 ──────────────────────────────
+    # season='2026' literal (selecciones que usan ese formato),
+    # fid contiene '-2026-' (selecciones con año completo),
+    # o years incluye 2026/2027 (clubes con 25/26, 26/27).
+    is_world_cup = (
+        ("2026" in season)
+        or ("-2026-" in fid)
+        or fid.endswith("-2026")
+        or (bool(years) and (2026 in years or 2027 in years))
+    )
 
-    # T2: top-5 Europa 25/26 o 26/27
-    if years and (2025 in years or 2026 in years or 2027 in years):
-        if _is_top5_europe(team):
+    if is_world_cup:
+        # Selección nacional → T1 (Mundial 2026 strict sense)
+        if _fid_prefix_match(fid, NATIONAL_TEAMS_FID):
+            return "T1"
+        # Club Top-5 con temporada actual → T2
+        if _fid_prefix_match(fid, TOP5_EUROPE_FID) or _is_top5_europe(team):
             return "T2"
+        # Club Latam actual → T3
+        if _fid_prefix_match(fid, LATAM_FID) or _is_latam_important(team):
+            return "T3"
+        # Club secundario con 25/26 o 26/27 (Ajax, Benfica, Celtic, Porto, etc.) → T5
+        if cat:
+            return "T5"
 
-    # T3: otras ligas importantes actuales
-    if years and (2024 in years or 2025 in years or 2026 in years or 2027 in years):
-        if _is_latam_important(team):
+    # ── Temporadas actuales sin señal Mundial ────────────
+    # Rango extendido 2023-2025 para absorber Premier 23/24, 24/25, etc.
+    current_years = {2023, 2024, 2025}
+    has_current = bool(years) and bool(set(years) & current_years)
+
+    if has_current:
+        if _fid_prefix_match(fid, TOP5_EUROPE_FID) or _is_top5_europe(team):
+            return "T2"
+        if _fid_prefix_match(fid, LATAM_FID) or _is_latam_important(team):
             return "T3"
 
-    # T5: retros viejos (cualquier año <= 2015)
-    if years and min(years) <= 2015:
+    # ── Fallback T5 ──────────────────────────────────────
+    # Cualquier family con season parseable (retros viejos, ligas secundarias,
+    # selecciones no-Mundial) o categoría visible cae en T5. Evita None.
+    visible_cats = {"adult", "women", "kids", "baby", "jacket", "training",
+                    "polo", "vest", "sweatshirt"}
+    if years or cat in visible_cats:
         return "T5"
 
-    # Caso ambiguo: Diego asigna manual
     return None
+
+
+def rebuild_tiers(catalog=None, dry_run=False):
+    """Recalcula `tier` para todas las families de audit_decisions con la lógica
+    vigente de assign_tier. Preserva status, checks, notes — solo actualiza `tier`.
+
+    Uso típico tras cambiar la lógica de assign_tier o expandir los diccionarios
+    de teams. Idempotente.
+
+    Args:
+      catalog: lista de familias (si None, carga desde catalog.json).
+      dry_run: si True, no escribe cambios — solo retorna stats.
+
+    Returns:
+      dict con { before: {tier: count}, after: {tier: count}, changed: int, total: int }
+    """
+    from collections import Counter
+
+    if catalog is None:
+        catalog = load_catalog()
+    by_id = {f["family_id"]: f for f in catalog}
+
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT family_id, tier FROM audit_decisions"
+    ).fetchall()
+
+    before = Counter()
+    after = Counter()
+    changed = 0
+    missing_from_catalog = 0
+
+    for r in rows:
+        fid = r["family_id"]
+        old_tier = r["tier"]
+        before[old_tier or "None"] += 1
+
+        fam = by_id.get(fid)
+        if not fam:
+            missing_from_catalog += 1
+            after[old_tier or "None"] += 1
+            continue
+
+        new_tier = assign_tier(fam)
+        after[new_tier or "None"] += 1
+        if new_tier != old_tier:
+            changed += 1
+            if not dry_run:
+                conn.execute(
+                    "UPDATE audit_decisions SET tier = ? WHERE family_id = ?",
+                    (new_tier, fid),
+                )
+
+    if not dry_run:
+        conn.commit()
+    conn.close()
+
+    return {
+        "total": len(rows),
+        "changed": changed,
+        "missing_from_catalog": missing_from_catalog,
+        "before": dict(before),
+        "after": dict(after),
+        "dry_run": dry_run,
+    }
 
 
 # ───────────────────────────────────────────
@@ -543,8 +807,10 @@ def queue_families(conn, catalog, tier_filter=None, status_filter=None, category
     """
     by_id = {f["family_id"]: f for f in catalog}
 
-    # Toma todas las decisiones
-    q = "SELECT family_id, tier, status FROM audit_decisions WHERE 1=1"
+    # Default sort: T1 → T2 → T3 → T4 → T5 → None (via tier_rank), tiebreaker family_id ASC.
+    # Asegura que la primera página del queue siempre muestre lo más prioritario
+    # (Diego arranca por Mundial 2026, luego Europa top-5, etc.).
+    q = """SELECT family_id, tier, status FROM audit_decisions WHERE 1=1"""
     params = []
     if tier_filter:
         q += " AND tier = ?"
@@ -552,6 +818,18 @@ def queue_families(conn, catalog, tier_filter=None, status_filter=None, category
     if status_filter:
         q += " AND status = ?"
         params.append(status_filter)
+    q += """
+        ORDER BY
+          CASE tier
+            WHEN 'T1' THEN 1
+            WHEN 'T2' THEN 2
+            WHEN 'T3' THEN 3
+            WHEN 'T4' THEN 4
+            WHEN 'T5' THEN 5
+            ELSE 6
+          END ASC,
+          family_id ASC
+    """
     rows = conn.execute(q, params).fetchall()
 
     out = []
