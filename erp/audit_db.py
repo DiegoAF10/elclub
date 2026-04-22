@@ -1227,6 +1227,8 @@ def queue_stats(conn):
              SUM(CASE WHEN status='verified' THEN 1 ELSE 0 END) as verified,
              SUM(CASE WHEN status='flagged' THEN 1 ELSE 0 END) as flagged,
              SUM(CASE WHEN status='skipped' THEN 1 ELSE 0 END) as skipped,
+             SUM(CASE WHEN status='needs_rework' THEN 1 ELSE 0 END) as needs_rework,
+             SUM(CASE WHEN status='deleted' THEN 1 ELSE 0 END) as deleted,
              SUM(CASE WHEN final_verified=1 THEN 1 ELSE 0 END) as final_verified
            FROM audit_decisions"""
     ).fetchone()

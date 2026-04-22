@@ -743,13 +743,18 @@ def _render_shortcuts_box():
 def _render_stats_header(conn):
     stats = audit_db.queue_stats(conn)
     total = stats.get("total", 0) or 0
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    needs_rework = stats.get("needs_rework", 0) or 0
+    c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
     c1.metric("Total", total)
     c2.metric("Pending", stats.get("pending", 0) or 0)
     c3.metric("Verified", stats.get("verified", 0) or 0)
     c4.metric("Flagged", stats.get("flagged", 0) or 0)
     c5.metric("Skipped", stats.get("skipped", 0) or 0)
-    c6.metric("✅ Publicadas", stats.get("final_verified", 0) or 0)
+    # needs_rework visible en el header (antes de s14-mini estaba oculto, causando
+    # el bug Diego-2026-04-22: Argentina 2026 Home invisible porque quedó en este
+    # estado tras fallos de Gemini y queue default filtra pending).
+    c6.metric("⚠️ Needs rework", needs_rework)
+    c7.metric("✅ Publicadas", stats.get("final_verified", 0) or 0)
 
 
 # ═══════════════════════════════════════
@@ -760,6 +765,31 @@ def render_queue(conn, catalog):
     st.header("📋 Queue de Audit")
     _render_shortcuts_box()
     st.markdown("")
+
+    # Banner needs_rework — fix de s14-mini (2026-04-22). Diego reportó que
+    # ARG-2026-L-FS/PS no aparecían. Razón: status='needs_rework' (Gemini
+    # watermark falló al publish) + queue default filtra 'pending'. Añado
+    # señal visible + shortcut al filter.
+    qstats = audit_db.queue_stats(conn)
+    nr = qstats.get("needs_rework", 0) or 0
+    if nr > 0:
+        bc1, bc2 = st.columns([4, 1])
+        with bc1:
+            st.warning(
+                f"⚠️ **{nr} SKU{'s' if nr != 1 else ''} en `needs_rework`** — "
+                f"fallaron al publish (Gemini watermark u otra abort). No están en "
+                f"el filter default 'pending'. Click derecha para verlos."
+            )
+        with bc2:
+            if st.button("👀 Ver needs_rework", use_container_width=True,
+                         key="queue_jump_needs_rework"):
+                st.session_state["audit_queue_status"] = "needs_rework"
+                st.rerun()
+
+    # Status filter con session_state para permitir navegación programática
+    # (banner arriba + bookmark-style persistencia entre reruns).
+    if "audit_queue_status" not in st.session_state:
+        st.session_state["audit_queue_status"] = "pending"
 
     # Filters — Ops s13+: default filter = pending para que Diego vea primero lo que falta
     fc1, fc2, fc3, fc4 = st.columns(4)
@@ -772,7 +802,7 @@ def render_queue(conn, catalog):
         status_options = ["(todos)"] + STATUSES
         status_filter = st.selectbox(
             "Status", status_options,
-            index=status_options.index("pending"),  # default pending
+            key="audit_queue_status",
         )
     with fc3:
         category_filter = st.selectbox(
