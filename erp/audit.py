@@ -1913,6 +1913,49 @@ def _render_photos_and_actions(conn, fam, form_key_prefix):
     display_order = sorted(non_deleted, key=_sort_key)
     display_pos_of = {idx: pos for pos, idx in enumerate(display_order)}
 
+    # s14z-#6: Multi-select + bulk delete en audit detail. Checkbox por foto +
+    # barra arriba. Delete en audit = set_photo_action(action="delete") → foto
+    # excluida del gallery final al publish (soft, reversible via clear).
+    sel_key = f"audit_photo_sel_{fid}"
+    if sel_key not in st.session_state:
+        st.session_state[sel_key] = set()
+    selected = st.session_state[sel_key]
+    # Solo las no-ya-borradas son seleccionables
+    sel_valid = selected & set(non_deleted)
+
+    bc1, bc2, bc3 = st.columns([3, 1, 1])
+    with bc1:
+        if sel_valid:
+            if st.button(
+                f"🗑 Delete {len(sel_valid)} foto(s) seleccionadas",
+                key=f"bulk_photo_del_{fid}",
+                type="primary", use_container_width=True,
+                help="Marca action=delete en audit_photo_actions. Al publicar, "
+                     "estas fotos se excluyen del gallery final.",
+            ):
+                for pi in sel_valid:
+                    audit_db.set_photo_action(conn, fid, gallery[pi], pi, action="delete")
+                st.session_state[sel_key] = set()
+                st.toast(f"🗑 {len(sel_valid)} fotos marcadas para delete")
+                st.rerun()
+        else:
+            st.caption(
+                "☑ Multi-select: marcá el checkbox arriba de cada foto y usá "
+                "🗑 para bulk delete."
+            )
+    with bc2:
+        if st.button("☑ Todas", key=f"audit_sel_all_{fid}",
+                     use_container_width=True,
+                     disabled=(len(sel_valid) == len(non_deleted))):
+            st.session_state[sel_key] = set(non_deleted)
+            st.rerun()
+    with bc3:
+        if st.button("☐ Ninguna", key=f"audit_sel_none_{fid}",
+                     use_container_width=True,
+                     disabled=not sel_valid):
+            st.session_state[sel_key] = set()
+            st.rerun()
+
     cols_per_row = 4
     for row_start in range(0, len(gallery), cols_per_row):
         cols = st.columns(cols_per_row)
@@ -1921,6 +1964,21 @@ def _render_photos_and_actions(conn, fam, form_key_prefix):
             if i >= len(gallery):
                 break
             with cols[col_idx]:
+                # Checkbox multi-select (solo si la foto no está ya marcada para delete)
+                if i in non_deleted:
+                    was_sel = i in selected
+                    is_sel = st.checkbox(
+                        f"sel_{i}", value=was_sel,
+                        key=f"audit_sel_cb_{fid}_{i}",
+                        label_visibility="collapsed",
+                        help="Marcar para bulk delete",
+                    )
+                    if is_sel != was_sel:
+                        if is_sel:
+                            selected.add(i)
+                        else:
+                            selected.discard(i)
+                        st.session_state[sel_key] = selected
                 _render_photo_card(conn, fid, i, gallery[i], saved_actions.get(i),
                                    current_hero, display_order=display_order,
                                    display_pos=display_pos_of.get(i),
