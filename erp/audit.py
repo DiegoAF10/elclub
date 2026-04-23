@@ -1462,6 +1462,38 @@ def render_queue(conn, catalog):
                             )
                             st.rerun()
 
+                # s14z-#10+#11: Mover a otra family / Extraer como huérfano
+                # (acciones avanzadas, mismo row pero debajo)
+                move_c1, move_c2, move_c3 = st.columns([1, 1, 2])
+                with move_c1:
+                    if st.button(
+                        "🔄 Mover a otra family",
+                        key=f"move_{it['sku']}",
+                        use_container_width=True,
+                        help="Mueve este modelo solo (no toda la family) a otra family existente. "
+                             "El dialog te rankea families probables por team/season/variant match.",
+                    ):
+                        _move_modelo_dialog(fid, it["sku"], _modelo_desc(it))
+                with move_c2:
+                    if st.button(
+                        "🚪 Extraer huérfano",
+                        key=f"orphan_{it['sku']}",
+                        use_container_width=True,
+                        help="Crea una nueva family solo con este modelo. Útil cuando sabés "
+                             "que está mal ubicado pero aún no encontraste su family correcta. "
+                             "Después podés mergearla con la real.",
+                    ):
+                        res = _orphan_modelo(fid, it["sku"])
+                        if res.get("ok"):
+                            st.toast(
+                                f"🚪 `{it['sku']}` extraído a nueva family "
+                                f"`{res['new_fid']}`. Source queda con "
+                                f"{res['source_remaining']} modelos."
+                            )
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {res.get('error', 'orphan falló')}")
+
 
 # ═══════════════════════════════════════
 # VIEW 2: Audit Detail (producto madre)
@@ -1647,6 +1679,43 @@ def render_detail(conn, catalog):
         except Exception as _e:
             st.error(f"Error renderizando editor: {type(_e).__name__}: {_e}")
 
+    # s14z-#10+#11: Acciones de modelo-level (mover o extraer como huérfano)
+    st.markdown("---")
+    st.markdown("### 🔧 Acciones de modelo")
+    st.caption(
+        "Si el modelo actual está mal asociado al family, podés moverlo a otra "
+        "family existente o extraerlo como family independiente (huérfano)."
+    )
+    modelo_desc_str = modelo_desc if 'modelo_desc' in locals() else "modelo"
+    action_c1, action_c2, action_c3 = st.columns([1, 1, 2])
+    with action_c1:
+        if st.button(
+            "🔄 Mover a otra family",
+            key=f"detail_move_{sku}",
+            use_container_width=True,
+            help="Abre selector con families rankeadas por team/season/variant match.",
+        ):
+            _move_modelo_dialog(fam["family_id"], sku, modelo_desc_str)
+    with action_c2:
+        if st.button(
+            "🚪 Extraer como huérfano",
+            key=f"detail_orphan_{sku}",
+            use_container_width=True,
+            help="Crea nueva family 'orphan-{sku}' solo con este modelo. "
+                 "Hereda team/season/variant del origen.",
+        ):
+            res = _orphan_modelo(fam["family_id"], sku)
+            if res.get("ok"):
+                st.toast(
+                    f"🚪 `{sku}` extraído a `{res['new_fid']}`. "
+                    f"Source queda con {res['source_remaining']} modelos."
+                )
+                # Navegar a la nueva family orphan (o al queue)
+                st.session_state.current_family = sku  # SKU sigue siendo el mismo
+                st.rerun()
+            else:
+                st.error(f"❌ {res.get('error', 'orphan falló')}")
+
     # s14z-#7: Publicar directo sin pasar por Pending Review (skip Claude batch)
     _render_direct_publish_block(conn, sku, fam)
 
@@ -1745,6 +1814,267 @@ def _merge_families_tool(source_fids, target_fid):
         "target_fid": target_fid,
         "total_modelos_after": len(target_modelos),
     }
+
+
+def _orphan_modelo(source_fid, modelo_sku):
+    """s14z-#11: Extrae un modelo de su family actual y lo deja como 'huérfano' —
+    una nueva family que contiene solo este modelo. Útil cuando Diego sabe que
+    el modelo está mal ubicado pero todavía no encontró la family correcta.
+
+    Nueva family hereda team/season/variant del source para preservar contexto.
+    family_id = f'orphan-{modelo_sku.lower()}' (ej. 'orphan-bls-2026-l-fs').
+    Diego puede después mergear esta family con la correcta o editar el family_id
+    desde el form de specs top-level.
+
+    Retorna {ok, error?, new_fid?, source_remaining?}"""
+    import json
+    with open(audit_db.CATALOG_PATH, "r", encoding="utf-8") as f:
+        catalog = json.load(f)
+
+    source = None
+    for fam in catalog:
+        if fam.get("family_id") == source_fid:
+            source = fam
+            break
+    if not source:
+        return {"ok": False, "error": f"source '{source_fid}' no encontrada"}
+
+    src_modelos = list(source.get("modelos") or [])
+    modelo_idx = next(
+        (i for i, m in enumerate(src_modelos) if m.get("sku") == modelo_sku),
+        None,
+    )
+    if modelo_idx is None:
+        return {"ok": False, "error": f"modelo '{modelo_sku}' no encontrado en '{source_fid}'"}
+
+    modelo = src_modelos.pop(modelo_idx)
+    if "source_family_id" not in modelo:
+        modelo["source_family_id"] = source_fid
+
+    new_fid = f"orphan-{modelo_sku.lower()}"
+    # Evitar collision con family existente (muy improbable pero defensivo)
+    if any(f.get("family_id") == new_fid for f in catalog):
+        new_fid = f"orphan-{modelo_sku.lower()}-{modelo_idx}"
+
+    orphan_fam = {
+        "family_id": new_fid,
+        "team": source.get("team"),
+        "season": source.get("season"),
+        "variant": source.get("variant"),
+        "variant_label": source.get("variant_label"),
+        "category": source.get("category"),
+        "meta_country": source.get("meta_country"),
+        "meta_league": source.get("meta_league"),
+        "modelos": [modelo],
+        "hero_thumbnail": modelo.get("hero_thumbnail"),
+        "gallery": [],  # top-level vacío en unified families
+        "published": False,
+        "_orphan_from": source_fid,  # trace
+    }
+
+    source["modelos"] = src_modelos
+    catalog.append(orphan_fam)
+
+    with open(audit_db.CATALOG_PATH, "w", encoding="utf-8") as f:
+        json.dump(catalog, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+    return {
+        "ok": True,
+        "new_fid": new_fid,
+        "moved_sku": modelo_sku,
+        "source_fid": source_fid,
+        "source_remaining": len(src_modelos),
+    }
+
+
+def _move_modelo_to_family(source_fid, modelo_sku, target_fid):
+    """s14z-#10: Mueve un solo modelo desde source_fid.modelos[] hacia
+    target_fid.modelos[]. A diferencia de _merge_families_tool (que mueve
+    TODOS los modelos), este mueve solo uno — útil cuando el scraper puso
+    un modelo en la family equivocada.
+
+    Preserva source_family_id para trazabilidad. NO toca audit_decisions
+    ni audit_photo_actions (keyed por SKU, no por family_id). Si source
+    queda vacío, se mantiene en catalog — Diego lo limpia manual si quiere
+    (evita borrar data que puede tener metadata top-level útil).
+
+    Retorna {ok, error?, moved_sku?, target_total_modelos?}"""
+    import json
+    with open(audit_db.CATALOG_PATH, "r", encoding="utf-8") as f:
+        catalog = json.load(f)
+
+    source = target = None
+    for fam in catalog:
+        fid = fam.get("family_id")
+        if fid == source_fid:
+            source = fam
+        elif fid == target_fid:
+            target = fam
+
+    if not source:
+        return {"ok": False, "error": f"source '{source_fid}' no encontrada"}
+    if not target:
+        return {"ok": False, "error": f"target '{target_fid}' no encontrada"}
+    if source_fid == target_fid:
+        return {"ok": False, "error": "source == target"}
+
+    src_modelos = list(source.get("modelos") or [])
+    modelo_idx = next(
+        (i for i, m in enumerate(src_modelos) if m.get("sku") == modelo_sku),
+        None,
+    )
+    if modelo_idx is None:
+        return {"ok": False, "error": f"modelo SKU '{modelo_sku}' no encontrado en '{source_fid}'"}
+
+    modelo = src_modelos.pop(modelo_idx)
+    if "source_family_id" not in modelo:
+        modelo["source_family_id"] = source_fid
+
+    # Append al target
+    tgt_modelos = list(target.get("modelos") or [])
+    tgt_modelos.append(modelo)
+
+    source["modelos"] = src_modelos
+    target["modelos"] = tgt_modelos
+
+    with open(audit_db.CATALOG_PATH, "w", encoding="utf-8") as f:
+        json.dump(catalog, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+    return {
+        "ok": True,
+        "moved_sku": modelo_sku,
+        "source_fid": source_fid,
+        "target_fid": target_fid,
+        "source_remaining": len(src_modelos),
+        "target_total_modelos": len(tgt_modelos),
+    }
+
+
+def _rank_move_target_candidates(source_fid, modelo, all_families):
+    """s14z-#10: Rankea families candidatas para mover un modelo hacia ellas.
+    Retorna lista ordenada (más probable primero) de family_ids.
+
+    ═══ DECISIÓN DE DISEÑO — TUNEABLE POR DIEGO ═══
+    El ranking determina qué families ve primero Diego en el selector.
+    Un ranking pobre hace scrollear una lista de 4700+ items.
+    Un buen ranking pone el match obvio en el TOP-5.
+
+    Heurística actual (simple): score = matches en team/season/variant.
+    Podés cambiar la función de score para reflejar tu criterio real.
+    Ejemplos de cosas que podrías sumar:
+      - Families con modelos SIN variantes hermanas (ej. solo fan-short,
+        probablemente le falta fan-long)
+      - Matching de canonical family_id naming (ej. 'argentina-2026-')
+      - Priorizar families pending/flagged vs verified (querés consolidar)
+      - Penalizar families con muchos modelos ya (menos likely target)
+
+    Args:
+        source_fid: family_id del origen (se excluye del ranking)
+        modelo: el modelo que se va a mover (dict con type/sleeve/gallery/...)
+        all_families: list de dicts del catalog (fam completo)
+
+    Returns: list[str] de family_ids ordenados (best match first)
+    """
+    src_team = None
+    src_season = None
+    src_variant = None
+    for f in all_families:
+        if f.get("family_id") == source_fid:
+            src_team = f.get("team")
+            src_season = f.get("season")
+            src_variant = f.get("variant")
+            break
+
+    def _score(fam):
+        if fam.get("family_id") == source_fid:
+            return -1  # excluir
+        s = 0
+        if src_team and fam.get("team") == src_team:
+            s += 100
+        if src_season and fam.get("season") == src_season:
+            s += 50
+        if src_variant and fam.get("variant") == src_variant:
+            s += 30
+        # Tiebreaker: family_id asc
+        return s
+
+    scored = [
+        (_score(f), f.get("family_id", ""))
+        for f in all_families
+        if f.get("family_id") and f.get("family_id") != source_fid
+    ]
+    scored.sort(key=lambda t: (-t[0], t[1]))
+    return [fid for _, fid in scored]
+
+
+@st.dialog("🔄 Mover modelo a otra family", width="large")
+def _move_modelo_dialog(source_fid, modelo_sku, modelo_desc):
+    """Dialog: elegir target family + confirmar."""
+    import json
+    with open(audit_db.CATALOG_PATH, "r", encoding="utf-8") as f:
+        catalog = json.load(f)
+
+    # Find source modelo for context y ranking
+    source_fam = next((f for f in catalog if f.get("family_id") == source_fid), None)
+    modelo = None
+    if source_fam:
+        modelo = next(
+            (m for m in (source_fam.get("modelos") or []) if m.get("sku") == modelo_sku),
+            None,
+        )
+
+    st.markdown(f"**Modelo:** `{modelo_sku}` · {modelo_desc}")
+    st.markdown(f"**Viene de:** `{source_fid}`")
+    st.markdown("---")
+
+    ranked_fids = _rank_move_target_candidates(source_fid, modelo, catalog)
+    search = st.text_input(
+        "Filtrar families por nombre",
+        key=f"move_filter_{modelo_sku}",
+        placeholder="Ej: argentina-2026 · deja vacío para ver todas ordenadas por similaridad",
+    )
+    if search:
+        s = search.lower()
+        ranked_fids = [fid for fid in ranked_fids if s in fid.lower()]
+    if not ranked_fids:
+        st.error("Ninguna family match. Ajustá el filtro.")
+        return
+
+    # Mostrar los TOP-50 para evitar UI pesada
+    display_fids = ranked_fids[:50]
+    target_fid = st.selectbox(
+        f"Family destino (mostrando top {len(display_fids)}/{len(ranked_fids)})",
+        options=display_fids,
+        key=f"move_target_{modelo_sku}",
+    )
+
+    st.warning(
+        f"⚠️ Se moverá `{modelo_sku}` de `{source_fid}` → `{target_fid}`. "
+        f"Preserva audit state. La family origen queda con sus otros modelos "
+        f"(no se borra)."
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Cancelar", key=f"move_cancel_{modelo_sku}",
+                     use_container_width=True):
+            st.rerun()
+    with c2:
+        if st.button(
+            "🔄 Confirmar mover", type="primary",
+            key=f"move_confirm_{modelo_sku}", use_container_width=True,
+        ):
+            res = _move_modelo_to_family(source_fid, modelo_sku, target_fid)
+            if res.get("ok"):
+                st.toast(
+                    f"✅ `{modelo_sku}` movido a `{target_fid}`. "
+                    f"Target ahora tiene {res['target_total_modelos']} modelos."
+                )
+                st.rerun()
+            else:
+                st.error(f"❌ {res.get('error', 'move falló')}")
 
 
 @st.dialog("🔗 Mergear families", width="large")
