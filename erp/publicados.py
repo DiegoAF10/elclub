@@ -637,67 +637,66 @@ def _render_gallery_editor(fid, modelo_idx, modelo):
                     st.caption("🌟 GEMINI_API_KEY no seteada en `.env`")
 
                 # Nivel 6 — Pintar mask manual (safety net 100% efectivo).
-                # Diego pinta con brush sobre el watermark y LaMa/SD procesa con
-                # esa mask. Para casos donde auto/force/sd/gemini fallaron.
-                _paint_key = f"paint_{fid}_{modelo_idx}_{p_idx}"
-                painting = st.session_state.get(_paint_key, False)
-                _paint_label = "❌ Cerrar canvas" if painting else "🖌️ Pintar mask"
-                if st.button(_paint_label,
+                # Abre un modal (st.dialog) full-width con el canvas. Diego pinta
+                # sobre el watermark y LaMa/SD procesa SOLO esa área.
+                if st.button("🖌️ Pintar mask",
                              key=f"pub_wm_paint_{fid}_{modelo_idx}_{p_idx}",
-                             help=("Canvas interactivo: pintá con brush sobre el "
-                                   "watermark y LaMa/SD procesa SOLO esa área. "
-                                   "100% confiable pero ~15s/foto."),
+                             help=("Abre un modal con canvas interactivo. Pintá "
+                                   "con brush blanco sobre el watermark y LaMa/SD "
+                                   "procesa solo esa área. 100% confiable, ~15s/foto."),
                              disabled=not lama_ok,
                              use_container_width=True):
-                    st.session_state[_paint_key] = not painting
-                    st.rerun()
-
-                if painting:
-                    _render_paint_canvas(fid, modelo_idx, p_idx, url, _paint_key)
+                    _open_paint_dialog(fid, modelo_idx, p_idx, url)
 
 
 def _ensure_canvas_compat():
     """Shim para Streamlit >= 1.31 donde `image_to_url` fue removido de
     `streamlit.elements.image`. streamlit-drawable-canvas 0.9.3 todavía lo
-    necesita. El shim devuelve data URL base64 (compatible con el frontend
-    del componente, que solo necesita que el browser pueda renderizar el src).
-    """
+    necesita. El shim devuelve data URL base64 JPEG (5x más chico que PNG
+    → fabric.js del widget lo carga rápido sin colgarse)."""
     import streamlit.elements.image as st_image
     if hasattr(st_image, "image_to_url"):
-        return  # versión de Streamlit vieja, nada que hacer
+        return
 
     import base64
     import io as _io
     from PIL import Image as _PILImage
 
     def image_to_url(image, *args, **kwargs):
-        # Normalizar a PIL.Image.Image y devolver data URL base64 PNG
         if isinstance(image, _PILImage.Image):
-            pil = image
+            pil = image.convert("RGB") if image.mode not in ("RGB", "L") else image
         elif isinstance(image, (bytes, bytearray)):
-            return "data:image/png;base64," + base64.b64encode(image).decode()
+            return "data:image/jpeg;base64," + base64.b64encode(image).decode()
         else:
-            # Asumimos numpy array (H,W,C) uint8 o float
             try:
                 import numpy as _np
                 arr = image
                 if hasattr(arr, "dtype") and arr.dtype != _np.uint8:
                     arr = _np.clip(arr, 0, 255).astype(_np.uint8)
-                pil = _PILImage.fromarray(arr)
+                pil = _PILImage.fromarray(arr).convert("RGB")
             except Exception:
                 return ""
         buf = _io.BytesIO()
-        pil.save(buf, format="PNG")
-        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+        pil.save(buf, format="JPEG", quality=85)  # 5x más chico que PNG
+        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
     st_image.image_to_url = image_to_url
 
 
-def _render_paint_canvas(fid, modelo_idx, photo_idx, url, paint_key):
-    """Canvas interactivo: Diego pinta brush sobre el watermark y LaMa/SD
-    procesa con esa mask. Safety net 100% efectivo para cuando auto/force/
-    sd/gemini fallan. ~15s por foto con brush strokes razonables."""
-    _ensure_canvas_compat()  # shim pre-import, crítico para Streamlit >= 1.31
+def _open_paint_dialog(fid, modelo_idx, photo_idx, url):
+    """Abre un st.dialog (modal full-width) con el canvas de paint. Evita el
+    problema de layout de renderizar el canvas dentro de la columna del grid."""
+    @st.dialog(f"🖌️ Pintar mask · m{modelo_idx} foto #{photo_idx + 1}", width="large")
+    def _dlg():
+        _render_paint_canvas_content(fid, modelo_idx, photo_idx, url)
+    _dlg()
+
+
+def _render_paint_canvas_content(fid, modelo_idx, photo_idx, url):
+    """Contenido del paint canvas. Se monta dentro de un st.dialog (modal
+    full-width). Diego pinta brush sobre el watermark, LaMa/SD procesa con
+    esa mask."""
+    _ensure_canvas_compat()
     try:
         from streamlit_drawable_canvas import st_canvas
     except ImportError:
@@ -712,7 +711,6 @@ def _render_paint_canvas(fid, modelo_idx, photo_idx, url, paint_key):
     import io
     import numpy as np
 
-    # Download foto original (dims reales)
     try:
         resp = requests.get(url, timeout=20)
         if resp.status_code != 200:
@@ -724,9 +722,9 @@ def _render_paint_canvas(fid, modelo_idx, photo_idx, url, paint_key):
         return
 
     orig_w, orig_h = orig_img.size
-    # Scale para canvas display (max 600px wide). La mask se re-scale-a al tamaño
-    # original en custom_mask_inpaint_bytes vía cv2.resize.
-    max_display_w = 600
+    # Max 700px wide en el modal (st.dialog large ~720px inner width).
+    # La mask se re-escala al original en custom_mask_inpaint_bytes.
+    max_display_w = 700
     if orig_w > max_display_w:
         scale = max_display_w / orig_w
         disp_w = max_display_w
@@ -736,88 +734,79 @@ def _render_paint_canvas(fid, modelo_idx, photo_idx, url, paint_key):
         disp_w, disp_h = orig_w, orig_h
         disp_img = orig_img
 
-    with st.container(border=True):
-        st.markdown(f"**🖌️ Pintar mask · m{modelo_idx} foto #{photo_idx + 1}**")
-        ctrl_a, ctrl_b, ctrl_c = st.columns([1, 1, 2])
-        with ctrl_a:
-            brush_size = st.slider(
-                "Brush px", min_value=5, max_value=80, value=30,
-                key=f"{paint_key}_brush",
-                help="Grosor del brush. Ajustá según tamaño del watermark.",
-            )
-        with ctrl_b:
-            backend = st.radio(
-                "Backend",
-                options=["LaMa", "SD"],
-                horizontal=True,
-                key=f"{paint_key}_backend",
-                help="LaMa ~1-2s (rápido). SD ~10s (mejor quality en logos/texturas).",
-            )
-        with ctrl_c:
-            st.caption(
-                f"Pintá sobre TODAS las instancias del watermark con brush blanco. "
-                f"Imagen orig: {orig_w}×{orig_h}px · display: {disp_w}×{disp_h}px "
-                f"(la mask se re-escala automáticamente al original)."
-            )
+    key_prefix = f"paintdlg_{fid}_{modelo_idx}_{photo_idx}"
 
-        canvas_result = st_canvas(
-            fill_color="rgba(255, 255, 255, 0.0)",
-            stroke_width=brush_size,
-            stroke_color="#ffffff",
-            background_image=disp_img,
-            update_streamlit=False,  # acumula strokes local; no rerun por stroke
-            height=disp_h,
-            width=disp_w,
-            drawing_mode="freedraw",
-            key=f"{paint_key}_canvas",
+    ctrl_a, ctrl_b = st.columns([2, 3])
+    with ctrl_a:
+        brush_size = st.slider(
+            "Brush px", min_value=5, max_value=80, value=30,
+            key=f"{key_prefix}_brush",
+            help="Grosor del brush blanco. Más grande = cubre más rápido pero menos preciso.",
+        )
+        backend = st.radio(
+            "Backend",
+            options=["LaMa (~1s)", "SD (~10s, mejor quality)"],
+            key=f"{key_prefix}_backend",
+            horizontal=False,
+        )
+    with ctrl_b:
+        st.caption(
+            f"**Pintá con brush blanco sobre TODAS las instancias del watermark.** "
+            f"Orig: {orig_w}×{orig_h}px · display: {disp_w}×{disp_h}px "
+            f"(mask auto-reescalada). Usá los controles abajo del canvas para undo/redo."
         )
 
-        btn_a, btn_b = st.columns(2)
-        with btn_a:
-            apply_clicked = st.button(
-                "✅ Aplicar inpaint", key=f"{paint_key}_apply",
-                type="primary", use_container_width=True,
+    canvas_result = st_canvas(
+        fill_color="rgba(255, 255, 255, 0.0)",
+        stroke_width=brush_size,
+        stroke_color="#ffffff",
+        background_image=disp_img,
+        update_streamlit=False,  # acumula strokes local, solo rerun al apply
+        height=disp_h,
+        width=disp_w,
+        drawing_mode="freedraw",
+        key=f"{key_prefix}_canvas",
+    )
+
+    btn_a, btn_b = st.columns(2)
+    with btn_a:
+        apply_clicked = st.button(
+            "✅ Aplicar inpaint", key=f"{key_prefix}_apply",
+            type="primary", use_container_width=True,
+        )
+    with btn_b:
+        if st.button("❌ Cerrar", key=f"{key_prefix}_cancel",
+                     use_container_width=True):
+            st.rerun()  # cierra el dialog
+
+    if apply_clicked:
+        if canvas_result.image_data is None:
+            st.error("Canvas vacío. Pintá sobre el watermark primero.")
+            return
+        alpha = canvas_result.image_data[:, :, 3]
+        if int(np.count_nonzero(alpha)) == 0:
+            st.error("Nada pintado. Usá el brush blanco sobre el watermark.")
+            return
+
+        mask_bin = (alpha > 0).astype(np.uint8) * 255
+        pil_mask = Image.fromarray(mask_bin, mode="L")
+        buf = io.BytesIO()
+        pil_mask.save(buf, format="PNG")
+        mask_bytes = buf.getvalue()
+
+        use_sd = backend.startswith("SD")
+        with st.spinner(f"🖌️ {'SD' if use_sd else 'LaMa'} inpainting…"):
+            res = _regen_watermark(
+                fid, modelo_idx, photo_idx,
+                mode="manual",
+                mask_bytes=mask_bytes,
+                use_sd_for_manual=use_sd,
             )
-        with btn_b:
-            cancel_clicked = st.button(
-                "❌ Cancelar", key=f"{paint_key}_cancel",
-                use_container_width=True,
-            )
-
-        if cancel_clicked:
-            st.session_state[paint_key] = False
-            st.rerun()
-
-        if apply_clicked:
-            if canvas_result.image_data is None:
-                st.error("Canvas vacío. Pintá sobre el watermark primero.")
-                return
-            alpha = canvas_result.image_data[:, :, 3]
-            if int(np.count_nonzero(alpha)) == 0:
-                st.error("Nada pintado. Usá el brush blanco sobre el watermark.")
-                return
-
-            # PNG mask bytes (binarizada)
-            mask_bin = (alpha > 0).astype(np.uint8) * 255
-            pil_mask = Image.fromarray(mask_bin, mode="L")
-            buf = io.BytesIO()
-            pil_mask.save(buf, format="PNG")
-            mask_bytes = buf.getvalue()
-
-            use_sd = (backend == "SD")
-            with st.spinner(f"🖌️ {'SD' if use_sd else 'LaMa'} inpainting…"):
-                res = _regen_watermark(
-                    fid, modelo_idx, photo_idx,
-                    mode="manual",
-                    mask_bytes=mask_bytes,
-                    use_sd_for_manual=use_sd,
-                )
-            if res.get("ok"):
-                st.toast(f"🖌️ Manual inpaint #{photo_idx + 1} listo")
-                st.session_state[paint_key] = False
-                st.rerun()
-            else:
-                st.error(f"⚠️ {res.get('error', 'unknown')}")
+        if res.get("ok"):
+            st.toast(f"🖌️ Manual inpaint m{modelo_idx} #{photo_idx + 1} listo")
+            st.rerun()  # cierra el dialog y refresca la galería
+        else:
+            st.error(f"⚠️ {res.get('error', 'unknown')}")
 
 
 def _gallery_set_hero(fid, modelo_idx, photo_idx):
