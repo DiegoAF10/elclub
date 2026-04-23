@@ -320,7 +320,14 @@ def _render_detail(conn, fid, catalog):
             st.rerun()
 
     if not modelos:
-        st.info("Legacy family sin `modelos[]`. Price/sizes viven top-level o en `variants[]`.")
+        st.info(
+            "Legacy family sin `modelos[]`. Fotos/specs viven top-level. "
+            "El editor abajo opera directo sobre `fam.gallery[]` y `fam.deleted_gallery[]`."
+        )
+        # Modelo-like container: _render_gallery_editor solo usa .gallery y
+        # .deleted_gallery del dict, y fam tiene ambas top-level. Pasamos
+        # modelo_idx=None para que los handlers operen sobre fam directo.
+        _render_gallery_editor(fid, None, fam)
     else:
         for i, m in enumerate(modelos):
             with st.expander(
@@ -988,21 +995,38 @@ def _render_paint_canvas_content(fid, modelo_idx, photo_idx, url):
             st.error(f"⚠️ {res.get('error', 'unknown')}")
 
 
+def _get_gallery_container(fam, modelo_idx):
+    """Retorna el dict que contiene gallery/deleted_gallery/hero_thumbnail.
+    modelo_idx=None → fam (legacy, fotos top-level).
+    modelo_idx=int → fam.modelos[modelo_idx].
+    Retorna None si modelo_idx está out of bounds."""
+    if modelo_idx is None:
+        return fam
+    modelos = fam.get("modelos") or []
+    if 0 <= modelo_idx < len(modelos):
+        return modelos[modelo_idx]
+    return None
+
+
 def _gallery_set_hero(fid, modelo_idx, photo_idx):
-    """Mueve photo_idx a la posición 0 (hero). Sync top-level si es primary modelo."""
+    """Mueve photo_idx a la posición 0 (hero). Sync top-level si es primary modelo.
+    modelo_idx=None → opera directo sobre fam.gallery (legacy family)."""
     catalog = _load_catalog_fresh()
     fam = _find_fam(catalog, fid)
     if not fam:
         return
-    modelo = (fam.get("modelos") or [])[modelo_idx]
-    gallery = list(modelo.get("gallery") or [])
+    container = _get_gallery_container(fam, modelo_idx)
+    if container is None:
+        return
+    gallery = list(container.get("gallery") or [])
     if photo_idx <= 0 or photo_idx >= len(gallery):
         return
     new_hero = gallery.pop(photo_idx)
     gallery.insert(0, new_hero)
-    modelo["gallery"] = gallery
-    modelo["hero_thumbnail"] = gallery[0]
-    _sync_top_level_if_primary(fam, modelo_idx)
+    container["gallery"] = gallery
+    container["hero_thumbnail"] = gallery[0]
+    if modelo_idx is not None:
+        _sync_top_level_if_primary(fam, modelo_idx)
     _save_catalog(catalog)
 
 
@@ -1011,79 +1035,89 @@ def _gallery_swap(fid, modelo_idx, pos_a, pos_b):
     fam = _find_fam(catalog, fid)
     if not fam:
         return
-    modelo = (fam.get("modelos") or [])[modelo_idx]
-    gallery = list(modelo.get("gallery") or [])
+    container = _get_gallery_container(fam, modelo_idx)
+    if container is None:
+        return
+    gallery = list(container.get("gallery") or [])
     if not (0 <= pos_a < len(gallery) and 0 <= pos_b < len(gallery)):
         return
     gallery[pos_a], gallery[pos_b] = gallery[pos_b], gallery[pos_a]
-    modelo["gallery"] = gallery
+    container["gallery"] = gallery
     if 0 in (pos_a, pos_b):
-        modelo["hero_thumbnail"] = gallery[0]
-    _sync_top_level_if_primary(fam, modelo_idx)
+        container["hero_thumbnail"] = gallery[0]
+    if modelo_idx is not None:
+        _sync_top_level_if_primary(fam, modelo_idx)
     _save_catalog(catalog)
 
 
 def _gallery_delete(fid, modelo_idx, photo_idx):
     """Soft-delete: mueve URL de gallery[] → deleted_gallery[] para permitir
-    restore. Los bytes R2 NO se tocan. UI muestra deleted_gallery separado
-    con botón ↺ Restaurar."""
+    restore. Los bytes R2 NO se tocan. modelo_idx=None → fam top-level."""
     from datetime import datetime
     catalog = _load_catalog_fresh()
     fam = _find_fam(catalog, fid)
     if not fam:
         return
-    modelo = (fam.get("modelos") or [])[modelo_idx]
-    gallery = list(modelo.get("gallery") or [])
+    container = _get_gallery_container(fam, modelo_idx)
+    if container is None:
+        return
+    gallery = list(container.get("gallery") or [])
     if not (0 <= photo_idx < len(gallery)):
         return
     url = gallery.pop(photo_idx)
-    # Append a deleted_gallery[] con timestamp
-    deleted = list(modelo.get("deleted_gallery") or [])
+    deleted = list(container.get("deleted_gallery") or [])
     deleted.append({
         "url": url,
         "deleted_at": datetime.now().isoformat(timespec="seconds"),
         "original_idx": photo_idx,
     })
-    modelo["gallery"] = gallery
-    modelo["deleted_gallery"] = deleted
-    modelo["hero_thumbnail"] = gallery[0] if gallery else None
-    _sync_top_level_if_primary(fam, modelo_idx)
+    container["gallery"] = gallery
+    container["deleted_gallery"] = deleted
+    container["hero_thumbnail"] = gallery[0] if gallery else None
+    if modelo_idx is not None:
+        _sync_top_level_if_primary(fam, modelo_idx)
     _save_catalog(catalog)
 
 
 def _gallery_restore(fid, modelo_idx, deleted_idx):
-    """Restore de deleted_gallery[] → gallery[] (al final del array)."""
+    """Restore de deleted_gallery[] → gallery[]. modelo_idx=None → fam top-level."""
     catalog = _load_catalog_fresh()
     fam = _find_fam(catalog, fid)
     if not fam:
         return
-    modelo = (fam.get("modelos") or [])[modelo_idx]
-    deleted = list(modelo.get("deleted_gallery") or [])
+    container = _get_gallery_container(fam, modelo_idx)
+    if container is None:
+        return
+    deleted = list(container.get("deleted_gallery") or [])
     if not (0 <= deleted_idx < len(deleted)):
         return
     entry = deleted.pop(deleted_idx)
-    gallery = list(modelo.get("gallery") or [])
+    gallery = list(container.get("gallery") or [])
     gallery.append(entry["url"])
-    modelo["gallery"] = gallery
-    modelo["deleted_gallery"] = deleted
-    if not modelo.get("hero_thumbnail"):
-        modelo["hero_thumbnail"] = gallery[0]
-    _sync_top_level_if_primary(fam, modelo_idx)
+    container["gallery"] = gallery
+    container["deleted_gallery"] = deleted
+    if not container.get("hero_thumbnail"):
+        container["hero_thumbnail"] = gallery[0]
+    if modelo_idx is not None:
+        _sync_top_level_if_primary(fam, modelo_idx)
     _save_catalog(catalog)
 
 
 def _restore_r2_from_backup(fid, modelo_idx, photo_idx):
     """Descarga el backup R2 del path `.backup.jpg` y lo sube al key original.
     Actualiza URL del catalog (cache-bust nuevo para invalidar CDN).
-    El backup key NO se borra — puede restaurarse de nuevo si se re-edita."""
+    El backup key NO se borra — puede restaurarse de nuevo si se re-edita.
+    modelo_idx=None → opera sobre fam.gallery top-level (legacy family)."""
     import requests
     from datetime import datetime
     catalog = _load_catalog_fresh()
     fam = _find_fam(catalog, fid)
     if not fam:
         return {"error": "family not found"}
-    modelo = (fam.get("modelos") or [])[modelo_idx]
-    gallery = list(modelo.get("gallery") or [])
+    container = _get_gallery_container(fam, modelo_idx)
+    if container is None:
+        return {"error": "modelo/container no encontrado"}
+    gallery = list(container.get("gallery") or [])
     if not (0 <= photo_idx < len(gallery)):
         return {"error": "photo idx OOB"}
 
@@ -1095,7 +1129,6 @@ def _restore_r2_from_backup(fid, modelo_idx, photo_idx):
     backup_key = key.rsplit(".", 1)[0] + ".backup.jpg"
     backup_url = f"https://img.elclub.club/{backup_key}"
 
-    # Download backup
     try:
         resp = requests.get(backup_url, timeout=20)
         if resp.status_code != 200:
@@ -1103,19 +1136,18 @@ def _restore_r2_from_backup(fid, modelo_idx, photo_idx):
     except Exception as e:
         return {"error": f"download backup: {e}"}
 
-    # Upload backup bytes al key original (overwrite con el backup)
     up = audit_enrich.upload_image_to_r2(resp.content, key, content_type="image/jpeg")
     if not up.get("ok"):
         return {"error": f"R2 upload: {up.get('error')}"}
 
-    # Cache-bust URL
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     new_url = f"{base_url}?v={ts}"
     gallery[photo_idx] = new_url
-    modelo["gallery"] = gallery
+    container["gallery"] = gallery
     if photo_idx == 0:
-        modelo["hero_thumbnail"] = new_url
-    _sync_top_level_if_primary(fam, modelo_idx)
+        container["hero_thumbnail"] = new_url
+    if modelo_idx is not None:
+        _sync_top_level_if_primary(fam, modelo_idx)
     _save_catalog(catalog)
     return {"ok": True}
 
@@ -1192,8 +1224,10 @@ def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto",
     fam = _find_fam(catalog, fid)
     if not fam:
         return {"error": "family not found"}
-    modelo = (fam.get("modelos") or [])[modelo_idx]
-    gallery = list(modelo.get("gallery") or [])
+    container = _get_gallery_container(fam, modelo_idx)
+    if container is None:
+        return {"error": "modelo/container no encontrado"}
+    gallery = list(container.get("gallery") or [])
     if not (0 <= photo_idx < len(gallery)):
         return {"error": "photo index OOB"}
 
@@ -1303,10 +1337,11 @@ def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto",
     ts = datetime.now().strftime("%Y%m%d-%H%M%S")
     new_url = f"{base_url}?v={ts}"
     gallery[photo_idx] = new_url
-    modelo["gallery"] = gallery
+    container["gallery"] = gallery
     if photo_idx == 0:
-        modelo["hero_thumbnail"] = new_url
-    _sync_top_level_if_primary(fam, modelo_idx)
+        container["hero_thumbnail"] = new_url
+    if modelo_idx is not None:
+        _sync_top_level_if_primary(fam, modelo_idx)
     _save_catalog(catalog)
 
     result = {"ok": True, "new_url": new_url}
