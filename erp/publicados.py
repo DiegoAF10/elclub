@@ -394,11 +394,15 @@ def _render_gallery_editor(fid, modelo_idx, modelo):
                 # Watermark row
                 wc1, wc2 = st.columns(2)
                 with wc1:
+                    # LaMa local si disponible, fallback a Gemini.
+                    import local_inpaint as _li
+                    backend_ok = _li.local_inpaint_available() or audit_enrich.gemini_available()
+                    backend_label = "LaMa local" if _li.local_inpaint_available() else "Gemini"
                     if st.button("⚠️ Watermark",
                                  key=f"pub_wm_{fid}_{modelo_idx}_{p_idx}",
-                                 help="Re-run Gemini para remover watermark residual + overwrite R2",
-                                 disabled=not audit_enrich.gemini_available()):
-                        with st.spinner("Gemini inpainting…"):
+                                 help=f"Inpaint watermark vía {backend_label} + overwrite R2",
+                                 disabled=not backend_ok):
+                        with st.spinner(f"{backend_label} inpainting…"):
                             res = _regen_watermark(fid, modelo_idx, p_idx)
                         if res.get("ok"):
                             st.toast(f"✅ Watermark cleaned #{p_idx + 1}")
@@ -492,13 +496,22 @@ def _regen_watermark(fid, modelo_idx, photo_idx):
         return {"error": f"download http {resp.status_code}"}
     img_bytes = resp.content
 
-    # Gemini watermark inpaint
-    gem = audit_enrich.gemini_regen_image(
-        img_bytes, mime_type="image/jpeg", prompt_variant="watermark",
-        family_id=fid, photo_index=photo_idx,
-    )
+    # Watermark inpaint — LaMa local preferred, Gemini fallback.
+    import local_inpaint as _li
+    if _li.local_inpaint_available():
+        gem = _li.watermark_inpaint_bytes(
+            img_bytes, mime_type="image/jpeg",
+            family_id=fid, photo_index=photo_idx,
+        )
+        if gem.get("skipped") == "no_watermark_detected":
+            return {"error": "OCR no detectó watermark en esta foto (nada que remover)"}
+    else:
+        gem = audit_enrich.gemini_regen_image(
+            img_bytes, mime_type="image/jpeg", prompt_variant="watermark",
+            family_id=fid, photo_index=photo_idx,
+        )
     if not gem.get("ok"):
-        return {"error": gem.get("error", "gemini fail")}
+        return {"error": gem.get("error", "inpaint fail")}
 
     # Upload back to same key (overwrite)
     up = audit_enrich.upload_image_to_r2(

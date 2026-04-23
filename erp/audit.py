@@ -2184,8 +2184,16 @@ def _process_watermark_with_gemini(conn, family_id, original_url, original_index
         )
         return None
 
-    if not audit_enrich.gemini_available():
-        return _fail("availability", "GEMINI_API_KEY no seteada")
+    # Fix s14o: usar LaMa local en vez de Gemini. Free, 10x más rápido, preserva
+    # el resto de la imagen (Gemini re-generaba toda la foto). Fallback a Gemini
+    # solo si LaMa no disponible (sin torch.cuda).
+    import local_inpaint
+    if not local_inpaint.local_inpaint_available():
+        if not audit_enrich.gemini_available():
+            return _fail("availability", "LaMa local ni Gemini disponibles")
+        backend = "gemini"
+    else:
+        backend = "lama"
 
     # Strip query string (e.g. ?v=2026-04-22) para download raw
     clean_url = original_url.split("?")[0]
@@ -2198,15 +2206,27 @@ def _process_watermark_with_gemini(conn, family_id, original_url, original_index
     except Exception as exc:
         return _fail("download", f"{type(exc).__name__}: {exc}")
 
-    # gemini_regen_image ya tiene retry interno + logueo propio en 'gemini'.
-    result = audit_enrich.gemini_regen_image(
-        image_bytes, mime_type="image/jpeg", prompt_variant="watermark",
-        family_id=family_id, photo_index=original_index,
-    )
+    if backend == "lama":
+        result = local_inpaint.watermark_inpaint_bytes(
+            image_bytes, mime_type="image/jpeg",
+            family_id=family_id, photo_index=original_index,
+        )
+        if result.get("skipped") == "no_watermark_detected":
+            # LaMa no detectó watermark — no upload, pero marcamos processed
+            # para no re-intentar. processed_url = original URL (no cambia).
+            audit_db.set_photo_action(
+                conn, family_id, original_url, original_index,
+                action="flag_watermark", processed_url=original_url,
+            )
+            return original_url
+    else:
+        result = audit_enrich.gemini_regen_image(
+            image_bytes, mime_type="image/jpeg", prompt_variant="watermark",
+            family_id=family_id, photo_index=original_index,
+        )
+
     if not result.get("ok"):
-        # El error detallado ya quedó logueado por audit_enrich._with_retry.
-        # Acá agregamos una entrada de pipeline para facilitar query.
-        return _fail("gemini_inpaint", result.get("error", "unknown"))
+        return _fail(f"{backend}_inpaint", result.get("error", "unknown"))
 
     # Key en R2: families/<fid>/<NN>-cleaned.jpg
     ord_str = f"{original_index + 1:02d}"
@@ -2697,7 +2717,20 @@ def render_page(conn):
         st.markdown("---")
         st.markdown("**🔍 Audit Status**")
         st.caption(f"Claude: {'✅' if audit_enrich.claude_available() else '❌ set ANTHROPIC_API_KEY'}")
-        st.caption(f"Gemini: {'✅' if audit_enrich.gemini_available() else '❌ set GEMINI_API_KEY'}")
+        # Watermark inpaint backend status — LaMa local (preferido, free, GPU)
+        # vs Gemini API (fallback). Sidebar muestra cuál va a usar.
+        try:
+            import local_inpaint as _li
+            _lama_ok = _li.local_inpaint_available()
+        except Exception:
+            _lama_ok = False
+        if _lama_ok:
+            st.caption(f"Watermark inpaint: ✅ LaMa local (GPU, $0)")
+        elif audit_enrich.gemini_available():
+            st.caption(f"Watermark inpaint: ⚠️ Gemini fallback (LaMa no disponible)")
+        else:
+            st.caption(f"Watermark inpaint: ❌ ningún backend")
+        st.caption(f"Gemini (quality regen): {'✅' if audit_enrich.gemini_available() else '❌'}")
         st.caption(f"🗑 {deleted_week} SKU{'s' if deleted_week != 1 else ''} borrado{'s' if deleted_week != 1 else ''} esta semana")
         st.markdown("---")
 
