@@ -886,10 +886,17 @@ def _render_quality_gate(fam, modelo):
             )
 
 
-def _audit_prelclean_modelo(sku, fam, modelo):
+def _audit_prelclean_modelo(sku, fam, modelo, include_all=False):
     """Feature s14z-#1: pre-clean automático de watermarks antes de que Diego
-    revise las fotos. Itera sobre las DIRTY (sin ?v= cache-bust) y corre LaMa+OCR.
+    revise las fotos. Corre LaMa+OCR sobre las fotos de la galería.
     Retorna stats dict {ok, skip, fail} o None si LaMa no disponible.
+
+    include_all:
+      False (default) — solo fotos DIRTY (sin ?v= cache-bust)
+      True            — TODAS las fotos. LaMa skip silencioso si OCR no detecta
+                        watermark, entonces es safe. Útil cuando el scraper setea
+                        ?v= al importar (false-positive clean) o cuando querés
+                        forzar re-procesamiento.
 
     Escribe incremental a catalog.json para aguantar kills. No hace backup R2
     porque es la PRIMERA limpieza — el backup solo tiene sentido una vez que
@@ -905,9 +912,12 @@ def _audit_prelclean_modelo(sku, fam, modelo):
 
     # Resolve container: modelo específico o fam legacy
     gallery = (modelo or fam).get("gallery") or []
-    dirty = [(i, u) for i, u in enumerate(gallery) if "?v=" not in u]
+    if include_all:
+        dirty = list(enumerate(gallery))
+    else:
+        dirty = [(i, u) for i, u in enumerate(gallery) if "?v=" not in u]
     if not dirty:
-        st.info("Sin fotos DIRTY en esta galería — ya están todas procesadas.")
+        st.info("Sin fotos para procesar.")
         return {"ok": 0, "skip": 0, "fail": 0}
 
     total = len(dirty)
@@ -1545,35 +1555,60 @@ def render_detail(conn, catalog):
     _render_shortcuts_box()
     st.markdown("")
 
-    # s14z-#1: Pre-clean watermarks proactivo. Muestra banner solo si hay DIRTY.
+    # s14z-#1: Pre-clean watermarks proactivo. Siempre visible.
     _gallery = (modelo or fam).get("gallery") or []
+    _n_total = len(_gallery)
     _dirty_n = sum(1 for u in _gallery if "?v=" not in u)
-    if _dirty_n > 0:
+    if _n_total > 0:
         import local_inpaint as _li_pc
         pc_c1, pc_c2 = st.columns([1, 3])
         with pc_c1:
-            if st.button(f"🧹 Pre-clean {_dirty_n} foto(s)",
+            if _dirty_n > 0:
+                _pc_label = f"🧹 Pre-clean {_dirty_n} DIRTY"
+                _pc_include_all = False
+                _pc_help = (
+                    f"Corre LaMa+OCR sobre las {_dirty_n} fotos sin cache-bust. "
+                    f"~2s por foto. Las que OCR no detecta se marcan SKIP."
+                )
+            else:
+                _pc_label = f"🔄 Re-procesar {_n_total} fotos"
+                _pc_include_all = True
+                _pc_help = (
+                    "Forzar re-procesamiento de TODAS las fotos (incluye las "
+                    "que ya tienen cache-bust). LaMa hace skip silencioso si "
+                    "OCR no detecta watermark, entonces es safe."
+                )
+            if st.button(_pc_label,
                          key=f"preclean_{sku}",
                          type="primary",
                          disabled=not _li_pc.local_inpaint_available(),
-                         help=("Corre LaMa+OCR sobre TODAS las fotos DIRTY "
-                               "(sin cache-bust) de este modelo. Ahorra clicks de "
-                               "flag_watermark uno por uno. ~2s por foto.")):
-                with st.spinner(f"Pre-clean {_dirty_n} fotos…"):
-                    stats = _audit_prelclean_modelo(sku, fam, modelo)
+                         help=_pc_help,
+                         use_container_width=True):
+                with st.spinner(f"{_pc_label}…"):
+                    stats = _audit_prelclean_modelo(
+                        sku, fam, modelo, include_all=_pc_include_all,
+                    )
                 if stats is not None:
                     st.success(
-                        f"🧹 Pre-clean: {stats['ok']} OK · "
+                        f"🧹 Procesadas: {stats['ok']} OK · "
                         f"{stats['skip']} sin watermark · {stats['fail']} fail"
                     )
                     st.rerun()
         with pc_c2:
-            st.caption(
-                f"**{_dirty_n} fotos sin cache-bust** en esta galería. "
-                f"Pre-clean corre LaMa+OCR en batch ANTES de que revises manualmente "
-                f"— cuando vuelvas a ver las fotos ya estarán limpias. "
-                f"Las que OCR no detecte te aparecen marcadas SKIP para review manual."
-            )
+            if _dirty_n > 0:
+                st.caption(
+                    f"**{_dirty_n}/{_n_total} fotos DIRTY** (sin cache-bust). "
+                    f"Pre-clean corre LaMa+OCR en batch para que cuando revises "
+                    f"las fotos ya estén limpias. Las que OCR no detecte te "
+                    f"aparecen marcadas SKIP para review manual."
+                )
+            else:
+                st.caption(
+                    f"✅ Las {_n_total} fotos ya tienen cache-bust — pre-clean no "
+                    f"es estrictamente necesario. Si ves alguna con watermark "
+                    f"residual, podés forzar un re-procesamiento (LaMa es "
+                    f"idempotente: sin watermark detectado → skip sin cambio)."
+                )
 
     # Panel specs editable (scope: esta family / este modelo)
     _render_scraped_specs_panel(fam, modelo_idx=_find_modelo_idx(fam, sku))
