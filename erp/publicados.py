@@ -798,7 +798,7 @@ def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto"):
     # Backup del original ANTES de overwrite. Si ya existe backup previo (por
     # edit anterior), se preserva el más antiguo — eso permite ir "más atrás"
     # en caso de múltiples ediciones consecutivas.
-    backup_res = _backup_r2_before_overwrite(cur_url)
+    backup_res = _backup_r2_before_overwrite(current_url)
     # No bloqueamos si backup falla — solo log y seguimos
     if not backup_res.get("ok"):
         print(f"[WARN] backup pre-overwrite fail: {backup_res.get('error')}")
