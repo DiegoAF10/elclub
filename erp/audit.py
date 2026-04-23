@@ -1439,6 +1439,30 @@ def render_detail(conn, catalog):
     _render_family_checks_and_verify(conn, {"family_id": sku},
                                       catalog_fam=fam, modelo=modelo)
 
+    # s14z: Editor potente de galería (del tab Publicados) — accesible desde audit
+    # para no saltar entre tabs. Acciona INMEDIATO sobre R2 + catalog (no espera al
+    # publish). Incluye: multi-select bulk delete, 🌟 Gemini Rescue, 🖌️ Paint mask,
+    # 🧠 SD, ↺ Restore backup, checkbox select, etc.
+    with st.expander(
+        "🎨 **Editor de galería POTENTE** — Gemini Rescue · Paint mask · SD · Bulk delete · Restore backup",
+        expanded=False,
+    ):
+        st.caption(
+            "Es el mismo editor del tab **Publicados** embebido acá. Actúa "
+            "INMEDIATO sobre R2 y catalog (no pasa por audit_photo_actions, no "
+            "espera al publish). Usalo para limpiezas puntuales durante la revisión."
+        )
+        try:
+            from publicados import _render_gallery_editor as _pub_gallery_editor
+            _mi = _find_modelo_idx(fam, sku)  # int si fam.modelos[i].sku==sku, else None
+            # Container: fam.modelos[mi] si aplica, else fam (legacy top-level)
+            _container = modelo if modelo else fam
+            _pub_gallery_editor(fam["family_id"], _mi, _container)
+        except ImportError as _e:
+            st.caption(f"⚠️ Editor no disponible: {_e}")
+        except Exception as _e:
+            st.error(f"Error renderizando editor: {type(_e).__name__}: {_e}")
+
     # Ops s14 — inject shortcut bindings + preview modal. Antes de s14 esto vivía
     # sólo en el dead _render_variant_form. Moverlo acá habilita V/F/X/W/G/↑↓
     # + el nuevo Shift+D para borrar en el camino activo.
