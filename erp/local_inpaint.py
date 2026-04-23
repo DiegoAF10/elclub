@@ -125,6 +125,68 @@ def _detect_watermark_mask(img_bgr, dilate_x=20, dilate_y=4):
     return mask, matched
 
 
+def force_inpaint_center_bytes(image_bytes, mime_type="image/jpeg",
+                                 width_ratio=0.66, height_ratio=0.09,
+                                 y_center_ratio=0.54,
+                                 family_id=None, photo_index=None):
+    """Override manual: aplica LaMa con mask HARDCODED centrada horizontalmente,
+    posición vertical configurable. Usar cuando OCR no detecta el watermark
+    pero Diego sabe que está (tipo 'Forzar inpaint').
+
+    Watermark Yupoo estándar:
+      - width ≈ 66% del image width (configurable)
+      - height ≈ 9% del image height (configurable)
+      - horizontally centered
+      - vertically ~54% (slightly below middle) — configurable via y_center_ratio
+
+    Returns: mismo interface que watermark_inpaint_bytes.
+    """
+    try:
+        img_array = np.frombuffer(image_bytes, np.uint8)
+        img_bgr = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        if img_bgr is None:
+            return {"ok": False, "error": "invalid image bytes"}
+    except Exception as e:
+        return {"ok": False, "error": f"decode: {type(e).__name__}: {e}"}
+
+    h, w = img_bgr.shape[:2]
+    mask_w = int(w * width_ratio)
+    mask_h = int(h * height_ratio)
+    cx = w // 2
+    cy = int(h * y_center_ratio)
+    x_min = max(0, cx - mask_w // 2)
+    y_min = max(0, cy - mask_h // 2)
+    x_max = min(w, cx + mask_w // 2)
+    y_max = min(h, cy + mask_h // 2)
+
+    mask = np.zeros((h, w), dtype=np.uint8)
+    cv2.rectangle(mask, (x_min, y_min), (x_max, y_max), 255, -1)
+
+    try:
+        lama = _get_lama()
+        from iopaint.schema import InpaintRequest
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        result = lama(img_rgb, mask, InpaintRequest())
+        if result.dtype != np.uint8:
+            result = np.clip(result, 0, 255).astype(np.uint8)
+    except Exception as e:
+        return {"ok": False, "error": f"LaMa: {type(e).__name__}: {e}"}
+
+    try:
+        success, encoded = cv2.imencode(".jpg", result, [cv2.IMWRITE_JPEG_QUALITY, 92])
+        if not success:
+            return {"ok": False, "error": "JPEG encode failed"}
+    except Exception as e:
+        return {"ok": False, "error": f"encode: {type(e).__name__}: {e}"}
+
+    return {
+        "ok": True,
+        "image_bytes": bytes(encoded),
+        "mime_type": "image/jpeg",
+        "forced_mask": {"x_min": x_min, "y_min": y_min, "x_max": x_max, "y_max": y_max},
+    }
+
+
 def watermark_inpaint_bytes(image_bytes, mime_type="image/jpeg",
                               prompt_variant="watermark",
                               family_id=None, photo_index=None):

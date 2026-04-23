@@ -391,26 +391,42 @@ def _render_gallery_editor(fid, modelo_idx, modelo):
                         st.toast(f"🗑 Foto #{p_idx + 1} eliminada de {fid} m{modelo_idx}")
                         st.rerun()
 
-                # Watermark row
+                # Watermark row — 2 buttons:
+                # ⚠️ Watermark = OCR-based (auto-detect + LaMa). Si OCR falla → error.
+                # 🎯 Forzar = mask HARDCODED centro (ignora OCR, usa dimensiones
+                # estándar del watermark Yupoo). Para los casos donde Diego ve
+                # watermark pero OCR no lo detectó (text bajo textura difícil).
+                import local_inpaint as _li
+                lama_ok = _li.local_inpaint_available()
+                backend_ok = lama_ok or audit_enrich.gemini_available()
+                backend_label = "LaMa local" if lama_ok else "Gemini"
                 wc1, wc2 = st.columns(2)
                 with wc1:
-                    # LaMa local si disponible, fallback a Gemini.
-                    import local_inpaint as _li
-                    backend_ok = _li.local_inpaint_available() or audit_enrich.gemini_available()
-                    backend_label = "LaMa local" if _li.local_inpaint_available() else "Gemini"
-                    if st.button("⚠️ Watermark",
+                    if st.button("⚠️ Auto",
                                  key=f"pub_wm_{fid}_{modelo_idx}_{p_idx}",
-                                 help=f"Inpaint watermark vía {backend_label} + overwrite R2",
-                                 disabled=not backend_ok):
+                                 help=f"Inpaint auto-detect vía {backend_label}. Si OCR no detecta, usá 🎯 Forzar.",
+                                 disabled=not backend_ok,
+                                 use_container_width=True):
                         with st.spinner(f"{backend_label} inpainting…"):
-                            res = _regen_watermark(fid, modelo_idx, p_idx)
+                            res = _regen_watermark(fid, modelo_idx, p_idx, mode="auto")
                         if res.get("ok"):
                             st.toast(f"✅ Watermark cleaned #{p_idx + 1}")
                         else:
                             st.error(f"⚠️ {res.get('error', 'unknown')}")
                         st.rerun()
                 with wc2:
-                    st.caption("")  # spacer
+                    if st.button("🎯 Forzar",
+                                 key=f"pub_wm_force_{fid}_{modelo_idx}_{p_idx}",
+                                 help="Inpaint con mask hardcoded centro (dimensiones estándar Yupoo). Usar cuando OCR no detectó pero vos ves watermark.",
+                                 disabled=not lama_ok,
+                                 use_container_width=True):
+                        with st.spinner("LaMa forzado (mask centro)…"):
+                            res = _regen_watermark(fid, modelo_idx, p_idx, mode="force")
+                        if res.get("ok"):
+                            st.toast(f"🎯 Forced inpaint #{p_idx + 1}")
+                        else:
+                            st.error(f"⚠️ {res.get('error', 'unknown')}")
+                        st.rerun()
 
 
 def _gallery_set_hero(fid, modelo_idx, photo_idx):
@@ -465,9 +481,15 @@ def _gallery_delete(fid, modelo_idx, photo_idx):
     _save_catalog(catalog)
 
 
-def _regen_watermark(fid, modelo_idx, photo_idx):
-    """Descarga foto de R2, pasa por Gemini (watermark prompt), sube resultado
-    al mismo key + cache-bust URL en catalog."""
+def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto"):
+    """Descarga foto de R2, pasa por inpaint (LaMa local o Gemini), sube
+    resultado al mismo key + cache-bust URL en catalog.
+
+    mode:
+      "auto"  — OCR-based detection (default). Falla si OCR no detecta.
+      "force" — mask hardcoded centro (dimensiones estándar Yupoo).
+                Ignora OCR. Usar cuando Diego ve watermark pero OCR falla.
+    """
     import requests
     from datetime import datetime
 
@@ -496,15 +518,24 @@ def _regen_watermark(fid, modelo_idx, photo_idx):
         return {"error": f"download http {resp.status_code}"}
     img_bytes = resp.content
 
-    # Watermark inpaint — LaMa local preferred, Gemini fallback.
+    # Watermark inpaint — modo auto (OCR+LaMa) o force (mask hardcoded).
     import local_inpaint as _li
-    if _li.local_inpaint_available():
+    lama_ok = _li.local_inpaint_available()
+
+    if mode == "force":
+        if not lama_ok:
+            return {"error": "Forzar requiere LaMa local (no Gemini fallback)"}
+        gem = _li.force_inpaint_center_bytes(
+            img_bytes, mime_type="image/jpeg",
+            family_id=fid, photo_index=photo_idx,
+        )
+    elif lama_ok:
         gem = _li.watermark_inpaint_bytes(
             img_bytes, mime_type="image/jpeg",
             family_id=fid, photo_index=photo_idx,
         )
         if gem.get("skipped") == "no_watermark_detected":
-            return {"error": "OCR no detectó watermark en esta foto (nada que remover)"}
+            return {"error": "OCR no detectó watermark. Probá con '🎯 Forzar' si ves uno."}
     else:
         gem = audit_enrich.gemini_regen_image(
             img_bytes, mime_type="image/jpeg", prompt_variant="watermark",
