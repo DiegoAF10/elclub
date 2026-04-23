@@ -757,56 +757,35 @@ def _open_paint_dialog(fid, modelo_idx, photo_idx, url):
 
 
 def _render_paint_canvas_content(fid, modelo_idx, photo_idx, url):
-    """Contenido del paint canvas. Se monta dentro de un st.dialog (modal
-    full-width). Diego pinta brush sobre el watermark, LaMa/SD procesa con
-    esa mask."""
-    _ensure_canvas_compat()
-    try:
-        from streamlit_drawable_canvas import st_canvas
-    except ImportError:
-        st.error(
-            "`streamlit-drawable-canvas` no instalado. Correr: "
-            "`pip install streamlit-drawable-canvas`"
-        )
-        return
+    """Canvas HTML5 custom con components.html. Abandonamos streamlit-drawable-canvas
+    porque su pipeline de background image (shim data URL → fabric.js) está roto
+    con Streamlit >= 1.31 y fabric queda con canvas vacío.
 
-    import requests
-    from PIL import Image
+    Flow:
+      1. HTML+JS carga la foto DIRECTO desde el URL público (img.elclub.club)
+         — sin data URL intermedio, sin fabric.js.
+      2. Canvas HTML5 nativo para paint con brush blanco.
+      3. Click 'Exportar mask' → JS copia al clipboard el PNG base64.
+      4. Diego pega en text_area de abajo + click 'Aplicar inpaint'.
+      5. Python decodifica el base64 y llama _regen_watermark mode=manual.
+    """
+    import streamlit.components.v1 as components
+    import base64
     import io
     import numpy as np
-
-    try:
-        resp = requests.get(url, timeout=20)
-        if resp.status_code != 200:
-            st.error(f"DL fail: HTTP {resp.status_code}")
-            return
-        orig_img = Image.open(io.BytesIO(resp.content)).convert("RGB")
-    except Exception as e:
-        st.error(f"DL fail: {e}")
-        return
-
-    orig_w, orig_h = orig_img.size
-    # Max 700px wide en el modal (st.dialog large ~720px inner width).
-    # La mask se re-escala al original en custom_mask_inpaint_bytes.
-    max_display_w = 700
-    if orig_w > max_display_w:
-        scale = max_display_w / orig_w
-        disp_w = max_display_w
-        disp_h = int(orig_h * scale)
-        disp_img = orig_img.resize((disp_w, disp_h), Image.LANCZOS)
-    else:
-        disp_w, disp_h = orig_w, orig_h
-        disp_img = orig_img
+    from PIL import Image
 
     key_prefix = f"paintdlg_{fid}_{modelo_idx}_{photo_idx}"
 
-    ctrl_a, ctrl_b = st.columns([2, 3])
+    st.caption(
+        "**Instrucciones:** (1) Pintá con brush blanco sobre TODAS las instancias "
+        "del watermark. (2) Click **Exportar mask** (se copia al clipboard auto). "
+        "(3) Pegá (Ctrl+V) en el campo de abajo. (4) Click **Aplicar inpaint**. "
+        "Undo/Clear disponibles en el canvas."
+    )
+
+    ctrl_a, ctrl_b = st.columns([1, 2])
     with ctrl_a:
-        brush_size = st.slider(
-            "Brush px", min_value=5, max_value=80, value=30,
-            key=f"{key_prefix}_brush",
-            help="Grosor del brush blanco. Más grande = cubre más rápido pero menos preciso.",
-        )
         backend = st.radio(
             "Backend",
             options=["LaMa (~1s)", "SD (~10s, mejor quality)"],
@@ -815,21 +794,159 @@ def _render_paint_canvas_content(fid, modelo_idx, photo_idx, url):
         )
     with ctrl_b:
         st.caption(
-            f"**Pintá con brush blanco sobre TODAS las instancias del watermark.** "
-            f"Orig: {orig_w}×{orig_h}px · display: {disp_w}×{disp_h}px "
-            f"(mask auto-reescalada). Usá los controles abajo del canvas para undo/redo."
+            "La mask se exporta al tamaño natural de la imagen mostrada. "
+            "Backend LaMa es más rápido; SD preserva mejor las texturas complejas."
         )
 
-    canvas_result = st_canvas(
-        fill_color="rgba(255, 255, 255, 0.0)",
-        stroke_width=brush_size,
-        stroke_color="#ffffff",
-        background_image=disp_img,
-        update_streamlit=False,  # acumula strokes local, solo rerun al apply
-        height=disp_h,
-        width=disp_w,
-        drawing_mode="freedraw",
-        key=f"{key_prefix}_canvas",
+    # HTML5 canvas inline. Carga foto via <img> desde URL público (respeta CORS
+    # por Cloudflare R2 default). JS acumula strokes en <canvas>. Botón export
+    # genera mask binaria (blanco=pintado) y la copia al clipboard.
+    html_code = f"""
+    <div style="background:#1a1a1a;color:#fff;padding:16px;border-radius:8px;font-family:sans-serif;">
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+        <label style="font-size:13px;">
+          Brush:
+          <input type="range" id="brush" min="5" max="80" value="30" style="vertical-align:middle;">
+          <span id="brush-val">30</span>px
+        </label>
+        <button id="undo" style="padding:6px 12px;background:#444;color:#fff;border:none;border-radius:4px;cursor:pointer;">↶ Undo</button>
+        <button id="clear" style="padding:6px 12px;background:#444;color:#fff;border:none;border-radius:4px;cursor:pointer;">🗑 Clear</button>
+        <button id="export" style="padding:8px 16px;background:#4CAF50;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">📋 Exportar mask al clipboard</button>
+      </div>
+      <div style="position:relative;display:inline-block;border:2px solid #333;">
+        <img id="bg" src="{url}" crossorigin="anonymous" style="max-width:700px;display:block;user-select:none;" draggable="false">
+        <canvas id="paint" style="position:absolute;top:0;left:0;cursor:crosshair;"></canvas>
+      </div>
+      <div id="status" style="margin-top:10px;font-size:12px;color:#aaa;min-height:18px;">Cargando foto…</div>
+    </div>
+    <script>
+    (function() {{
+      const img = document.getElementById('bg');
+      const canvas = document.getElementById('paint');
+      const ctx = canvas.getContext('2d');
+      const brushInput = document.getElementById('brush');
+      const brushVal = document.getElementById('brush-val');
+      const undoBtn = document.getElementById('undo');
+      const clearBtn = document.getElementById('clear');
+      const exportBtn = document.getElementById('export');
+      const status = document.getElementById('status');
+
+      let drawing = false;
+      let strokes = [];   // [ [[x,y,brush],...], ... ]
+      let currentStroke = null;
+
+      function resizeCanvas() {{
+        const rect = img.getBoundingClientRect();
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+        redraw();
+      }}
+
+      img.addEventListener('load', () => {{
+        resizeCanvas();
+        status.innerText = `Foto cargada: ${{img.naturalWidth}}×${{img.naturalHeight}}px. Pintá con brush blanco.`;
+      }});
+      img.addEventListener('error', () => {{
+        status.innerText = `❌ Error cargando ${{img.src.slice(0,80)}}... — revisar CORS o URL.`;
+      }});
+      window.addEventListener('resize', resizeCanvas);
+
+      function pt(e) {{
+        const rect = canvas.getBoundingClientRect();
+        const sx = canvas.width / rect.width;
+        const sy = canvas.height / rect.height;
+        return [(e.clientX - rect.left) * sx, (e.clientY - rect.top) * sy,
+                parseInt(brushInput.value) * sx];
+      }}
+
+      canvas.addEventListener('mousedown', (e) => {{ drawing = true; currentStroke = [pt(e)]; redraw(); }});
+      canvas.addEventListener('mousemove', (e) => {{
+        if (!drawing) return;
+        currentStroke.push(pt(e));
+        redraw();
+      }});
+      function finish() {{
+        if (drawing && currentStroke && currentStroke.length > 0) {{
+          strokes.push(currentStroke);
+        }}
+        drawing = false; currentStroke = null;
+      }}
+      canvas.addEventListener('mouseup', finish);
+      canvas.addEventListener('mouseleave', finish);
+
+      brushInput.addEventListener('input', () => {{ brushVal.innerText = brushInput.value; }});
+      undoBtn.onclick = () => {{ strokes.pop(); redraw(); }};
+      clearBtn.onclick = () => {{ strokes = []; redraw(); status.innerText = 'Canvas limpio.'; }};
+
+      function drawStroke(c, stroke, color) {{
+        if (stroke.length === 0) return;
+        c.strokeStyle = color;
+        c.fillStyle = color;
+        c.lineCap = 'round';
+        c.lineJoin = 'round';
+        c.lineWidth = stroke[0][2];
+        c.beginPath();
+        c.moveTo(stroke[0][0], stroke[0][1]);
+        for (let i = 1; i < stroke.length; i++) c.lineTo(stroke[i][0], stroke[i][1]);
+        c.stroke();
+        // dot at start for click-only strokes
+        c.beginPath();
+        c.arc(stroke[0][0], stroke[0][1], stroke[0][2]/2, 0, Math.PI*2);
+        c.fill();
+      }}
+
+      function redraw() {{
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const all = currentStroke ? strokes.concat([currentStroke]) : strokes;
+        for (const s of all) drawStroke(ctx, s, 'rgba(255,255,255,0.65)');
+      }}
+
+      exportBtn.onclick = async () => {{
+        if (strokes.length === 0) {{
+          status.innerText = '⚠️ No pintaste nada. Pintá primero.';
+          return;
+        }}
+        // Generar mask binaria sobre canvas off-screen al tamaño natural
+        const maskCanvas = document.createElement('canvas');
+        maskCanvas.width = img.naturalWidth;
+        maskCanvas.height = img.naturalHeight;
+        const mctx = maskCanvas.getContext('2d');
+        mctx.fillStyle = '#000';
+        mctx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+        for (const s of strokes) drawStroke(mctx, s, '#fff');
+        const b64 = maskCanvas.toDataURL('image/png');
+        try {{
+          await navigator.clipboard.writeText(b64);
+          status.innerText = `✅ Mask copiada al clipboard (${{b64.length.toLocaleString()}} chars). Pegá (Ctrl+V) abajo y click 'Aplicar inpaint'.`;
+          exportBtn.innerText = '✅ Copiada — pegá abajo';
+          exportBtn.style.background = '#2E7D32';
+        }} catch (err) {{
+          status.innerText = '⚠️ Clipboard bloqueado. Copy-paste manual desde el campo visible abajo.';
+          const ta = document.createElement('textarea');
+          ta.value = b64;
+          ta.style.width = '100%';
+          ta.style.height = '40px';
+          ta.style.marginTop = '8px';
+          ta.readOnly = true;
+          exportBtn.parentNode.parentNode.appendChild(ta);
+          ta.select();
+        }}
+      }};
+    }})();
+    </script>
+    """
+
+    components.html(html_code, height=720, scrolling=True)
+
+    st.markdown("---")
+    mask_b64 = st.text_area(
+        "Mask base64 (Ctrl+V acá después de exportar)",
+        key=f"{key_prefix}_mask_b64",
+        height=80,
+        placeholder="data:image/png;base64,iVBORw0KGgo...",
+        help="El JS copia el base64 al clipboard al clickear 'Exportar mask'. Solo Ctrl+V acá.",
     )
 
     btn_a, btn_b = st.columns(2)
@@ -837,26 +954,24 @@ def _render_paint_canvas_content(fid, modelo_idx, photo_idx, url):
         apply_clicked = st.button(
             "✅ Aplicar inpaint", key=f"{key_prefix}_apply",
             type="primary", use_container_width=True,
+            disabled=not mask_b64.strip(),
         )
     with btn_b:
         if st.button("❌ Cerrar", key=f"{key_prefix}_cancel",
                      use_container_width=True):
-            st.rerun()  # cierra el dialog
+            st.rerun()
 
     if apply_clicked:
-        if canvas_result.image_data is None:
-            st.error("Canvas vacío. Pintá sobre el watermark primero.")
+        try:
+            raw = mask_b64.strip()
+            if raw.startswith("data:"):
+                raw = raw.split(",", 1)[1]
+            mask_bytes = base64.b64decode(raw)
+            # Valida rápido que es un PNG parseable
+            _ = Image.open(io.BytesIO(mask_bytes))
+        except Exception as e:
+            st.error(f"⚠️ base64 inválido: {e}")
             return
-        alpha = canvas_result.image_data[:, :, 3]
-        if int(np.count_nonzero(alpha)) == 0:
-            st.error("Nada pintado. Usá el brush blanco sobre el watermark.")
-            return
-
-        mask_bin = (alpha > 0).astype(np.uint8) * 255
-        pil_mask = Image.fromarray(mask_bin, mode="L")
-        buf = io.BytesIO()
-        pil_mask.save(buf, format="PNG")
-        mask_bytes = buf.getvalue()
 
         use_sd = backend.startswith("SD")
         with st.spinner(f"🖌️ {'SD' if use_sd else 'LaMa'} inpainting…"):
@@ -868,7 +983,7 @@ def _render_paint_canvas_content(fid, modelo_idx, photo_idx, url):
             )
         if res.get("ok"):
             st.toast(f"🖌️ Manual inpaint m{modelo_idx} #{photo_idx + 1} listo")
-            st.rerun()  # cierra el dialog y refresca la galería
+            st.rerun()
         else:
             st.error(f"⚠️ {res.get('error', 'unknown')}")
 
