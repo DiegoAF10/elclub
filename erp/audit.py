@@ -1191,117 +1191,211 @@ def render_queue(conn, catalog):
                 )
                 st.rerun()
 
-    # Pagination
-    total_pages = max(1, (len(items) + PAGE_SIZE - 1) // PAGE_SIZE)
+    # s14z-#8: Agrupar items por canonical family_id. Diego pidió layout tipo
+    # publicados: 1 card por family con expander de modelos adentro. Menos scroll,
+    # contexto de hermanos claro, ready-to-publish detection a golpe de vista.
+    from collections import defaultdict
+    by_fid = defaultdict(list)
+    for it in items:
+        fid_key = it.get("canonical_fid") or it.get("sku")
+        by_fid[fid_key].append(it)
+
+    def _family_tier_rank(its_):
+        ranks = [{"T1":1,"T2":2,"T3":3,"T4":4,"T5":5}.get(i.get("tier"), 6) for i in its_]
+        return min(ranks) if ranks else 6
+    family_groups = sorted(
+        by_fid.items(),
+        key=lambda kv: (_family_tier_rank(kv[1]), kv[0]),
+    )
+
+    # Paginación ahora por FAMILY, no por SKU
+    total_families = len(family_groups)
+    total_pages_fam = max(1, (total_families + PAGE_SIZE - 1) // PAGE_SIZE)
     if "queue_page" not in st.session_state:
         st.session_state.queue_page = 1
-    page = min(st.session_state.queue_page, total_pages)
+    page_fam = min(st.session_state.queue_page, total_pages_fam)
 
     pc1, pc2, pc3 = st.columns([1, 2, 1])
     with pc1:
-        if st.button("← Prev page", disabled=page <= 1, key="queue_prev"):
-            st.session_state.queue_page = max(1, page - 1)
+        if st.button("← Prev page", disabled=page_fam <= 1, key="queue_prev"):
+            st.session_state.queue_page = max(1, page_fam - 1)
             st.rerun()
     with pc2:
-        st.markdown(f"<div style='text-align:center'>Página <b>{page}</b> de <b>{total_pages}</b></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='text-align:center'>Página <b>{page_fam}</b> de "
+            f"<b>{total_pages_fam}</b> · {total_families} families "
+            f"({len(items)} modelos)</div>",
+            unsafe_allow_html=True,
+        )
     with pc3:
-        if st.button("Next page →", disabled=page >= total_pages, key="queue_next"):
-            st.session_state.queue_page = min(total_pages, page + 1)
+        if st.button("Next page →", disabled=page_fam >= total_pages_fam, key="queue_next"):
+            st.session_state.queue_page = min(total_pages_fam, page_fam + 1)
             st.rerun()
 
-    start = (page - 1) * PAGE_SIZE
+    start = (page_fam - 1) * PAGE_SIZE
     end = start + PAGE_SIZE
-    page_items = items[start:end]
+    page_groups = family_groups[start:end]
 
-    # Render list — Ops s13+: 1 card por SKU (modelo independiente)
+    # Render per-family cards
     modelo_label_map = {
         "fan_adult": "Fan", "player_adult": "Player", "retro_adult": "Retro",
         "woman": "Mujer", "kid": "Niño", "baby": "Bebé",
     }
     sleeve_label_map = {"short": "manga corta", "long": "manga larga"}
 
-    for i, it in enumerate(page_items):
+    def _modelo_desc(it):
+        mt = it.get("modelo_type")
+        sl = it.get("sleeve")
+        if mt:
+            desc = modelo_label_map.get(mt, mt)
+            if sl and mt in ("fan_adult", "player_adult", "retro_adult"):
+                desc += f" {sleeve_label_map.get(sl, sl)}"
+            return desc
+        if it.get("category") and it.get("category") != "adult":
+            return f"[{it['category']}]"
+        return "—"
+
+    for fid, its in page_groups:
+        its_sorted = sorted(its, key=lambda x: x.get("sku") or "")
+        n_total = len(its_sorted)
+        n_verified = sum(1 for i in its_sorted if i.get("status") == "verified")
+        n_pending = sum(1 for i in its_sorted if i.get("status") == "pending")
+        n_flagged = sum(1 for i in its_sorted if i.get("status") == "flagged")
+        n_rework = sum(1 for i in its_sorted if i.get("status") == "needs_rework")
+
+        family_hero = next((i["hero"] for i in its_sorted if i.get("hero")), None)
+        family_team = its_sorted[0].get("team") or ""
+        family_season = its_sorted[0].get("season") or ""
+        family_variant = (
+            its_sorted[0].get("variant_label") or its_sorted[0].get("variant") or ""
+        )
+        best_tier = min(
+            ({"T1":1,"T2":2,"T3":3,"T4":4,"T5":5}.get(i.get("tier"), 6) for i in its_sorted),
+            default=6,
+        )
+        best_tier_label = TIER_LABELS.get(
+            ["T1", "T2", "T3", "T4", "T5"][best_tier - 1] if 1 <= best_tier <= 5 else None,
+            "Sin tier",
+        )
+
         with st.container(border=True):
-            row = st.columns([0.3, 1, 3, 2, 1, 1, 1])
-            with row[0]:
-                # s14z-#2: checkbox multi-select para batch edit
-                sku_id = it["sku"]
-                was_sel = sku_id in selected
-                is_sel = st.checkbox(
-                    "sel", value=was_sel,
-                    key=f"qsel_{sku_id}",
-                    label_visibility="collapsed",
-                    help="Seleccionar para batch edit de specs",
+            hdr = st.columns([1, 4, 2, 1.2])
+            with hdr[0]:
+                if family_hero:
+                    st.image(family_hero, width=90)
+                else:
+                    st.caption("(sin hero)")
+            with hdr[1]:
+                st.markdown(f"**`{fid}`** · {best_tier_label}")
+                st.markdown(f"{family_team} · {family_season} · {family_variant}")
+                badge_parts = [f"{n_total} modelo{'s' if n_total != 1 else ''}"]
+                if n_verified:
+                    badge_parts.append(f"✅ {n_verified}")
+                if n_pending:
+                    badge_parts.append(f"⏳ {n_pending}")
+                if n_flagged:
+                    badge_parts.append(f"🔴 {n_flagged}")
+                if n_rework:
+                    badge_parts.append(f"⚠️ {n_rework}")
+                st.caption(" · ".join(badge_parts))
+            with hdr[2]:
+                if n_total > 0 and n_verified == n_total:
+                    st.success("✅ Ready to publish")
+                elif n_rework:
+                    st.warning(f"⚠️ {n_rework} rework")
+                elif n_pending:
+                    st.info(f"⏳ {n_pending} pending")
+                elif n_flagged:
+                    st.error(f"🔴 {n_flagged} flagged")
+            with hdr[3]:
+                first_pending = next(
+                    (i for i in its_sorted if i.get("status") == "pending"),
+                    its_sorted[0],
                 )
-                if is_sel != was_sel:
-                    if is_sel:
-                        selected.add(sku_id)
-                    else:
-                        selected.discard(sku_id)
-                    st.session_state["audit_queue_selected"] = selected
-            hero = it.get("hero")
-            with row[1]:
-                if hero:
-                    st.image(hero, width=80)
-                if it.get("n_photos"):
-                    st.caption(f"📷 {it['n_photos']}")
-            with row[2]:
-                tier_badge = TIER_LABELS.get(it.get("tier"), "❓ Sin tier")
-                qa_badge = " · 🎯 **QA**" if it.get("qa_priority") else ""
-                st.markdown(f"**`{it['sku']}`**{qa_badge}  \n{tier_badge}")
-                team = it.get("team") or ""
-                season = it.get("season") or ""
-                variant_label = it.get("variant_label") or it.get("variant") or ""
-                # Modelo descriptivo
-                mt = it.get("modelo_type")
-                sl = it.get("sleeve")
-                modelo_desc = ""
-                if mt:
-                    modelo_desc = modelo_label_map.get(mt, mt)
-                    if sl and mt in ("fan_adult", "player_adult", "retro_adult"):
-                        modelo_desc += f" {sleeve_label_map.get(sl, sl)}"
-                elif it.get("category") and it.get("category") != "adult":
-                    modelo_desc = f"[{it['category']}]"
-                label = f"{team} · {season} · {variant_label}"
-                if modelo_desc:
-                    label += f" · **{modelo_desc}**"
-                st.markdown(label)
-                if it.get("sizes") or it.get("price"):
-                    st.caption(f"{it.get('sizes') or '—'} · Q{it.get('price') or '—'}")
-            with row[3]:
-                status = it.get("status", "pending")
-                emoji = {"pending": "⏳", "verified": "🟢", "flagged": "🔴",
-                         "skipped": "⏭️", "needs_rework": "⚠️",
-                         "deleted": "🗑"}.get(status, "?")
-                st.markdown(f"{emoji} **{status}**")
-            with row[4]:
-                if st.button("Abrir", key=f"open_{it['sku']}", type="primary"):
+                if st.button(
+                    "Abrir primer →",
+                    key=f"fam_open_first_{fid}",
+                    type="primary",
+                    use_container_width=True,
+                    help="Abre el detail del primer modelo pending (o primero si todos done)",
+                ):
                     st.session_state.audit_view = "detail"
-                    st.session_state.current_family = it["sku"]
+                    st.session_state.current_family = first_pending["sku"]
                     st.rerun()
-            with row[5]:
-                current_tier = it.get("tier") or "(sin)"
-                new_tier = st.selectbox(
-                    "Tier",
-                    ["(sin)"] + TIERS,
-                    index=(["(sin)"] + TIERS).index(current_tier) if current_tier in (["(sin)"] + TIERS) else 0,
-                    key=f"tier_{it['sku']}",
-                    label_visibility="collapsed",
-                )
-                if new_tier != current_tier:
-                    audit_db.upsert_decision(
-                        conn, it["sku"],
-                        tier=None if new_tier == "(sin)" else new_tier,
-                    )
-                    st.rerun()
-            with row[6]:
-                if st.button("⏭️", key=f"skip_{it['sku']}", help="Skip"):
-                    audit_db.upsert_decision(
-                        conn, it["sku"],
-                        status="skipped",
-                        decided_at=datetime.now().isoformat(timespec="seconds"),
-                    )
-                    st.rerun()
+
+            # Expander con modelos — auto-expand si hay pending/flagged/rework
+            auto_expand = (n_pending > 0 or n_flagged > 0 or n_rework > 0)
+            with st.expander(
+                f"Ver {n_total} modelo(s) de esta family",
+                expanded=auto_expand,
+            ):
+                for it in its_sorted:
+                    mrow = st.columns([0.3, 0.8, 3, 1.5, 1, 1, 0.7])
+                    with mrow[0]:
+                        sku_id = it["sku"]
+                        was_sel = sku_id in selected
+                        is_sel = st.checkbox(
+                            "sel", value=was_sel,
+                            key=f"qsel_{sku_id}",
+                            label_visibility="collapsed",
+                            help="Seleccionar para batch edit de specs",
+                        )
+                        if is_sel != was_sel:
+                            if is_sel:
+                                selected.add(sku_id)
+                            else:
+                                selected.discard(sku_id)
+                            st.session_state["audit_queue_selected"] = selected
+                    with mrow[1]:
+                        if it.get("hero"):
+                            st.image(it["hero"], width=55)
+                    with mrow[2]:
+                        qa_badge = " 🎯" if it.get("qa_priority") else ""
+                        st.markdown(f"**`{it['sku']}`**{qa_badge}")
+                        st.caption(
+                            f"{_modelo_desc(it)} · {it.get('n_photos', 0)} fotos"
+                        )
+                        if it.get("sizes") or it.get("price"):
+                            st.caption(
+                                f"{it.get('sizes') or '—'} · Q{it.get('price') or '—'}"
+                            )
+                    with mrow[3]:
+                        status = it.get("status", "pending")
+                        emoji = {"pending": "⏳", "verified": "🟢", "flagged": "🔴",
+                                 "skipped": "⏭️", "needs_rework": "⚠️",
+                                 "deleted": "🗑"}.get(status, "?")
+                        st.markdown(f"{emoji} **{status}**")
+                    with mrow[4]:
+                        if st.button("Abrir", key=f"open_{it['sku']}",
+                                     type="primary", use_container_width=True):
+                            st.session_state.audit_view = "detail"
+                            st.session_state.current_family = it["sku"]
+                            st.rerun()
+                    with mrow[5]:
+                        current_tier = it.get("tier") or "(sin)"
+                        new_tier = st.selectbox(
+                            "Tier",
+                            ["(sin)"] + TIERS,
+                            index=(["(sin)"] + TIERS).index(current_tier)
+                                if current_tier in (["(sin)"] + TIERS) else 0,
+                            key=f"tier_{it['sku']}",
+                            label_visibility="collapsed",
+                        )
+                        if new_tier != current_tier:
+                            audit_db.upsert_decision(
+                                conn, it["sku"],
+                                tier=None if new_tier == "(sin)" else new_tier,
+                            )
+                            st.rerun()
+                    with mrow[6]:
+                        if st.button("⏭️", key=f"skip_{it['sku']}", help="Skip",
+                                     use_container_width=True):
+                            audit_db.upsert_decision(
+                                conn, it["sku"],
+                                status="skipped",
+                                decided_at=datetime.now().isoformat(timespec="seconds"),
+                            )
+                            st.rerun()
 
 
 # ═══════════════════════════════════════
