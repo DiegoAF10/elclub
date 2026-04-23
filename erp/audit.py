@@ -1463,6 +1463,9 @@ def render_detail(conn, catalog):
         except Exception as _e:
             st.error(f"Error renderizando editor: {type(_e).__name__}: {_e}")
 
+    # s14z-#7: Publicar directo sin pasar por Pending Review (skip Claude batch)
+    _render_direct_publish_block(conn, sku, fam)
+
     # Ops s14 — inject shortcut bindings + preview modal. Antes de s14 esto vivía
     # sólo en el dead _render_variant_form. Moverlo acá habilita V/F/X/W/G/↑↓
     # + el nuevo Shift+D para borrar en el camino activo.
@@ -1475,6 +1478,88 @@ def render_detail(conn, catalog):
         "FLAG": "flag-current",
         "BORRAR SKU": "delete-sku",
     })
+
+
+def _render_direct_publish_block(conn, sku, fam):
+    """s14z-#7: Publicar la family actual directo desde audit detail, sin pasar
+    por Pending Review ni Claude batch. Diego ya escribió title/description/historia
+    manual; no hace falta enriquecer con Claude.
+
+    Check pre-publish: todos los modelos del family deben tener status='verified'
+    en audit_decisions. Si alguno falta, botón disabled con explicación de qué
+    falta. Evita publicar family con modelos incompletos.
+
+    Post-publish: auto-navega al siguiente SKU pending del queue."""
+    st.markdown("---")
+    st.markdown("### 📤 Publicar directo")
+
+    modelos_all = fam.get("modelos") or []
+    statuses = {}
+    if modelos_all:
+        for m in modelos_all:
+            m_sku = m.get("sku") or fam["family_id"]
+            d = audit_db.get_decision(conn, m_sku) or {}
+            statuses[m_sku] = d.get("status", "pending")
+    else:
+        # Legacy: family sin modelos, status del SKU = del family
+        d = audit_db.get_decision(conn, sku) or {}
+        statuses[sku] = d.get("status", "pending")
+
+    all_verified = all(s == "verified" for s in statuses.values())
+    pending_siblings = [k for k, v in statuses.items() if v != "verified"]
+    total_m = len(statuses)
+
+    pub_c1, pub_c2 = st.columns([1, 3])
+    with pub_c1:
+        clicked = st.button(
+            "📤 Publicar + Commit + Push",
+            key=f"direct_publish_{sku}",
+            type="primary",
+            use_container_width=True,
+            disabled=not all_verified,
+            help=("Skipea Pending Review y Claude batch. Aplica photo_actions "
+                  "(con Gemini watermark si hay flags), flipea published=True, "
+                  "commit+push al repo. Auto-deploy en vault.elclub.club en ~30s."),
+        )
+    with pub_c2:
+        if all_verified:
+            st.success(
+                f"✅ Los {total_m} modelo(s) de `{fam['family_id']}` están verified. "
+                f"Listo para publicar sin más pasos."
+            )
+        else:
+            preview = ", ".join(f"`{k}`={v}" for k, v in list(statuses.items())[:4])
+            if len(statuses) > 4:
+                preview += f" (+{len(statuses) - 4} más)"
+            st.warning(
+                f"⚠️ Publicar deshabilitado — faltan modelos por verify: {preview}. "
+                f"Terminá de auditar los hermanos del family primero."
+            )
+
+    if clicked:
+        with st.spinner(f"Publicando {fam['family_id']} (commit + push incluido)…"):
+            try:
+                _publish_family(
+                    conn, fam,
+                    claude_data={},  # manual content, sin Claude enrichment
+                    new_gallery=None,
+                    featured=bool(fam.get("featured")),
+                    sku=sku,
+                )
+            except Exception as e:
+                st.error(f"❌ Publish falló: {type(e).__name__}: {e}")
+                return
+
+        # Auto-navegar al siguiente pending para seguir el flow
+        next_sku = _find_adjacent_pending(conn, sku, direction=1)
+        if next_sku:
+            st.toast(f"→ Siguiente pending: `{next_sku}`")
+            st.session_state.current_family = next_sku
+            st.rerun()
+        else:
+            st.toast("🎉 No hay más pendings. Volviendo al queue.")
+            st.session_state.audit_view = "queue"
+            st.rerun()
 
 
 def _find_modelo_idx(fam, sku):
