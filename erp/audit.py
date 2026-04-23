@@ -1236,6 +1236,31 @@ def render_queue(conn, catalog):
     end = start + PAGE_SIZE
     page_groups = family_groups[start:end]
 
+    # s14z-#9: Family merge. Checkbox por family card + barra cuando 2+ seleccionadas.
+    if "audit_family_merge_sel" not in st.session_state:
+        st.session_state["audit_family_merge_sel"] = set()
+    fam_merge_sel = st.session_state["audit_family_merge_sel"]
+
+    if len(fam_merge_sel) >= 2:
+        merge_bar_c1, merge_bar_c2 = st.columns([3, 1])
+        with merge_bar_c1:
+            st.info(
+                f"🔗 **{len(fam_merge_sel)} families seleccionadas** para merge: "
+                + ", ".join(f"`{f}`" for f in sorted(fam_merge_sel)[:4])
+                + (f" (+{len(fam_merge_sel) - 4} más)" if len(fam_merge_sel) > 4 else "")
+            )
+        with merge_bar_c2:
+            if st.button(
+                f"🔗 Mergear {len(fam_merge_sel)} families",
+                key="open_merge_dialog", type="primary",
+                use_container_width=True,
+            ):
+                _merge_families_dialog(sorted(fam_merge_sel))
+    elif len(fam_merge_sel) == 1:
+        st.caption(
+            f"🔗 1 family seleccionada para merge. Seleccioná al menos una más para habilitar el merge."
+        )
+
     # Render per-family cards
     modelo_label_map = {
         "fan_adult": "Fan", "player_adult": "Player", "retro_adult": "Retro",
@@ -1279,13 +1304,28 @@ def render_queue(conn, catalog):
         )
 
         with st.container(border=True):
-            hdr = st.columns([1, 4, 2, 1.2])
+            hdr = st.columns([0.3, 1, 4, 2, 1.2])
             with hdr[0]:
+                # Merge checkbox — seleccionar family para merge bulk
+                was_merge_sel = fid in fam_merge_sel
+                is_merge_sel = st.checkbox(
+                    "merge", value=was_merge_sel,
+                    key=f"fam_merge_cb_{fid}",
+                    label_visibility="collapsed",
+                    help="Marcar para merge con otras families (2+ seleccionadas habilita el botón 🔗)",
+                )
+                if is_merge_sel != was_merge_sel:
+                    if is_merge_sel:
+                        fam_merge_sel.add(fid)
+                    else:
+                        fam_merge_sel.discard(fid)
+                    st.session_state["audit_family_merge_sel"] = fam_merge_sel
+            with hdr[1]:
                 if family_hero:
                     st.image(family_hero, width=90)
                 else:
                     st.caption("(sin hero)")
-            with hdr[1]:
+            with hdr[2]:
                 st.markdown(f"**`{fid}`** · {best_tier_label}")
                 st.markdown(f"{family_team} · {family_season} · {family_variant}")
                 badge_parts = [f"{n_total} modelo{'s' if n_total != 1 else ''}"]
@@ -1298,7 +1338,7 @@ def render_queue(conn, catalog):
                 if n_rework:
                     badge_parts.append(f"⚠️ {n_rework}")
                 st.caption(" · ".join(badge_parts))
-            with hdr[2]:
+            with hdr[3]:
                 if n_total > 0 and n_verified == n_total:
                     st.success("✅ Ready to publish")
                 elif n_rework:
@@ -1307,7 +1347,7 @@ def render_queue(conn, catalog):
                     st.info(f"⏳ {n_pending} pending")
                 elif n_flagged:
                     st.error(f"🔴 {n_flagged} flagged")
-            with hdr[3]:
+            with hdr[4]:
                 first_pending = next(
                     (i for i in its_sorted if i.get("status") == "pending"),
                     its_sorted[0],
@@ -1572,6 +1612,141 @@ def render_detail(conn, catalog):
         "FLAG": "flag-current",
         "BORRAR SKU": "delete-sku",
     })
+
+
+def _merge_families_tool(source_fids, target_fid):
+    """s14z-#9: Mergea modelos de families source EN target. Elimina sources del
+    catálogo. Útil cuando el scraper generó 2+ families separadas que deberían
+    ser 1 (ej. belgium-2026-home + belgium-long-sleeve-2026-home).
+
+    Flow:
+      - Load catalog
+      - Para cada source: extraer sus modelos (o construir uno sintético si legacy),
+        append a target.modelos[], remove source del array catalog
+      - Save catalog
+
+    NO toca audit_decisions (SKUs se mantienen igual), NO toca audit_photo_actions
+    (también keyed por SKU), NO toca R2 (URLs siguen apuntando a la key vieja —
+    las fotos se sirven por URL absoluta, funcionan aunque la key no matchee el
+    nuevo family_id).
+
+    Retorna dict {ok, moved_modelos, removed_families, error?}."""
+    import json
+    with open(audit_db.CATALOG_PATH, "r", encoding="utf-8") as f:
+        catalog = json.load(f)
+
+    target = None
+    source_fams = []
+    for fam in catalog:
+        fid = fam.get("family_id")
+        if fid == target_fid:
+            target = fam
+        elif fid in source_fids:
+            source_fams.append(fam)
+
+    if not target:
+        return {"ok": False, "error": f"target '{target_fid}' no encontrado en catalog"}
+    if not source_fams:
+        return {"ok": False, "error": f"ninguna source encontrada en catalog"}
+
+    target_modelos = list(target.get("modelos") or [])
+    moved_n = 0
+    for src in source_fams:
+        src_modelos = list(src.get("modelos") or [])
+        if src_modelos:
+            # Ya es unified, mover sus modelos tal cual
+            for m in src_modelos:
+                # Preservar trazabilidad del origin
+                if "source_family_id" not in m:
+                    m["source_family_id"] = src.get("family_id")
+                target_modelos.append(m)
+                moved_n += 1
+        elif src.get("gallery"):
+            # Legacy: construir un modelo sintético desde top-level
+            synthetic = {
+                "sku": src.get("sku") or src["family_id"],
+                "gallery": src.get("gallery") or [],
+                "hero_thumbnail": src.get("hero_thumbnail"),
+                "type": src.get("category") or "fan_adult",
+                "sleeve": "short",
+                "price": src.get("price"),
+                "sizes": src.get("sizes"),
+                "source_family_id": src.get("family_id"),
+            }
+            target_modelos.append(synthetic)
+            moved_n += 1
+        # else: family vacía, nada que mover
+
+    target["modelos"] = target_modelos
+    # Remove sources del catalog
+    new_catalog = [
+        fam for fam in catalog
+        if fam.get("family_id") not in {f.get("family_id") for f in source_fams}
+    ]
+
+    with open(audit_db.CATALOG_PATH, "w", encoding="utf-8") as f:
+        json.dump(new_catalog, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+    return {
+        "ok": True,
+        "moved_modelos": moved_n,
+        "removed_families": len(source_fams),
+        "target_fid": target_fid,
+        "total_modelos_after": len(target_modelos),
+    }
+
+
+@st.dialog("🔗 Mergear families", width="large")
+def _merge_families_dialog(fids):
+    """Dialog para elegir target canonical + confirmar merge. fids es una lista
+    de family_ids seleccionadas."""
+    if len(fids) < 2:
+        st.error("Se necesitan al menos 2 families seleccionadas para mergear.")
+        return
+
+    st.markdown(
+        f"**{len(fids)} families seleccionadas:**\n\n"
+        + "\n".join(f"- `{fid}`" for fid in fids)
+    )
+    st.caption(
+        "Elegí una como **target canonical** (la que se queda). Los modelos de "
+        "las otras se mueven al target y esas families se eliminan del catalog."
+    )
+
+    target_fid = st.radio(
+        "Target canonical (queda esta family)",
+        options=fids,
+        key="merge_target_radio",
+    )
+    source_fids = [f for f in fids if f != target_fid]
+
+    st.warning(
+        f"⚠️ **Confirmar:** los modelos de {len(source_fids)} families "
+        f"({', '.join(f'`{s}`' for s in source_fids)}) se moverán a `{target_fid}`. "
+        f"Las sources se eliminan del catalog. Esta acción NO es reversible "
+        f"desde UI (catalog.json se modifica y commita después de tu push)."
+    )
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Cancelar", key="merge_cancel", use_container_width=True):
+            st.rerun()
+    with c2:
+        if st.button(
+            "🔗 Confirmar merge", type="primary",
+            key="merge_confirm", use_container_width=True,
+        ):
+            res = _merge_families_tool(source_fids, target_fid)
+            if res.get("ok"):
+                st.session_state.pop("audit_family_merge_sel", None)
+                st.toast(
+                    f"✅ Merge OK: {res['moved_modelos']} modelos → `{target_fid}`. "
+                    f"{res['removed_families']} families eliminadas."
+                )
+                st.rerun()
+            else:
+                st.error(f"❌ {res.get('error', 'merge falló')}")
 
 
 def _render_direct_publish_block(conn, sku, fam):
