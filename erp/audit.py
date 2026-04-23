@@ -756,6 +756,256 @@ def _render_stats_header(conn):
     c6.metric("⚠️ Needs rework", needs_rework)
     c7.metric("✅ Publicadas", stats.get("final_verified", 0) or 0)
 
+    _render_session_progress(stats)
+
+
+def _render_session_progress(stats):
+    """Session-level progress: SKUs procesados en esta sesión + avg tiempo + ETA.
+    Motivacional + visibilidad para pausas/cadencia. Feature s14z-#4."""
+    import time as _time
+    sess = st.session_state
+    if "audit_session_start" not in sess:
+        sess["audit_session_start"] = _time.time()
+        sess["audit_session_start_pending"] = stats.get("pending", 0) or 0
+
+    pending_now = stats.get("pending", 0) or 0
+    start_pending = sess.get("audit_session_start_pending", pending_now)
+    processed = max(0, start_pending - pending_now)
+    elapsed_sec = max(1, int(_time.time() - sess["audit_session_start"]))
+    elapsed_min = elapsed_sec // 60
+
+    if processed > 0:
+        avg_sec = elapsed_sec / processed
+        remaining_min = int((avg_sec * pending_now) / 60)
+        avg_str = f"{int(avg_sec // 60)}m {int(avg_sec % 60)}s" if avg_sec >= 60 else f"{int(avg_sec)}s"
+        eta_str = f"~{remaining_min // 60}h {remaining_min % 60}m" if remaining_min >= 60 else f"~{remaining_min}m"
+        st.caption(
+            f"🎯 **Session:** {processed} SKUs procesados · "
+            f"elapsed {elapsed_min}m · avg **{avg_str}/SKU** · "
+            f"pending {pending_now} → ETA **{eta_str}**"
+        )
+    else:
+        st.caption(
+            f"🎯 **Session:** elapsed {elapsed_min}m · aún no completaste SKUs "
+            f"(el avg aparece después del primero)."
+        )
+
+
+def _quality_gate_checks(fam, modelo):
+    """s14z-#5: Retorna lista de (label, passed, detail) con checks pre-publish.
+    No bloqueante por default — informativo. Diego ve qué falta antes de publicar."""
+    import requests
+    checks = []
+
+    # Specs llenos
+    team = (fam.get("team") or "").strip()
+    season = (fam.get("season") or "").strip()
+    variant = (fam.get("variant") or "").strip()
+    checks.append((
+        "Specs completos (team / season / variant)",
+        bool(team and season and variant),
+        f"team={team or '∅'} · season={season or '∅'} · variant={variant or '∅'}",
+    ))
+
+    # Title + description
+    title = (fam.get("title") or "").strip()
+    description = (fam.get("description") or "").strip()
+    checks.append((
+        "Title + Description no vacíos",
+        bool(title and description),
+        f"title={'OK' if title else '∅'} · desc={'OK' if description else '∅'} ({len(description)} chars)",
+    ))
+
+    # Gallery tiene fotos + todas tienen cache-bust
+    gallery = (modelo or fam).get("gallery") or []
+    dirty_n = sum(1 for u in gallery if "?v=" not in u)
+    checks.append((
+        "Fotos procesadas (sin DIRTY)",
+        len(gallery) >= 3 and dirty_n == 0,
+        f"{len(gallery)} fotos · {dirty_n} DIRTY (sin cache-bust)",
+    ))
+
+    # Hero thumbnail existe
+    hero = (modelo or fam).get("hero_thumbnail")
+    checks.append((
+        "Hero thumbnail configurado",
+        bool(hero),
+        f"hero={'OK' if hero else 'falta'}",
+    ))
+
+    # No duplicados por URL base (mismo key R2)
+    seen_keys = set()
+    dupe = False
+    for u in gallery:
+        base = u.split("?")[0]
+        if base in seen_keys:
+            dupe = True
+            break
+        seen_keys.add(base)
+    checks.append((
+        "Sin fotos duplicadas (mismo R2 key)",
+        not dupe,
+        f"{len(seen_keys)}/{len(gallery)} keys únicos",
+    ))
+
+    # Price / sizes (si el modelo los tiene)
+    if modelo:
+        price = modelo.get("price") or fam.get("price") or 0
+        sizes = modelo.get("sizes") or fam.get("sizes") or []
+        checks.append((
+            "Price + sizes",
+            bool(price and price > 0 and sizes),
+            f"price={price or '∅'} · sizes={len(sizes)} opciones",
+        ))
+
+    return checks
+
+
+def _render_quality_gate(fam, modelo):
+    """s14z-#5: UI del quality gate. Expander con checklist visible abajo del specs."""
+    checks = _quality_gate_checks(fam, modelo)
+    passed_n = sum(1 for _, ok, _ in checks if ok)
+    total_n = len(checks)
+    all_ok = passed_n == total_n
+    icon = "✅" if all_ok else "⚠️"
+    status = "ready-to-publish" if all_ok else f"{total_n - passed_n} check(s) pendiente(s)"
+
+    with st.expander(
+        f"{icon} **Quality Gate · {passed_n}/{total_n} checks** · {status}",
+        expanded=not all_ok,
+    ):
+        for label, ok, detail in checks:
+            badge = "✅" if ok else "❌"
+            st.markdown(f"- {badge} **{label}** — `{detail}`")
+        if all_ok:
+            st.success("Todo check pasa. SKU listo para publicar.")
+        else:
+            st.info(
+                "Los checks son informativos, no bloqueantes. Podés publicar igual, "
+                "pero completar lo que falte mejora el PDP y el SEO."
+            )
+
+
+def _audit_prelclean_modelo(sku, fam, modelo):
+    """Feature s14z-#1: pre-clean automático de watermarks antes de que Diego
+    revise las fotos. Itera sobre las DIRTY (sin ?v= cache-bust) y corre LaMa+OCR.
+    Retorna stats dict {ok, skip, fail} o None si LaMa no disponible.
+
+    Escribe incremental a catalog.json para aguantar kills. No hace backup R2
+    porque es la PRIMERA limpieza — el backup solo tiene sentido una vez que
+    la foto ya fue procesada (pre-overwrite en re-edits)."""
+    import requests
+    import json
+    from datetime import datetime
+    import local_inpaint
+
+    if not local_inpaint.local_inpaint_available():
+        st.error("LaMa local no disponible (torch.cuda?)")
+        return None
+
+    # Resolve container: modelo específico o fam legacy
+    gallery = (modelo or fam).get("gallery") or []
+    dirty = [(i, u) for i, u in enumerate(gallery) if "?v=" not in u]
+    if not dirty:
+        st.info("Sin fotos DIRTY en esta galería — ya están todas procesadas.")
+        return {"ok": 0, "skip": 0, "fail": 0}
+
+    total = len(dirty)
+    progress = st.progress(0.0, text=f"Pre-clean: 0/{total}")
+    log = st.empty()
+    log_lines = []
+    ok_count = skip_count = fail_count = 0
+
+    # Cargar catalog fresh y encontrar el container para escribir
+    with open(audit_db.CATALOG_PATH, "r", encoding="utf-8") as f:
+        catalog = json.load(f)
+    fam_in_cat = next((f for f in catalog if f.get("family_id") == fam.get("family_id")), None)
+    if not fam_in_cat:
+        st.error("Family no encontrada en catalog al guardar.")
+        return None
+
+    if modelo:
+        container = None
+        for m in fam_in_cat.get("modelos") or []:
+            if m.get("sku") == sku:
+                container = m
+                break
+        if container is None:
+            st.error(f"Modelo SKU={sku} no encontrado en catalog")
+            return None
+    else:
+        container = fam_in_cat  # legacy
+
+    for i, (p_idx, url) in enumerate(dirty, 1):
+        base_url = url.split("?")[0]
+        if "/families/" not in base_url:
+            log_lines.append(f"[{i}/{total}] #{p_idx + 1} SKIP (URL no R2)")
+            skip_count += 1
+            log.code("\n".join(log_lines[-10:]))
+            progress.progress(i / total, text=f"Pre-clean: {i}/{total}")
+            continue
+        key = "families/" + base_url.split("/families/", 1)[1]
+
+        try:
+            resp = requests.get(url, timeout=20)
+            if resp.status_code != 200:
+                raise Exception(f"HTTP {resp.status_code}")
+            img_bytes = resp.content
+        except Exception as e:
+            log_lines.append(f"[{i}/{total}] #{p_idx + 1} DL fail: {e}")
+            fail_count += 1
+            log.code("\n".join(log_lines[-10:]))
+            progress.progress(i / total, text=f"Pre-clean: {i}/{total}")
+            continue
+
+        result = local_inpaint.watermark_inpaint_bytes(
+            img_bytes, family_id=sku, photo_index=p_idx,
+        )
+        if result.get("skipped") == "no_watermark_detected":
+            log_lines.append(f"[{i}/{total}] #{p_idx + 1} SKIP (no watermark detected)")
+            skip_count += 1
+            log.code("\n".join(log_lines[-10:]))
+            progress.progress(i / total, text=f"Pre-clean: {i}/{total}")
+            continue
+        if not result.get("ok"):
+            log_lines.append(f"[{i}/{total}] #{p_idx + 1} FAIL: {result.get('error')}")
+            fail_count += 1
+            log.code("\n".join(log_lines[-10:]))
+            progress.progress(i / total, text=f"Pre-clean: {i}/{total}")
+            continue
+
+        up = audit_enrich.upload_image_to_r2(
+            result["image_bytes"], key,
+            content_type=result.get("mime_type", "image/jpeg"),
+        )
+        if not up.get("ok"):
+            log_lines.append(f"[{i}/{total}] #{p_idx + 1} R2 fail: {up.get('error')}")
+            fail_count += 1
+            log.code("\n".join(log_lines[-10:]))
+            progress.progress(i / total, text=f"Pre-clean: {i}/{total}")
+            continue
+
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        new_url = f"{base_url}?v={ts}"
+        gallery_cat = list(container.get("gallery") or [])
+        if 0 <= p_idx < len(gallery_cat):
+            gallery_cat[p_idx] = new_url
+            container["gallery"] = gallery_cat
+            if p_idx == 0:
+                container["hero_thumbnail"] = new_url
+            with open(audit_db.CATALOG_PATH, "w", encoding="utf-8") as f:
+                json.dump(catalog, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+
+        method = result.get("detection_method", "?")
+        log_lines.append(f"[{i}/{total}] #{p_idx + 1} OK ({method})")
+        ok_count += 1
+        log.code("\n".join(log_lines[-10:]))
+        progress.progress(i / total, text=f"Pre-clean: {i}/{total}")
+
+    progress.progress(1.0, text=f"Done: {ok_count} OK · {skip_count} SKIP · {fail_count} FAIL")
+    return {"ok": ok_count, "skip": skip_count, "fail": fail_count}
+
 
 # ═══════════════════════════════════════
 # VIEW 1: Queue
@@ -862,6 +1112,85 @@ def render_queue(conn, catalog):
 
     st.caption(f"**{len(items)} items auditables** en queue (post-filtros) · cada uno es 1 modelo independiente")
 
+    # s14z-#2: Batch edit de team/season/variant. Checkbox por row + barra arriba.
+    if "audit_queue_selected" not in st.session_state:
+        st.session_state["audit_queue_selected"] = set()
+    selected = st.session_state["audit_queue_selected"]
+
+    VARIANT_OPTIONS_BATCH = [
+        "(no cambiar)", "home", "away", "third", "fourth",
+        "goalkeeper", "prematch", "special", "retro",
+    ]
+    with st.expander(
+        f"✏️ Batch edit specs ({len(selected)} seleccionado(s))",
+        expanded=len(selected) > 0,
+    ):
+        st.caption(
+            "Marcá el checkbox al inicio de cada row. Campos vacíos no modifican. "
+            "El variant aplica al family (si varios SKUs comparten family_id, se "
+            "actualiza una sola vez)."
+        )
+        be_a, be_b, be_c = st.columns(3)
+        with be_a:
+            new_team_bulk = st.text_input(
+                "Team nuevo", key="batch_team",
+                placeholder="Vacío = no cambiar",
+            )
+        with be_b:
+            new_season_bulk = st.text_input(
+                "Season nuevo", key="batch_season",
+                placeholder="Ej: 2026 o 2025-26",
+            )
+        with be_c:
+            new_variant_bulk = st.selectbox(
+                "Variant nuevo", VARIANT_OPTIONS_BATCH,
+                key="batch_variant",
+            )
+        apply_cols = st.columns([3, 1])
+        with apply_cols[0]:
+            has_changes = bool(
+                new_team_bulk.strip() or new_season_bulk.strip()
+                or new_variant_bulk != "(no cambiar)"
+            )
+            if selected and not has_changes:
+                st.info("Llená al menos 1 campo arriba para habilitar Aplicar.")
+        with apply_cols[1]:
+            if st.button(
+                f"💾 Aplicar a {len(selected)}",
+                type="primary", use_container_width=True,
+                disabled=not (selected and has_changes),
+                key="batch_apply",
+            ):
+                import json as _json
+                # Map sku → family_id desde los items
+                sku_to_fid = {}
+                for it in items:
+                    fid = it.get("family_id") or it.get("canonical") or it.get("sku")
+                    sku_to_fid[it["sku"]] = fid
+                fids_to_update = {sku_to_fid[s] for s in selected if sku_to_fid.get(s)}
+
+                with open(audit_db.CATALOG_PATH, "r", encoding="utf-8") as f:
+                    cat_all = _json.load(f)
+                updated = 0
+                for fam_cat in cat_all:
+                    if fam_cat.get("family_id") in fids_to_update:
+                        if new_team_bulk.strip():
+                            fam_cat["team"] = new_team_bulk.strip()
+                        if new_season_bulk.strip():
+                            fam_cat["season"] = new_season_bulk.strip()
+                        if new_variant_bulk != "(no cambiar)":
+                            fam_cat["variant"] = new_variant_bulk
+                        updated += 1
+                with open(audit_db.CATALOG_PATH, "w", encoding="utf-8") as f:
+                    _json.dump(cat_all, f, ensure_ascii=False, indent=2)
+                    f.write("\n")
+                st.session_state["audit_queue_selected"] = set()
+                st.success(
+                    f"✅ {updated} families actualizadas "
+                    f"({len(selected)} SKUs seleccionados)"
+                )
+                st.rerun()
+
     # Pagination
     total_pages = max(1, (len(items) + PAGE_SIZE - 1) // PAGE_SIZE)
     if "queue_page" not in st.session_state:
@@ -893,14 +1222,30 @@ def render_queue(conn, catalog):
 
     for i, it in enumerate(page_items):
         with st.container(border=True):
-            row = st.columns([1, 3, 2, 1, 1, 1])
-            hero = it.get("hero")
+            row = st.columns([0.3, 1, 3, 2, 1, 1, 1])
             with row[0]:
+                # s14z-#2: checkbox multi-select para batch edit
+                sku_id = it["sku"]
+                was_sel = sku_id in selected
+                is_sel = st.checkbox(
+                    "sel", value=was_sel,
+                    key=f"qsel_{sku_id}",
+                    label_visibility="collapsed",
+                    help="Seleccionar para batch edit de specs",
+                )
+                if is_sel != was_sel:
+                    if is_sel:
+                        selected.add(sku_id)
+                    else:
+                        selected.discard(sku_id)
+                    st.session_state["audit_queue_selected"] = selected
+            hero = it.get("hero")
+            with row[1]:
                 if hero:
                     st.image(hero, width=80)
                 if it.get("n_photos"):
                     st.caption(f"📷 {it['n_photos']}")
-            with row[1]:
+            with row[2]:
                 tier_badge = TIER_LABELS.get(it.get("tier"), "❓ Sin tier")
                 qa_badge = " · 🎯 **QA**" if it.get("qa_priority") else ""
                 st.markdown(f"**`{it['sku']}`**{qa_badge}  \n{tier_badge}")
@@ -923,18 +1268,18 @@ def render_queue(conn, catalog):
                 st.markdown(label)
                 if it.get("sizes") or it.get("price"):
                     st.caption(f"{it.get('sizes') or '—'} · Q{it.get('price') or '—'}")
-            with row[2]:
+            with row[3]:
                 status = it.get("status", "pending")
                 emoji = {"pending": "⏳", "verified": "🟢", "flagged": "🔴",
                          "skipped": "⏭️", "needs_rework": "⚠️",
                          "deleted": "🗑"}.get(status, "?")
                 st.markdown(f"{emoji} **{status}**")
-            with row[3]:
+            with row[4]:
                 if st.button("Abrir", key=f"open_{it['sku']}", type="primary"):
                     st.session_state.audit_view = "detail"
                     st.session_state.current_family = it["sku"]
                     st.rerun()
-            with row[4]:
+            with row[5]:
                 current_tier = it.get("tier") or "(sin)"
                 new_tier = st.selectbox(
                     "Tier",
@@ -949,7 +1294,7 @@ def render_queue(conn, catalog):
                         tier=None if new_tier == "(sin)" else new_tier,
                     )
                     st.rerun()
-            with row[5]:
+            with row[6]:
                 if st.button("⏭️", key=f"skip_{it['sku']}", help="Skip"):
                     audit_db.upsert_decision(
                         conn, it["sku"],
@@ -1051,8 +1396,41 @@ def render_detail(conn, catalog):
     _render_shortcuts_box()
     st.markdown("")
 
+    # s14z-#1: Pre-clean watermarks proactivo. Muestra banner solo si hay DIRTY.
+    _gallery = (modelo or fam).get("gallery") or []
+    _dirty_n = sum(1 for u in _gallery if "?v=" not in u)
+    if _dirty_n > 0:
+        import local_inpaint as _li_pc
+        pc_c1, pc_c2 = st.columns([1, 3])
+        with pc_c1:
+            if st.button(f"🧹 Pre-clean {_dirty_n} foto(s)",
+                         key=f"preclean_{sku}",
+                         type="primary",
+                         disabled=not _li_pc.local_inpaint_available(),
+                         help=("Corre LaMa+OCR sobre TODAS las fotos DIRTY "
+                               "(sin cache-bust) de este modelo. Ahorra clicks de "
+                               "flag_watermark uno por uno. ~2s por foto.")):
+                with st.spinner(f"Pre-clean {_dirty_n} fotos…"):
+                    stats = _audit_prelclean_modelo(sku, fam, modelo)
+                if stats is not None:
+                    st.success(
+                        f"🧹 Pre-clean: {stats['ok']} OK · "
+                        f"{stats['skip']} sin watermark · {stats['fail']} fail"
+                    )
+                    st.rerun()
+        with pc_c2:
+            st.caption(
+                f"**{_dirty_n} fotos sin cache-bust** en esta galería. "
+                f"Pre-clean corre LaMa+OCR en batch ANTES de que revises manualmente "
+                f"— cuando vuelvas a ver las fotos ya estarán limpias. "
+                f"Las que OCR no detecte te aparecen marcadas SKIP para review manual."
+            )
+
     # Panel specs editable (scope: esta family / este modelo)
     _render_scraped_specs_panel(fam, modelo_idx=_find_modelo_idx(fam, sku))
+
+    # s14z-#5: Quality gate pre-publish (informativo, no bloqueante)
+    _render_quality_gate(fam, modelo)
 
     # Render el modelo — fotos + acciones + checks + verify/flag
     modelo_view = _modelo_view_for_audit(sku, fam, modelo)
