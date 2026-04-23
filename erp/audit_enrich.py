@@ -302,12 +302,45 @@ GEMINI_REGEN_PROMPT_QUALITY = (
     "neutral gray studio background with mannequin. Do not add or remove any design "
     "elements of the jersey itself."
 )
+# Prompt quirúrgico para fotos donde el watermark está sobre texturas complejas
+# (check patterns adidas, escudos metálicos FIFA, embroidery detallado).
+# Usado por el botón '🌟 Gemini Rescue' cuando LaMa/SD fallan por pérdida de detalle.
+GEMINI_REGEN_PROMPT_PRESERVE = (
+    "TASK: Remove ONLY the diagonal repeating watermark text "
+    "(such as 'minkang.x.yupoo.com', 'yupoo.com', '*.yupoo.com', or similar "
+    "translucent text tiles) from this football jersey product photo.\n\n"
+    "CRITICAL PRESERVATION RULES:\n"
+    "1. Preserve EVERY detail of the jersey fabric: weave texture, check patterns, "
+    "stripes (adidas 3-stripes, Nike swoosh, Puma, etc.), stitching, seams, hems.\n"
+    "2. Preserve ALL branding EXACTLY as-is: team crest (AFA, CBF, federations), "
+    "sponsor logos, FIFA World Champions badge, manufacturer logo, number and name prints.\n"
+    "3. Preserve fabric textures including metallic/gold/silver elements, "
+    "holographic finishes, and embroidered details with their original sharpness.\n"
+    "4. Preserve background, mannequin, lighting, shadows, and perspective.\n"
+    "5. Preserve image resolution, aspect ratio, framing, and overall sharpness.\n"
+    "6. Do NOT invent or hallucinate new details that were not in the original.\n"
+    "7. Do NOT modify colors, contrast, saturation, or white balance.\n\n"
+    "If the watermark overlaps a complex texture (badge, logo, checkered pattern), "
+    "reconstruct the underlying texture faithfully based on visible surrounding context. "
+    "If uncertain about a detail hidden under the watermark, leave a subtle trace "
+    "rather than inventing a replacement. Output only the cleaned image at full quality."
+)
+
+
+def _select_gemini_prompt(prompt_variant):
+    """Mapea variant → prompt. Default: watermark (legacy behavior)."""
+    if prompt_variant == "preserve":
+        return GEMINI_REGEN_PROMPT_PRESERVE
+    if prompt_variant == "quality":
+        return GEMINI_REGEN_PROMPT_QUALITY
+    return GEMINI_REGEN_PROMPT_WATERMARK
 
 
 def gemini_regen_image(image_bytes, mime_type="image/jpeg", prompt_variant="watermark",
                         family_id=None, photo_index=None):
     """Llama Gemini para re-generar una imagen. Input bytes, output bytes.
-    prompt_variant: 'watermark' o 'quality'
+    prompt_variant: 'watermark' (default), 'quality', o 'preserve' (quirúrgico
+                    para texturas complejas — usar cuando LaMa/SD fallan).
     family_id / photo_index: contexto para retry error log.
     Retorna dict { ok, image_bytes, mime_type, error }
     """
@@ -328,7 +361,7 @@ def gemini_regen_image(image_bytes, mime_type="image/jpeg", prompt_variant="wate
         except ImportError:
             return {"ok": False, "error": "google-genai package no instalado. pip install google-genai"}
 
-    prompt = GEMINI_REGEN_PROMPT_WATERMARK if prompt_variant == "watermark" else GEMINI_REGEN_PROMPT_QUALITY
+    prompt = _select_gemini_prompt(prompt_variant)
 
     def _call():
         client = genai.Client(api_key=GEMINI_KEY)
@@ -373,7 +406,7 @@ def gemini_regen_image(image_bytes, mime_type="image/jpeg", prompt_variant="wate
 def _gemini_regen_image_legacy(image_bytes, mime_type, prompt_variant, genai_legacy,
                                  family_id=None, photo_index=None):
     """Fallback con google-generativeai viejo."""
-    prompt = GEMINI_REGEN_PROMPT_WATERMARK if prompt_variant == "watermark" else GEMINI_REGEN_PROMPT_QUALITY
+    prompt = _select_gemini_prompt(prompt_variant)
     def _call():
         genai_legacy.configure(api_key=GEMINI_KEY)
         model = genai_legacy.GenerativeModel(GEMINI_IMAGE_MODEL)

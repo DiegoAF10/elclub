@@ -544,6 +544,28 @@ def _render_gallery_editor(fid, modelo_idx, modelo):
                 if not _sd_ok and lama_ok:
                     st.caption("🧠 SD no descargado. Correr: `iopaint download --model runwayml/stable-diffusion-inpainting`")
 
+                # Nivel 5 — Gemini Rescue (texturas complejas: check patterns,
+                # escudos metálicos, embroidery). ~$0.04/foto pero mejor quality
+                # que LaMa/SD cuando hay branding conocido debajo del watermark.
+                _gem_ok = audit_enrich.gemini_available()
+                if st.button("🌟 Gemini Rescue",
+                             key=f"pub_wm_gem_{fid}_{modelo_idx}_{p_idx}",
+                             help=("Gemini 2.5 Flash Image con prompt preservador. "
+                                   "Mejor para texturas complejas (adidas stripes, "
+                                   "FIFA badges, escudos metálicos). ~$0.04/foto, ~5s. "
+                                   "Usar cuando LaMa/SD dañan detalles finos."),
+                             disabled=not _gem_ok,
+                             use_container_width=True):
+                    with st.spinner("🌟 Gemini Rescue (~5s)…"):
+                        res = _regen_watermark(fid, modelo_idx, p_idx, mode="gemini")
+                    if res.get("ok"):
+                        st.toast(f"🌟 Gemini rescue #{p_idx + 1}")
+                    else:
+                        st.error(f"⚠️ {res.get('error', 'unknown')}")
+                    st.rerun()
+                if not _gem_ok:
+                    st.caption("🌟 GEMINI_API_KEY no seteada en `.env`")
+
 
 def _gallery_set_hero(fid, modelo_idx, photo_idx):
     """Mueve photo_idx a la posición 0 (hero). Sync top-level si es primary modelo."""
@@ -732,9 +754,12 @@ def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto"):
     resultado al mismo key + cache-bust URL en catalog.
 
     mode:
-      "auto"  — OCR-based detection (default). Falla si OCR no detecta.
-      "force" — mask hardcoded centro (dimensiones estándar Yupoo).
-                Ignora OCR. Usar cuando Diego ve watermark pero OCR falla.
+      "auto"   — LaMa + OCR/template (default). Falla si OCR+template no detectan.
+      "force"  — LaMa + mask hardcoded centro (dimensiones estándar Yupoo).
+      "sd"     — Stable Diffusion inpaint (preserva logos/texturas mejor que LaMa).
+      "gemini" — Gemini 2.5 Flash Image con prompt preservador quirúrgico.
+                 Úsalo cuando LaMa/SD dañan texturas complejas (check pattern adidas,
+                 escudos metálicos, embroidery). ~$0.04/foto pero quality mucho mayor.
     """
     import requests
     from datetime import datetime
@@ -768,7 +793,14 @@ def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto"):
     import local_inpaint as _li
     lama_ok = _li.local_inpaint_available()
 
-    if mode == "sd":
+    if mode == "gemini":
+        if not audit_enrich.gemini_available():
+            return {"error": "GEMINI_API_KEY no seteada — revisar .env"}
+        gem = audit_enrich.gemini_regen_image(
+            img_bytes, mime_type="image/jpeg", prompt_variant="preserve",
+            family_id=fid, photo_index=photo_idx,
+        )
+    elif mode == "sd":
         if not lama_ok or not _li.sd_available():
             return {"error": "SD Inpaint requiere LaMa local + SD model descargado"}
         gem = _li.sd_inpaint_bytes(
@@ -1059,6 +1091,7 @@ def _render_batch_review(fid):
         import local_inpaint as _li
         lama_ok = _li.local_inpaint_available()
         sd_ok = _li.sd_available() if lama_ok else False
+        gem_ok = audit_enrich.gemini_available()
 
         cols_per_row = 4
         for row_start in range(0, len(visible), cols_per_row):
@@ -1081,7 +1114,7 @@ def _render_batch_review(fid):
                     if note:
                         st.caption(note)
 
-                    b1, b2, b3 = st.columns(3)
+                    b1, b2, b3, b4 = st.columns(4)
                     with b1:
                         if st.button("⚠️", key=f"br_auto_{fid}_{mi}_{pi}",
                                      help="Re-run Auto (LaMa + OCR + template)",
@@ -1106,9 +1139,17 @@ def _render_batch_review(fid):
                             res = _regen_watermark(fid, mi, pi, mode="sd")
                             _br_update_item(key, mi, pi, res, "sd")
                             st.rerun()
-
-                    b4, b5 = st.columns(2)
                     with b4:
+                        if st.button("🌟", key=f"br_gem_{fid}_{mi}_{pi}",
+                                     help="Gemini Rescue — mejor para texturas complejas (~$0.04/foto)",
+                                     disabled=not gem_ok,
+                                     use_container_width=True):
+                            res = _regen_watermark(fid, mi, pi, mode="gemini")
+                            _br_update_item(key, mi, pi, res, "gemini")
+                            st.rerun()
+
+                    b5, b6 = st.columns(2)
+                    with b5:
                         if st.button("↺ Original", key=f"br_restore_{fid}_{mi}_{pi}",
                                      help="Restore backup R2 (revierte al original pre-watermark)",
                                      use_container_width=True):
@@ -1126,7 +1167,7 @@ def _render_batch_review(fid):
                             else:
                                 st.error(rr.get("error", "restore fail"))
                             st.rerun()
-                    with b5:
+                    with b6:
                         if st.button("🗑️ Delete", key=f"br_del_{fid}_{mi}_{pi}",
                                      help="Soft-delete (mueve a deleted_gallery)",
                                      use_container_width=True):
