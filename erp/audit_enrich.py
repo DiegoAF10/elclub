@@ -305,25 +305,28 @@ GEMINI_REGEN_PROMPT_QUALITY = (
 # Prompt quirúrgico para fotos donde el watermark está sobre texturas complejas
 # (check patterns adidas, escudos metálicos FIFA, embroidery detallado).
 # Usado por el botón '🌟 Gemini Rescue' cuando LaMa/SD fallan por pérdida de detalle.
+#
+# Lessons learned:
+# - Evitar listas largas de "do NOT modify X, Y, Z" — Gemini-2.5-flash-image tiende
+#   a responder con la imagen sin editar cuando el prompt suena demasiado cauteloso.
+# - Verbos imperativos ("erase", "reconstruct", "output the edited image") funcionan
+#   mejor que "preserve" + negaciones largas.
+# - Explicitar que el OUTPUT es la imagen editada (no un "similar image").
 GEMINI_REGEN_PROMPT_PRESERVE = (
-    "TASK: Remove ONLY the diagonal repeating watermark text "
-    "(such as 'minkang.x.yupoo.com', 'yupoo.com', '*.yupoo.com', or similar "
-    "translucent text tiles) from this football jersey product photo.\n\n"
-    "CRITICAL PRESERVATION RULES:\n"
-    "1. Preserve EVERY detail of the jersey fabric: weave texture, check patterns, "
-    "stripes (adidas 3-stripes, Nike swoosh, Puma, etc.), stitching, seams, hems.\n"
-    "2. Preserve ALL branding EXACTLY as-is: team crest (AFA, CBF, federations), "
-    "sponsor logos, FIFA World Champions badge, manufacturer logo, number and name prints.\n"
-    "3. Preserve fabric textures including metallic/gold/silver elements, "
-    "holographic finishes, and embroidered details with their original sharpness.\n"
-    "4. Preserve background, mannequin, lighting, shadows, and perspective.\n"
-    "5. Preserve image resolution, aspect ratio, framing, and overall sharpness.\n"
-    "6. Do NOT invent or hallucinate new details that were not in the original.\n"
-    "7. Do NOT modify colors, contrast, saturation, or white balance.\n\n"
-    "If the watermark overlaps a complex texture (badge, logo, checkered pattern), "
-    "reconstruct the underlying texture faithfully based on visible surrounding context. "
-    "If uncertain about a detail hidden under the watermark, leave a subtle trace "
-    "rather than inventing a replacement. Output only the cleaned image at full quality."
+    "ACTION: Erase the diagonal watermark text that reads 'minkang.x.yupoo.com' "
+    "(and any similar repeating yupoo.com tile patterns) from this football jersey "
+    "product photograph. The watermark appears as semi-transparent text tiled "
+    "diagonally across the entire image — multiple instances, not just one.\n\n"
+    "PROCESS:\n"
+    "1. Identify every instance of the watermark text overlaid on the image.\n"
+    "2. Erase each occurrence by reconstructing the underlying fabric, texture, "
+    "or badge from the surrounding unwatermarked context.\n"
+    "3. While erasing, keep the jersey design, team crest, sponsor logos, "
+    "FIFA badges, adidas/Nike/Puma stripes, fabric weave patterns, stitching, "
+    "numbers, names, colors, lighting, and background unchanged.\n\n"
+    "OUTPUT: the edited photograph at full resolution with all watermark text "
+    "removed and the underlying product details intact. Do not return the "
+    "original image unchanged — the watermark MUST be gone from the output."
 )
 
 

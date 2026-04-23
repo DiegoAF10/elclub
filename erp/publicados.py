@@ -559,7 +559,19 @@ def _render_gallery_editor(fid, modelo_idx, modelo):
                     with st.spinner("🌟 Gemini Rescue (~5s)…"):
                         res = _regen_watermark(fid, modelo_idx, p_idx, mode="gemini")
                     if res.get("ok"):
-                        st.toast(f"🌟 Gemini rescue #{p_idx + 1}")
+                        diag = res.get("diagnostic") or {}
+                        if diag.get("identical"):
+                            st.error(
+                                f"⚠️ Gemini devolvió imagen IDÉNTICA al input "
+                                f"(hash match {diag.get('in_hash')}). El modelo no editó. "
+                                f"Problema de prompt/modelo, NO de cache."
+                            )
+                        else:
+                            delta = diag.get("delta_pct", 0)
+                            st.toast(
+                                f"🌟 Gemini #{p_idx + 1} · Δ {delta:.1f}% "
+                                f"({diag.get('in_hash')} → {diag.get('out_hash')})"
+                            )
                     else:
                         st.error(f"⚠️ {res.get('error', 'unknown')}")
                     st.rerun()
@@ -800,6 +812,26 @@ def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto"):
             img_bytes, mime_type="image/jpeg", prompt_variant="preserve",
             family_id=fid, photo_index=photo_idx,
         )
+        # Diagnóstico: comparar bytes input vs output. Si similarity>95% → Gemini
+        # devolvió la imagen sin editar (failure mode del modelo cuando el prompt
+        # es ambiguo). Si diff grande pero visualmente igual → CDN cache.
+        if gem.get("ok"):
+            import hashlib
+            in_size = len(img_bytes)
+            out_size = len(gem.get("image_bytes") or b"")
+            in_hash = hashlib.md5(img_bytes).hexdigest()[:8]
+            out_hash = hashlib.md5(gem.get("image_bytes") or b"").hexdigest()[:8]
+            delta_pct = abs(out_size - in_size) / max(in_size, 1) * 100
+            identical = (in_hash == out_hash)
+            gem["_diagnostic"] = {
+                "in_size": in_size, "out_size": out_size,
+                "in_hash": in_hash, "out_hash": out_hash,
+                "delta_pct": round(delta_pct, 2),
+                "identical": identical,
+            }
+            print(f"[GEMINI DIAG] m{modelo_idx} idx={photo_idx} "
+                  f"in={in_size}b ({in_hash}) → out={out_size}b ({out_hash}) "
+                  f"Δ={delta_pct:.1f}% {'IDENTICAL' if identical else 'CHANGED'}")
     elif mode == "sd":
         if not lama_ok or not _li.sd_available():
             return {"error": "SD Inpaint requiere LaMa local + SD model descargado"}
@@ -855,7 +887,10 @@ def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto"):
     _sync_top_level_if_primary(fam, modelo_idx)
     _save_catalog(catalog)
 
-    return {"ok": True, "new_url": new_url}
+    result = {"ok": True, "new_url": new_url}
+    if gem.get("_diagnostic"):
+        result["diagnostic"] = gem["_diagnostic"]
+    return result
 
 
 # Helpers compartidos
