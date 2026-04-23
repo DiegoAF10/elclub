@@ -21,9 +21,15 @@ import cv2
 import numpy as np
 from PIL import Image
 import io
+import os
 
 _LAMA = None
 _OCR = None
+_TEMPLATE = None  # watermark template (grayscale) para matching
+
+_TEMPLATE_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "assets", "watermark-template.png"
+)
 
 # Keywords del watermark Yupoo del proveedor "minkang.x.yupoo.com"
 WATERMARK_KEYWORDS = ("minkang", "yupoo", "com", "x.", ".x.")
@@ -84,6 +90,88 @@ def _merge_horizontal_line(boxes, y_tolerance=30):
             max(b[3] for b in g),
         ))
     return unified
+
+
+def _get_template():
+    global _TEMPLATE
+    if _TEMPLATE is None and os.path.exists(_TEMPLATE_PATH):
+        tpl_bgr = cv2.imread(_TEMPLATE_PATH)
+        if tpl_bgr is not None:
+            _TEMPLATE = cv2.cvtColor(tpl_bgr, cv2.COLOR_BGR2GRAY)
+    return _TEMPLATE
+
+
+def _template_match_watermark(img_bgr, threshold=0.5, scales=None):
+    """Busca el watermark Yupoo en `img_bgr` via multi-scale template matching.
+    Funciona AÚN sobre texturas/logos porque compara glyph shapes (no readability).
+    Retorna bbox (x_min, y_min, x_max, y_max) del mejor match o None.
+    """
+    tpl = _get_template()
+    if tpl is None:
+        return None, 0.0
+    img_gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    img_h, img_w = img_gray.shape
+    tpl_h, tpl_w = tpl.shape
+    if scales is None:
+        scales = [0.6, 0.75, 0.85, 0.95, 1.0, 1.05, 1.15, 1.3]
+
+    best_conf = 0.0
+    best_bbox = None
+    for s in scales:
+        new_w = int(tpl_w * s)
+        new_h = int(tpl_h * s)
+        if new_w >= img_w or new_h >= img_h or new_w < 50:
+            continue
+        tpl_scaled = cv2.resize(tpl, (new_w, new_h))
+        res = cv2.matchTemplate(img_gray, tpl_scaled, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, max_loc = cv2.minMaxLoc(res)
+        if max_val > best_conf:
+            best_conf = max_val
+            best_bbox = (max_loc[0], max_loc[1],
+                         max_loc[0] + new_w, max_loc[1] + new_h)
+
+    if best_conf < threshold:
+        return None, best_conf
+    return best_bbox, best_conf
+
+
+def _pixel_precise_mask_from_bbox(img_bgr, bbox, brightness_delta=30):
+    """Dentro del bbox detectado, genera mask solo de pixels brillantes que
+    son watermark (text bright/semi-transparent sobre darker backgrounds).
+
+    Técnica: computa la brightness media del bbox + extrae pixels que están
+    N puntos por encima (semi-transparent text siempre es más bright que
+    fondo promedio). Resulta mask con forma de glyphs, no rectángulo.
+
+    Retorna mask_uint8 (mismas dims que img_bgr).
+    """
+    h, w = img_bgr.shape[:2]
+    x_min, y_min, x_max, y_max = bbox
+    x_min = max(0, x_min)
+    y_min = max(0, y_min)
+    x_max = min(w, x_max)
+    y_max = min(h, y_max)
+
+    mask = np.zeros((h, w), dtype=np.uint8)
+    if x_max <= x_min or y_max <= y_min:
+        return mask
+
+    roi = img_bgr[y_min:y_max, x_min:x_max]
+    # LAB L channel — brightness more stable to color variations
+    lab = cv2.cvtColor(roi, cv2.COLOR_BGR2LAB)
+    L = lab[:, :, 0]
+    # Threshold dinámico: brightness_delta por encima de la media del ROI
+    mean_L = np.mean(L)
+    threshold = min(255, mean_L + brightness_delta)
+    _, binary = cv2.threshold(L, threshold, 255, cv2.THRESH_BINARY)
+
+    # Morphological close para conectar glyphs cercanos + dilate ligero
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+    binary = cv2.dilate(binary, kernel, iterations=1)
+
+    mask[y_min:y_max, x_min:x_max] = binary
+    return mask
 
 
 def _detect_watermark_mask(img_bgr, dilate_x=20, dilate_y=4):
@@ -214,14 +302,40 @@ def watermark_inpaint_bytes(image_bytes, mime_type="image/jpeg",
     except Exception as e:
         return {"ok": False, "error": f"decode: {type(e).__name__}: {e}"}
 
-    # Detect watermark
+    # Fallback chain para detectar watermark:
+    #  1. EasyOCR (current, 70% casos — fondos lisos)
+    #  2. Template matching + pixel-precise mask (para watermark sobre
+    #     logos/texturas — ~20% additional recovery, preserva detalles)
+    detection_method = None
+    matched = []
     try:
         mask, matched = _detect_watermark_mask(img_bgr)
+        if mask is not None:
+            detection_method = "ocr"
     except Exception as e:
         return {"ok": False, "error": f"OCR: {type(e).__name__}: {e}"}
 
     if mask is None:
-        # No watermark detected — return original
+        # Fallback: template matching sobre grayscale → encuentra pattern
+        # aun cuando está sobre textura/logo. Mask resulting es pixel-precisa
+        # (solo glyphs, no rectángulo) → preserva el resto de la imagen.
+        try:
+            bbox, conf = _template_match_watermark(img_bgr, threshold=0.5)
+            if bbox is not None:
+                mask = _pixel_precise_mask_from_bbox(img_bgr, bbox,
+                                                     brightness_delta=30)
+                # Check that mask has enough pixels (sanity) — si muy pocos,
+                # probable false positive
+                if np.count_nonzero(mask) > 100:
+                    detection_method = f"template_match (conf={conf:.2f})"
+                    matched = [{"method": "template", "bbox": bbox, "conf": conf}]
+                else:
+                    mask = None
+        except Exception as e:
+            # No fatal, continue con skip
+            pass
+
+    if mask is None:
         return {
             "ok": True,
             "image_bytes": image_bytes,
@@ -259,4 +373,5 @@ def watermark_inpaint_bytes(image_bytes, mime_type="image/jpeg",
         "image_bytes": out_bytes,
         "mime_type": "image/jpeg",
         "matched_fragments": matched,
+        "detection_method": detection_method,
     }

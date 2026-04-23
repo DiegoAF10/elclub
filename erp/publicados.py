@@ -349,6 +349,25 @@ def _render_gallery_editor(fid, modelo_idx, modelo):
 
     st.caption(f"{len(gallery)} fotos · foto #1 = hero (lo que ve el cliente primero)")
 
+    # Section de fotos borradas (soft-delete) con restore
+    deleted = modelo.get("deleted_gallery") or []
+    if deleted:
+        with st.expander(f"🗑 Fotos borradas ({len(deleted)}) · click para restaurar",
+                          expanded=False):
+            dcols = st.columns(min(4, len(deleted)))
+            for di, entry in enumerate(deleted):
+                with dcols[di % len(dcols)]:
+                    try:
+                        st.image(entry["url"], use_container_width=True)
+                    except Exception:
+                        st.caption("(img fail)")
+                    st.caption(f"Borrada: {entry.get('deleted_at', '?')[:16]}")
+                    if st.button("↺ Restaurar", key=f"pub_undel_{fid}_{modelo_idx}_{di}",
+                                 use_container_width=True):
+                        _gallery_restore(fid, modelo_idx, di)
+                        st.toast("↺ Restaurada al final de la galería")
+                        st.rerun()
+
     cols_per_row = 4
     for row_start in range(0, len(gallery), cols_per_row):
         cols = st.columns(cols_per_row)
@@ -389,6 +408,30 @@ def _render_gallery_editor(fid, modelo_idx, modelo):
                                  help="Delete foto (removes from gallery array)"):
                         _gallery_delete(fid, modelo_idx, p_idx)
                         st.toast(f"🗑 Foto #{p_idx + 1} eliminada de {fid} m{modelo_idx}")
+                        st.rerun()
+
+                # Check si hay backup disponible (R2 object `<path>.backup.jpg`)
+                # para esta foto. Si sí, mostrar botón ↺ Restore original.
+                import requests
+                _base = url.split("?")[0]
+                _backup_url = _base.rsplit(".", 1)[0] + ".backup.jpg" if "/families/" in _base else None
+                _has_backup = False
+                if _backup_url:
+                    try:
+                        _h = requests.head(_backup_url, timeout=3)
+                        _has_backup = _h.status_code == 200
+                    except Exception:
+                        pass
+                if _has_backup:
+                    if st.button("↺ Restore original", key=f"pub_restore_{fid}_{modelo_idx}_{p_idx}",
+                                 help="Restaurar bytes originales del R2 backup (pre-overwrite)",
+                                 use_container_width=True):
+                        with st.spinner("Restoring original..."):
+                            rr = _restore_r2_from_backup(fid, modelo_idx, p_idx)
+                        if rr.get("ok"):
+                            st.toast(f"↺ Original restored #{p_idx + 1}")
+                        else:
+                            st.error(f"⚠️ {rr.get('error')}")
                         st.rerun()
 
                 # Watermark row — 2 buttons:
@@ -465,7 +508,10 @@ def _gallery_swap(fid, modelo_idx, pos_a, pos_b):
 
 
 def _gallery_delete(fid, modelo_idx, photo_idx):
-    """Remueve foto del array. Los bytes en R2 quedan huérfanos (no urgente limpiar)."""
+    """Soft-delete: mueve URL de gallery[] → deleted_gallery[] para permitir
+    restore. Los bytes R2 NO se tocan. UI muestra deleted_gallery separado
+    con botón ↺ Restaurar."""
+    from datetime import datetime
     catalog = _load_catalog_fresh()
     fam = _find_fam(catalog, fid)
     if not fam:
@@ -474,11 +520,138 @@ def _gallery_delete(fid, modelo_idx, photo_idx):
     gallery = list(modelo.get("gallery") or [])
     if not (0 <= photo_idx < len(gallery)):
         return
-    gallery.pop(photo_idx)
+    url = gallery.pop(photo_idx)
+    # Append a deleted_gallery[] con timestamp
+    deleted = list(modelo.get("deleted_gallery") or [])
+    deleted.append({
+        "url": url,
+        "deleted_at": datetime.now().isoformat(timespec="seconds"),
+        "original_idx": photo_idx,
+    })
     modelo["gallery"] = gallery
+    modelo["deleted_gallery"] = deleted
     modelo["hero_thumbnail"] = gallery[0] if gallery else None
     _sync_top_level_if_primary(fam, modelo_idx)
     _save_catalog(catalog)
+
+
+def _gallery_restore(fid, modelo_idx, deleted_idx):
+    """Restore de deleted_gallery[] → gallery[] (al final del array)."""
+    catalog = _load_catalog_fresh()
+    fam = _find_fam(catalog, fid)
+    if not fam:
+        return
+    modelo = (fam.get("modelos") or [])[modelo_idx]
+    deleted = list(modelo.get("deleted_gallery") or [])
+    if not (0 <= deleted_idx < len(deleted)):
+        return
+    entry = deleted.pop(deleted_idx)
+    gallery = list(modelo.get("gallery") or [])
+    gallery.append(entry["url"])
+    modelo["gallery"] = gallery
+    modelo["deleted_gallery"] = deleted
+    if not modelo.get("hero_thumbnail"):
+        modelo["hero_thumbnail"] = gallery[0]
+    _sync_top_level_if_primary(fam, modelo_idx)
+    _save_catalog(catalog)
+
+
+def _restore_r2_from_backup(fid, modelo_idx, photo_idx):
+    """Descarga el backup R2 del path `.backup.jpg` y lo sube al key original.
+    Actualiza URL del catalog (cache-bust nuevo para invalidar CDN).
+    El backup key NO se borra — puede restaurarse de nuevo si se re-edita."""
+    import requests
+    from datetime import datetime
+    catalog = _load_catalog_fresh()
+    fam = _find_fam(catalog, fid)
+    if not fam:
+        return {"error": "family not found"}
+    modelo = (fam.get("modelos") or [])[modelo_idx]
+    gallery = list(modelo.get("gallery") or [])
+    if not (0 <= photo_idx < len(gallery)):
+        return {"error": "photo idx OOB"}
+
+    cur_url = gallery[photo_idx]
+    base_url = cur_url.split("?")[0]
+    if "/families/" not in base_url:
+        return {"error": "URL no es R2"}
+    key = "families/" + base_url.split("/families/", 1)[1]
+    backup_key = key.rsplit(".", 1)[0] + ".backup.jpg"
+    backup_url = f"https://img.elclub.club/{backup_key}"
+
+    # Download backup
+    try:
+        resp = requests.get(backup_url, timeout=20)
+        if resp.status_code != 200:
+            return {"error": f"backup no existe (HTTP {resp.status_code} en {backup_key})"}
+    except Exception as e:
+        return {"error": f"download backup: {e}"}
+
+    # Upload backup bytes al key original (overwrite con el backup)
+    up = audit_enrich.upload_image_to_r2(resp.content, key, content_type="image/jpeg")
+    if not up.get("ok"):
+        return {"error": f"R2 upload: {up.get('error')}"}
+
+    # Cache-bust URL
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    new_url = f"{base_url}?v={ts}"
+    gallery[photo_idx] = new_url
+    modelo["gallery"] = gallery
+    if photo_idx == 0:
+        modelo["hero_thumbnail"] = new_url
+    _sync_top_level_if_primary(fam, modelo_idx)
+    _save_catalog(catalog)
+    return {"ok": True}
+
+
+def _backup_r2_before_overwrite(url):
+    """Descarga el R2 object actual y lo sube a `<path>.backup.jpg`.
+    Se llama ANTES de cualquier overwrite (watermark auto/forzar).
+    Si el backup ya existe (previous edit), NO se sobreescribe — preserva
+    el original más antiguo."""
+    import requests
+    base_url = url.split("?")[0]
+    if "/families/" not in base_url:
+        return {"ok": False, "error": "URL no es R2"}
+    key = "families/" + base_url.split("/families/", 1)[1]
+    backup_key = key.rsplit(".", 1)[0] + ".backup.jpg"
+
+    # HEAD al backup — si ya existe, no sobreescribimos (preservamos más antiguo)
+    try:
+        import os, boto3
+        account_id = os.getenv("R2_ACCOUNT_ID", "").strip()
+        access_key = os.getenv("R2_ACCESS_KEY_ID", "").strip()
+        secret_key = os.getenv("R2_SECRET_ACCESS_KEY", "").strip()
+        bucket = os.getenv("R2_BUCKET", "elclub-vault-images").strip()
+        client = boto3.client(
+            "s3",
+            endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
+            region_name="auto",
+        )
+        try:
+            client.head_object(Bucket=bucket, Key=backup_key)
+            return {"ok": True, "status": "already_exists", "backup_key": backup_key}
+        except Exception:
+            pass  # 404 → proceed to create backup
+    except Exception as e:
+        return {"ok": False, "error": f"R2 check: {e}"}
+
+    # Download current R2 object
+    try:
+        resp = requests.get(base_url, timeout=20)
+        if resp.status_code != 200:
+            return {"ok": False, "error": f"HTTP {resp.status_code} descargando original"}
+    except Exception as e:
+        return {"ok": False, "error": f"download: {e}"}
+
+    # Upload a .backup.jpg
+    up = audit_enrich.upload_image_to_r2(resp.content, backup_key, content_type="image/jpeg")
+    if not up.get("ok"):
+        return {"ok": False, "error": f"R2 upload backup: {up.get('error')}"}
+
+    return {"ok": True, "status": "created", "backup_key": backup_key}
 
 
 def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto"):
@@ -543,6 +716,14 @@ def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto"):
         )
     if not gem.get("ok"):
         return {"error": gem.get("error", "inpaint fail")}
+
+    # Backup del original ANTES de overwrite. Si ya existe backup previo (por
+    # edit anterior), se preserva el más antiguo — eso permite ir "más atrás"
+    # en caso de múltiples ediciones consecutivas.
+    backup_res = _backup_r2_before_overwrite(cur_url)
+    # No bloqueamos si backup falla — solo log y seguimos
+    if not backup_res.get("ok"):
+        print(f"[WARN] backup pre-overwrite fail: {backup_res.get('error')}")
 
     # Upload back to same key (overwrite)
     up = audit_enrich.upload_image_to_r2(
