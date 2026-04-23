@@ -24,8 +24,13 @@ import io
 import os
 
 _LAMA = None
+_SD = None
 _OCR = None
 _TEMPLATE = None  # watermark template (grayscale) para matching
+
+SD_MODEL_NAME = "runwayml/stable-diffusion-inpainting"
+SD_DEFAULT_PROMPT = "high quality jersey photograph, preserve the jersey design and logos exactly, seamless background, no watermark, no text"
+SD_DEFAULT_NEGATIVE = "watermark, text, logo overlay, minkang, yupoo, letters, typography, distortion, blurry, low quality"
 
 _TEMPLATE_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "assets", "watermark-template.png"
@@ -65,6 +70,116 @@ def _get_lama():
         from iopaint.model_manager import ModelManager
         _LAMA = ModelManager(name="lama", device="cuda")
     return _LAMA
+
+
+def _get_sd():
+    """Lazy-load del modelo SD-1.5 Inpainting (~5GB). Requiere download previo:
+        iopaint download --model runwayml/stable-diffusion-inpainting
+    """
+    global _SD
+    if _SD is None:
+        from iopaint.model_manager import ModelManager
+        _SD = ModelManager(name=SD_MODEL_NAME, device="cuda")
+    return _SD
+
+
+def sd_available():
+    """Chequea si SD-Inpaint model está disponible localmente."""
+    try:
+        from iopaint.download import scan_models
+        models = scan_models()
+        for m in models:
+            if SD_MODEL_NAME in m.name:
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def sd_inpaint_bytes(image_bytes, mime_type="image/jpeg",
+                     prompt=None, negative_prompt=None,
+                     use_ocr_mask=True, force_mask=False,
+                     family_id=None, photo_index=None):
+    """SD-1.5 Inpaint con prompt. Para casos donde LaMa daña logos/texturas.
+
+    Preserva detalles del jersey mejor que LaMa porque genera contenido nuevo
+    con conocimiento visual del modelo de diffusion (5 años de training sobre
+    imágenes web = entiende qué es un "jersey de fútbol con escudo").
+
+    Args:
+        use_ocr_mask: si True, detecta watermark con OCR + template (como
+            watermark_inpaint_bytes). Si False, usa force_mask (hardcoded center).
+        force_mask: si True + use_ocr_mask=False, usa mask hardcoded.
+        prompt: prompt positivo (default: preserve jersey design).
+        negative_prompt: prompt negativo (default: no watermark/text).
+
+    Returns: mismo interface que watermark_inpaint_bytes.
+    """
+    try:
+        img_array = np.frombuffer(image_bytes, np.uint8)
+        img_bgr = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        if img_bgr is None:
+            return {"ok": False, "error": "invalid image bytes"}
+    except Exception as e:
+        return {"ok": False, "error": f"decode: {type(e).__name__}: {e}"}
+
+    h, w = img_bgr.shape[:2]
+
+    # Generate mask
+    mask = None
+    if use_ocr_mask:
+        mask, _ = _detect_watermark_mask(img_bgr)
+        if mask is None:
+            # Template match fallback
+            bbox, conf = _template_match_watermark(img_bgr, threshold=0.5)
+            if bbox is not None:
+                mask = _pixel_precise_mask_from_bbox(img_bgr, bbox, brightness_delta=30)
+                if np.count_nonzero(mask) < 100:
+                    mask = None
+    if mask is None and force_mask:
+        # Hardcoded center mask — mismo que force_inpaint_center_bytes
+        mask = np.zeros((h, w), dtype=np.uint8)
+        mask_w = int(w * 0.66)
+        mask_h = int(h * 0.09)
+        cx, cy = w // 2, int(h * 0.54)
+        x_min = max(0, cx - mask_w // 2)
+        y_min = max(0, cy - mask_h // 2)
+        x_max = min(w, cx + mask_w // 2)
+        y_max = min(h, cy + mask_h // 2)
+        cv2.rectangle(mask, (x_min, y_min), (x_max, y_max), 255, -1)
+
+    if mask is None:
+        return {"ok": True, "image_bytes": image_bytes, "mime_type": mime_type,
+                "skipped": "no_watermark_detected"}
+
+    # Run SD inpaint
+    try:
+        sd = _get_sd()
+        from iopaint.schema import InpaintRequest
+        req = InpaintRequest(
+            prompt=prompt or SD_DEFAULT_PROMPT,
+            negative_prompt=negative_prompt or SD_DEFAULT_NEGATIVE,
+            sd_steps=25,  # default 50 — reduzco para speed (25 suele ser suficiente)
+            sd_guidance_scale=7.5,
+            sd_strength=1.0,
+        )
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        result = sd(img_rgb, mask, req)
+        if result.dtype != np.uint8:
+            result = np.clip(result, 0, 255).astype(np.uint8)
+    except Exception as e:
+        return {"ok": False, "error": f"SD: {type(e).__name__}: {e}"}
+
+    # Encode JPEG
+    try:
+        success, encoded = cv2.imencode(".jpg", result, [cv2.IMWRITE_JPEG_QUALITY, 92])
+        if not success:
+            return {"ok": False, "error": "JPEG encode failed"}
+    except Exception as e:
+        return {"ok": False, "error": f"encode: {type(e).__name__}: {e}"}
+
+    return {"ok": True, "image_bytes": bytes(encoded), "mime_type": "image/jpeg",
+            "detection_method": "sd_inpaint"}
 
 
 def _merge_horizontal_line(boxes, y_tolerance=30):

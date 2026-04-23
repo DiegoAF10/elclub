@@ -229,6 +229,32 @@ def _render_detail(conn, fid, catalog):
     st.markdown("---")
     st.markdown("### 📐 Modelos (editables por-item)")
     modelos = fam.get("modelos") or []
+
+    # Primary modelo selector — el modelo que provee el HERO del family card
+    # (fam.gallery + fam.hero_thumbnail top-level se sincronizan desde su gallery[0]).
+    if modelos:
+        current_primary = fam.get("primary_modelo_idx", 0) or 0
+        primary_options = []
+        for i, m in enumerate(modelos):
+            lbl = f"modelo[{i}] · {m.get('sku', '?')} · {m.get('type', '?')}/{m.get('sleeve', '?')}"
+            # Highlight fan_adult/short como recomendado
+            if m.get("type") == "fan_adult" and m.get("sleeve") == "short":
+                lbl += " ⭐ (recomendado)"
+            primary_options.append(lbl)
+
+        sel_idx = st.selectbox(
+            "👑 Primary modelo (provee el Hero de la card)",
+            range(len(primary_options)),
+            index=current_primary if current_primary < len(primary_options) else 0,
+            format_func=lambda i: primary_options[i],
+            key=f"pub_primary_{fid}",
+            help="Este modelo define fam.hero_thumbnail + fam.gallery (lo que el cliente ve primero en el grid). Recomendado: fan_adult/short si existe.",
+        )
+        if sel_idx != current_primary:
+            _set_primary_modelo(fid, sel_idx)
+            st.success(f"Primary cambiado a modelo[{sel_idx}]. Catalog actualizado.")
+            st.rerun()
+
     if not modelos:
         st.info("Legacy family sin `modelos[]`. Price/sizes viven top-level o en `variants[]`.")
     else:
@@ -295,6 +321,30 @@ def _render_detail(conn, fid, catalog):
                 # Editor de galería (post-publish, mutations directas sobre
                 # catalog.gallery — no pasa por audit_photo_actions).
                 _render_gallery_editor(fid, i, m)
+
+    # Batch watermark processing — procesa TODAS las fotos sin cache-bust
+    # del family con LaMa (OCR + template match fallback). Diego se ahorra
+    # clickear una por una.
+    st.markdown("---")
+    st.markdown("### 🧹 Procesar watermarks en batch")
+    import local_inpaint as _li_batch
+    batch_c1, batch_c2 = st.columns([1, 3])
+    with batch_c1:
+        if st.button("🧹 Procesar toda la family",
+                     key=f"pub_batch_{fid}",
+                     type="primary", use_container_width=True,
+                     disabled=not _li_batch.local_inpaint_available(),
+                     help="Pasa LaMa + OCR/template sobre todas las fotos sin cache-bust (DIRTY). Si OCR+template no detectan, skip."):
+            _batch_clean_family(fid)
+            st.rerun()
+    with batch_c2:
+        # Count dirty
+        n_dirty = 0
+        for _m in fam.get("modelos") or []:
+            for _u in _m.get("gallery") or []:
+                if "?v=" not in _u:
+                    n_dirty += 1
+        st.caption(f"{n_dirty} fotos DIRTY (sin cache-bust) en esta family. Procesa con LaMa auto-detect.")
 
     # Acciones finales
     st.markdown("---")
@@ -470,6 +520,26 @@ def _render_gallery_editor(fid, modelo_idx, modelo):
                         else:
                             st.error(f"⚠️ {res.get('error', 'unknown')}")
                         st.rerun()
+
+                # Nivel 4 — SD Inpaint (preserva logos/texturas mejor que LaMa).
+                # Lento (~10s) pero mejor quality cuando LaMa daña detalles.
+                _sd_ok = _li.sd_available() if lama_ok else False
+                if st.button("🧠 SD Inpaint",
+                             key=f"pub_wm_sd_{fid}_{modelo_idx}_{p_idx}",
+                             help=("Stable Diffusion inpaint con prompt preservador. "
+                                   "Último recurso si LaMa deja artefactos en logos/texturas. "
+                                   "Requiere: iopaint download --model runwayml/stable-diffusion-inpainting"),
+                             disabled=not _sd_ok,
+                             use_container_width=True):
+                    with st.spinner("SD Inpaint (~10s)…"):
+                        res = _regen_watermark(fid, modelo_idx, p_idx, mode="sd")
+                    if res.get("ok"):
+                        st.toast(f"🧠 SD inpaint #{p_idx + 1}")
+                    else:
+                        st.error(f"⚠️ {res.get('error', 'unknown')}")
+                    st.rerun()
+                if not _sd_ok and lama_ok:
+                    st.caption("🧠 SD no descargado. Correr: `iopaint download --model runwayml/stable-diffusion-inpainting`")
 
 
 def _gallery_set_hero(fid, modelo_idx, photo_idx):
@@ -691,11 +761,19 @@ def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto"):
         return {"error": f"download http {resp.status_code}"}
     img_bytes = resp.content
 
-    # Watermark inpaint — modo auto (OCR+LaMa) o force (mask hardcoded).
+    # Watermark inpaint — modo auto (OCR+LaMa), force (mask hardcoded), sd (SD inpaint).
     import local_inpaint as _li
     lama_ok = _li.local_inpaint_available()
 
-    if mode == "force":
+    if mode == "sd":
+        if not lama_ok or not _li.sd_available():
+            return {"error": "SD Inpaint requiere LaMa local + SD model descargado"}
+        gem = _li.sd_inpaint_bytes(
+            img_bytes, mime_type="image/jpeg",
+            use_ocr_mask=True, force_mask=True,  # OCR primero, fallback a hardcoded
+            family_id=fid, photo_index=photo_idx,
+        )
+    elif mode == "force":
         if not lama_ok:
             return {"error": "Forzar requiere LaMa local (no Gemini fallback)"}
         gem = _li.force_inpaint_center_bytes(
@@ -708,7 +786,7 @@ def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto"):
             family_id=fid, photo_index=photo_idx,
         )
         if gem.get("skipped") == "no_watermark_detected":
-            return {"error": "OCR no detectó watermark. Probá con '🎯 Forzar' si ves uno."}
+            return {"error": "OCR+template no detectaron watermark. Probá '🎯 Forzar' o '🧠 SD'."}
     else:
         gem = audit_enrich.gemini_regen_image(
             img_bytes, mime_type="image/jpeg", prompt_variant="watermark",
@@ -762,6 +840,134 @@ def _find_fam(catalog, fid):
         if f.get("family_id") == fid:
             return f
     return None
+
+
+def _batch_clean_family(fid):
+    """Procesa todas las fotos sin cache-bust del family con LaMa auto-detect.
+    Mismo flow que scripts/clean-all-published.py pero inline Streamlit con
+    progress bar. Hace backup pre-overwrite de cada foto."""
+    import requests
+    from datetime import datetime
+    import local_inpaint
+
+    if not local_inpaint.local_inpaint_available():
+        st.error("LaMa local no disponible (torch.cuda?)")
+        return
+
+    catalog = _load_catalog_fresh()
+    fam = _find_fam(catalog, fid)
+    if not fam:
+        st.error(f"Family {fid} no encontrada")
+        return
+
+    # Collect dirty photos
+    dirty = []
+    for mi, m in enumerate(fam.get("modelos") or []):
+        for pi, url in enumerate(m.get("gallery") or []):
+            if "?v=" not in url:
+                dirty.append((mi, pi, url))
+    total = len(dirty)
+    if total == 0:
+        st.info("Sin fotos DIRTY. Todo ya procesado.")
+        return
+
+    progress = st.progress(0.0, text=f"Batch clean: 0/{total}")
+    log = st.empty()
+    log_lines = []
+    ok_count = 0
+    skip_count = 0
+    fail_count = 0
+
+    for i, (mi, pi, url) in enumerate(dirty, 1):
+        base_url = url.split("?")[0]
+        if "/families/" not in base_url:
+            log_lines.append(f"[{i}/{total}] m{mi} idx={pi} SKIP (URL no R2)")
+            log.code("\n".join(log_lines[-10:]))
+            skip_count += 1
+            progress.progress(i / total, text=f"Batch clean: {i}/{total}")
+            continue
+        key = "families/" + base_url.split("/families/", 1)[1]
+
+        # Download
+        try:
+            resp = requests.get(url, timeout=20)
+            if resp.status_code != 200:
+                raise Exception(f"HTTP {resp.status_code}")
+            img_bytes = resp.content
+        except Exception as e:
+            log_lines.append(f"[{i}/{total}] m{mi} idx={pi} DL fail: {e}")
+            fail_count += 1
+            progress.progress(i / total, text=f"Batch clean: {i}/{total}")
+            continue
+
+        # LaMa with OCR + template match fallback
+        result = local_inpaint.watermark_inpaint_bytes(img_bytes, family_id=fid, photo_index=pi)
+        if result.get("skipped") == "no_watermark_detected":
+            log_lines.append(f"[{i}/{total}] m{mi} idx={pi} SKIP (no watermark)")
+            skip_count += 1
+            log.code("\n".join(log_lines[-10:]))
+            progress.progress(i / total, text=f"Batch clean: {i}/{total}")
+            continue
+        if not result.get("ok"):
+            log_lines.append(f"[{i}/{total}] m{mi} idx={pi} FAIL: {result.get('error')}")
+            fail_count += 1
+            log.code("\n".join(log_lines[-10:]))
+            progress.progress(i / total, text=f"Batch clean: {i}/{total}")
+            continue
+
+        # Backup pre-overwrite
+        _backup_r2_before_overwrite(url)
+
+        # Upload cleaned
+        up = audit_enrich.upload_image_to_r2(
+            result["image_bytes"], key,
+            content_type=result.get("mime_type", "image/jpeg"),
+        )
+        if not up.get("ok"):
+            log_lines.append(f"[{i}/{total}] m{mi} idx={pi} R2 fail: {up.get('error')}")
+            fail_count += 1
+            log.code("\n".join(log_lines[-10:]))
+            progress.progress(i / total, text=f"Batch clean: {i}/{total}")
+            continue
+
+        # Update catalog in-memory with cache-bust URL
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        new_url = f"{base_url}?v={ts}"
+        fam["modelos"][mi]["gallery"][pi] = new_url
+        if pi == 0:
+            fam["modelos"][mi]["hero_thumbnail"] = new_url
+        _sync_top_level_if_primary(fam, mi)
+        # Save incremental (en caso de kill)
+        _save_catalog(catalog)
+        catalog = _load_catalog_fresh()  # reload por si hubo concurrent changes
+        fam = _find_fam(catalog, fid)
+
+        method = result.get("detection_method", "?")
+        log_lines.append(f"[{i}/{total}] m{mi} idx={pi} OK ({method})")
+        ok_count += 1
+        log.code("\n".join(log_lines[-10:]))
+        progress.progress(i / total, text=f"Batch clean: {i}/{total}")
+
+    progress.progress(1.0, text=f"Done: {ok_count} OK · {skip_count} SKIP · {fail_count} FAIL")
+    st.success(f"🧹 Batch terminó. OK: {ok_count} · SKIP: {skip_count} · FAIL: {fail_count}. No olvides click 🚀 Commit+Push.")
+
+
+def _set_primary_modelo(fid, new_idx):
+    """Cambia primary_modelo_idx del family y re-syncea fam.gallery+hero."""
+    catalog = _load_catalog_fresh()
+    fam = _find_fam(catalog, fid)
+    if not fam:
+        return
+    modelos = fam.get("modelos") or []
+    if new_idx >= len(modelos):
+        return
+    fam["primary_modelo_idx"] = new_idx
+    primary = modelos[new_idx]
+    gal = primary.get("gallery") or []
+    if gal:
+        fam["gallery"] = list(gal)
+        fam["hero_thumbnail"] = gal[0]
+    _save_catalog(catalog)
 
 
 def _sync_top_level_if_primary(fam, modelo_idx):
