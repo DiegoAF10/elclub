@@ -346,6 +346,9 @@ def _render_detail(conn, fid, catalog):
                     n_dirty += 1
         st.caption(f"{n_dirty} fotos DIRTY (sin cache-bust) en esta family. Procesa con LaMa auto-detect.")
 
+    # QA Review Post-Batch — aparece solo si hay items en session_state
+    _render_batch_review(fid)
+
     # Acciones finales
     st.markdown("---")
     st.markdown("### ⚡ Acciones")
@@ -874,9 +877,16 @@ def _batch_clean_family(fid):
     progress = st.progress(0.0, text=f"Batch clean: 0/{total}")
     log = st.empty()
     log_lines = []
+    review_items = []  # accumulador para QA review post-batch
     ok_count = 0
     skip_count = 0
     fail_count = 0
+
+    def _record(mi, pi, url_now, status, note, method):
+        review_items.append({
+            "mi": mi, "pi": pi, "url": url_now,
+            "status": status, "note": note, "method": method,
+        })
 
     for i, (mi, pi, url) in enumerate(dirty, 1):
         base_url = url.split("?")[0]
@@ -884,6 +894,7 @@ def _batch_clean_family(fid):
             log_lines.append(f"[{i}/{total}] m{mi} idx={pi} SKIP (URL no R2)")
             log.code("\n".join(log_lines[-10:]))
             skip_count += 1
+            _record(mi, pi, url, "skip", "URL no R2", "skipped")
             progress.progress(i / total, text=f"Batch clean: {i}/{total}")
             continue
         key = "families/" + base_url.split("/families/", 1)[1]
@@ -897,6 +908,7 @@ def _batch_clean_family(fid):
         except Exception as e:
             log_lines.append(f"[{i}/{total}] m{mi} idx={pi} DL fail: {e}")
             fail_count += 1
+            _record(mi, pi, url, "fail", f"DL: {e}", "download_error")
             progress.progress(i / total, text=f"Batch clean: {i}/{total}")
             continue
 
@@ -905,12 +917,15 @@ def _batch_clean_family(fid):
         if result.get("skipped") == "no_watermark_detected":
             log_lines.append(f"[{i}/{total}] m{mi} idx={pi} SKIP (no watermark)")
             skip_count += 1
+            _record(mi, pi, url, "skip", "OCR+template no detectaron watermark", "no_watermark")
             log.code("\n".join(log_lines[-10:]))
             progress.progress(i / total, text=f"Batch clean: {i}/{total}")
             continue
         if not result.get("ok"):
-            log_lines.append(f"[{i}/{total}] m{mi} idx={pi} FAIL: {result.get('error')}")
+            err = result.get("error", "inpaint fail")
+            log_lines.append(f"[{i}/{total}] m{mi} idx={pi} FAIL: {err}")
             fail_count += 1
+            _record(mi, pi, url, "fail", err, "inpaint_error")
             log.code("\n".join(log_lines[-10:]))
             progress.progress(i / total, text=f"Batch clean: {i}/{total}")
             continue
@@ -924,8 +939,10 @@ def _batch_clean_family(fid):
             content_type=result.get("mime_type", "image/jpeg"),
         )
         if not up.get("ok"):
-            log_lines.append(f"[{i}/{total}] m{mi} idx={pi} R2 fail: {up.get('error')}")
+            err = up.get("error", "R2 upload fail")
+            log_lines.append(f"[{i}/{total}] m{mi} idx={pi} R2 fail: {err}")
             fail_count += 1
+            _record(mi, pi, url, "fail", err, "r2_upload_error")
             log.code("\n".join(log_lines[-10:]))
             progress.progress(i / total, text=f"Batch clean: {i}/{total}")
             continue
@@ -945,11 +962,178 @@ def _batch_clean_family(fid):
         method = result.get("detection_method", "?")
         log_lines.append(f"[{i}/{total}] m{mi} idx={pi} OK ({method})")
         ok_count += 1
+        _record(mi, pi, new_url, "ok", f"Procesada ({method})", method)
         log.code("\n".join(log_lines[-10:]))
         progress.progress(i / total, text=f"Batch clean: {i}/{total}")
 
     progress.progress(1.0, text=f"Done: {ok_count} OK · {skip_count} SKIP · {fail_count} FAIL")
     st.success(f"🧹 Batch terminó. OK: {ok_count} · SKIP: {skip_count} · FAIL: {fail_count}. No olvides click 🚀 Commit+Push.")
+
+    # Push a session_state → el panel _render_batch_review lo lee en el next rerun
+    st.session_state[f"batch_review_{fid}"] = review_items
+
+
+# ═══════════════════════════════════════════════
+# QA Review Post-Batch (modal tipo panel expandible)
+# ═══════════════════════════════════════════════
+
+def _br_update_item(key, mi, pi, res, method):
+    """Actualiza un item del review tras re-procesar (auto/force/sd/restore)."""
+    items = st.session_state.get(key) or []
+    for it in items:
+        if it["mi"] == mi and it["pi"] == pi:
+            if res.get("ok"):
+                it["status"] = "ok"
+                it["note"] = f"Re-procesada ({method})"
+                it["method"] = method
+                new_url = res.get("new_url")
+                if new_url:
+                    it["url"] = new_url
+            else:
+                it["status"] = "fail"
+                it["note"] = (res.get("error") or "unknown")[:120]
+                it["method"] = f"{method}_error"
+            break
+
+
+def _br_remove_item(key, mi, pi):
+    """Remueve item del review (tras delete). Shift de pi>deleted para preservar
+    apuntadores al catalog post-delete del mismo modelo."""
+    items = st.session_state.get(key) or []
+    remaining = [it for it in items if not (it["mi"] == mi and it["pi"] == pi)]
+    for it in remaining:
+        if it["mi"] == mi and it["pi"] > pi:
+            it["pi"] -= 1
+    st.session_state[key] = remaining
+
+
+def _render_batch_review(fid):
+    """Panel QA post-batch. Aparece tras _batch_clean_family, auto-expand.
+    Muestra thumbnails con action buttons (reutiliza handlers del gallery
+    editor). Default filter: FAIL+SKIP. Toggle 'Ver todas' para OK.
+    Persiste en session_state hasta que user cierre con ✅."""
+    key = f"batch_review_{fid}"
+    items = st.session_state.get(key)
+    if not items:
+        return
+
+    ok_n = sum(1 for it in items if it["status"] == "ok")
+    fail_n = sum(1 for it in items if it["status"] == "fail")
+    skip_n = sum(1 for it in items if it["status"] == "skip")
+    attention_n = fail_n + skip_n
+
+    with st.expander(
+        f"🔍 QA Review Post-Batch · {len(items)} fotos "
+        f"(✅ {ok_n} · ⚠️ {fail_n} FAIL · 🔍 {skip_n} SKIP)",
+        expanded=True,
+    ):
+        cc1, cc2, cc3 = st.columns([2, 2, 1])
+        with cc1:
+            show_all = st.toggle(
+                f"Ver todas ({len(items)}) · default: solo {attention_n} FAIL+SKIP",
+                key=f"br_show_all_{fid}",
+                value=False,
+            )
+        with cc2:
+            st.caption(
+                "⚠️ Auto = LaMa+OCR · 🎯 Force = mask centro · "
+                "🧠 SD = Stable Diffusion · ↺ Restore backup · 🗑️ Delete"
+            )
+        with cc3:
+            if st.button("✅ Cerrar review", key=f"br_close_{fid}",
+                         use_container_width=True,
+                         help="Cierra el panel. La lista se pierde, pero las fotos siguen en catalog."):
+                st.session_state.pop(key, None)
+                st.session_state.pop(f"br_show_all_{fid}", None)
+                st.rerun()
+
+        visible = items if show_all else [it for it in items if it["status"] in ("fail", "skip")]
+
+        if not visible:
+            st.success(
+                "🎉 0 fotos FAIL/SKIP. El batch cubrió todo. "
+                "Si querés revisar las OK por artefactos de LaMa, activá 'Ver todas'."
+            )
+            return
+
+        import local_inpaint as _li
+        lama_ok = _li.local_inpaint_available()
+        sd_ok = _li.sd_available() if lama_ok else False
+
+        cols_per_row = 4
+        for row_start in range(0, len(visible), cols_per_row):
+            cols = st.columns(cols_per_row)
+            for col_idx in range(cols_per_row):
+                idx = row_start + col_idx
+                if idx >= len(visible):
+                    break
+                it = visible[idx]
+                mi, pi, url = it["mi"], it["pi"], it["url"]
+                status = it["status"]
+                badge = {"ok": "✅", "fail": "⚠️", "skip": "🔍"}[status]
+                with cols[col_idx]:
+                    st.caption(f"{badge} m{mi} · #{pi + 1} · {it.get('method', '?')}")
+                    try:
+                        st.image(url, use_container_width=True)
+                    except Exception:
+                        st.caption("(img fail)")
+                    note = (it.get("note") or "")[:80]
+                    if note:
+                        st.caption(note)
+
+                    b1, b2, b3 = st.columns(3)
+                    with b1:
+                        if st.button("⚠️", key=f"br_auto_{fid}_{mi}_{pi}",
+                                     help="Re-run Auto (LaMa + OCR + template)",
+                                     disabled=not lama_ok,
+                                     use_container_width=True):
+                            res = _regen_watermark(fid, mi, pi, mode="auto")
+                            _br_update_item(key, mi, pi, res, "auto")
+                            st.rerun()
+                    with b2:
+                        if st.button("🎯", key=f"br_force_{fid}_{mi}_{pi}",
+                                     help="Force (mask hardcoded centro)",
+                                     disabled=not lama_ok,
+                                     use_container_width=True):
+                            res = _regen_watermark(fid, mi, pi, mode="force")
+                            _br_update_item(key, mi, pi, res, "force")
+                            st.rerun()
+                    with b3:
+                        if st.button("🧠", key=f"br_sd_{fid}_{mi}_{pi}",
+                                     help="SD Inpaint (preserva logos)",
+                                     disabled=not sd_ok,
+                                     use_container_width=True):
+                            res = _regen_watermark(fid, mi, pi, mode="sd")
+                            _br_update_item(key, mi, pi, res, "sd")
+                            st.rerun()
+
+                    b4, b5 = st.columns(2)
+                    with b4:
+                        if st.button("↺ Original", key=f"br_restore_{fid}_{mi}_{pi}",
+                                     help="Restore backup R2 (revierte al original pre-watermark)",
+                                     use_container_width=True):
+                            rr = _restore_r2_from_backup(fid, mi, pi)
+                            if rr.get("ok"):
+                                cat = _load_catalog_fresh()
+                                fam_ = _find_fam(cat, fid)
+                                try:
+                                    new_url = fam_["modelos"][mi]["gallery"][pi]
+                                except Exception:
+                                    new_url = None
+                                _br_update_item(key, mi, pi,
+                                                {"ok": True, "new_url": new_url},
+                                                "restored")
+                            else:
+                                st.error(rr.get("error", "restore fail"))
+                            st.rerun()
+                    with b5:
+                        if st.button("🗑️ Delete", key=f"br_del_{fid}_{mi}_{pi}",
+                                     help="Soft-delete (mueve a deleted_gallery)",
+                                     use_container_width=True):
+                            _gallery_delete(fid, mi, pi)
+                            _br_remove_item(key, mi, pi)
+                            st.toast(f"🗑 Foto m{mi} #{pi + 1} eliminada")
+                            st.rerun()
 
 
 def _set_primary_modelo(fid, new_idx):
