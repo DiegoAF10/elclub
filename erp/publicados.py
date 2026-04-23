@@ -656,10 +656,48 @@ def _render_gallery_editor(fid, modelo_idx, modelo):
                     _render_paint_canvas(fid, modelo_idx, p_idx, url, _paint_key)
 
 
+def _ensure_canvas_compat():
+    """Shim para Streamlit >= 1.31 donde `image_to_url` fue removido de
+    `streamlit.elements.image`. streamlit-drawable-canvas 0.9.3 todavía lo
+    necesita. El shim devuelve data URL base64 (compatible con el frontend
+    del componente, que solo necesita que el browser pueda renderizar el src).
+    """
+    import streamlit.elements.image as st_image
+    if hasattr(st_image, "image_to_url"):
+        return  # versión de Streamlit vieja, nada que hacer
+
+    import base64
+    import io as _io
+    from PIL import Image as _PILImage
+
+    def image_to_url(image, *args, **kwargs):
+        # Normalizar a PIL.Image.Image y devolver data URL base64 PNG
+        if isinstance(image, _PILImage.Image):
+            pil = image
+        elif isinstance(image, (bytes, bytearray)):
+            return "data:image/png;base64," + base64.b64encode(image).decode()
+        else:
+            # Asumimos numpy array (H,W,C) uint8 o float
+            try:
+                import numpy as _np
+                arr = image
+                if hasattr(arr, "dtype") and arr.dtype != _np.uint8:
+                    arr = _np.clip(arr, 0, 255).astype(_np.uint8)
+                pil = _PILImage.fromarray(arr)
+            except Exception:
+                return ""
+        buf = _io.BytesIO()
+        pil.save(buf, format="PNG")
+        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+
+    st_image.image_to_url = image_to_url
+
+
 def _render_paint_canvas(fid, modelo_idx, photo_idx, url, paint_key):
     """Canvas interactivo: Diego pinta brush sobre el watermark y LaMa/SD
     procesa con esa mask. Safety net 100% efectivo para cuando auto/force/
     sd/gemini fallan. ~15s por foto con brush strokes razonables."""
+    _ensure_canvas_compat()  # shim pre-import, crítico para Streamlit >= 1.31
     try:
         from streamlit_drawable_canvas import st_canvas
     except ImportError:
