@@ -1363,6 +1363,21 @@ def render_queue(conn, catalog):
                     st.session_state.current_family = first_pending["sku"]
                     st.rerun()
 
+            # s14z-#9 fix UX: si esta family está marcada para merge y hay 2+
+            # en total, mostrar el botón merge INLINE (no solo en la barra
+            # superior que queda fuera del viewport al scrollear).
+            if fid in fam_merge_sel and len(fam_merge_sel) >= 2:
+                others = [f for f in fam_merge_sel if f != fid]
+                if st.button(
+                    f"🔗 Mergear con {len(others)} families seleccionadas "
+                    f"({', '.join(f'`{o}`' for o in sorted(others)[:3])}"
+                    f"{' ...' if len(others) > 3 else ''})",
+                    key=f"inline_merge_{fid}",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    _merge_families_dialog(sorted(fam_merge_sel))
+
             # Expander con modelos — auto-expand si hay pending/flagged/rework
             auto_expand = (n_pending > 0 or n_flagged > 0 or n_rework > 0)
             with st.expander(
