@@ -421,6 +421,47 @@ def _render_gallery_editor(fid, modelo_idx, modelo):
                         st.toast("↺ Restaurada al final de la galería")
                         st.rerun()
 
+    # Bulk multi-select state per (family, modelo). Set de p_idx seleccionados.
+    # Permite marcar varias fotos y eliminarlas todas en 1 rerun.
+    sel_key = f"sel_{fid}_{modelo_idx}"
+    if sel_key not in st.session_state:
+        st.session_state[sel_key] = set()
+    selected = st.session_state[sel_key]
+
+    bulk_c1, bulk_c2, bulk_c3 = st.columns([3, 1, 1])
+    with bulk_c1:
+        if selected:
+            if st.button(f"🗑️ Eliminar {len(selected)} seleccionada(s)",
+                         key=f"bulk_del_{fid}_{modelo_idx}",
+                         type="primary", use_container_width=True,
+                         help="Soft-delete de todas las marcadas en un solo paso"):
+                # Sort descending para no romper índices (gallery.pop shiftea)
+                deleted_n = 0
+                for pi in sorted(selected, reverse=True):
+                    if 0 <= pi < len(gallery):
+                        _gallery_delete(fid, modelo_idx, pi)
+                        deleted_n += 1
+                st.session_state[sel_key] = set()
+                st.toast(f"🗑 {deleted_n} fotos eliminadas de m{modelo_idx}")
+                st.rerun()
+        else:
+            st.caption(
+                f"☑ Multi-select: marcá el checkbox de cada foto que querés eliminar "
+                f"y usá 🗑️ para bulk delete (evita 1 rerun por foto)."
+            )
+    with bulk_c2:
+        if st.button("☑ Todas", key=f"sel_all_{fid}_{modelo_idx}",
+                     use_container_width=True,
+                     disabled=(len(selected) == len(gallery))):
+            st.session_state[sel_key] = set(range(len(gallery)))
+            st.rerun()
+    with bulk_c3:
+        if st.button("☐ Ninguna", key=f"sel_none_{fid}_{modelo_idx}",
+                     use_container_width=True,
+                     disabled=not selected):
+            st.session_state[sel_key] = set()
+            st.rerun()
+
     cols_per_row = 4
     for row_start in range(0, len(gallery), cols_per_row):
         cols = st.columns(cols_per_row)
@@ -430,8 +471,25 @@ def _render_gallery_editor(fid, modelo_idx, modelo):
                 break
             url = gallery[p_idx]
             with cols[col_idx]:
-                crown = "👑 HERO" if p_idx == 0 else f"#{p_idx + 1}"
-                st.caption(crown)
+                # Header: checkbox multi-select + crown/numeración
+                hdr_c1, hdr_c2 = st.columns([1, 3])
+                with hdr_c1:
+                    was_sel = p_idx in selected
+                    is_sel = st.checkbox(
+                        "sel", value=was_sel,
+                        key=f"sel_cb_{fid}_{modelo_idx}_{p_idx}",
+                        label_visibility="collapsed",
+                        help="Marcar para bulk delete",
+                    )
+                    if is_sel != was_sel:
+                        if is_sel:
+                            selected.add(p_idx)
+                        else:
+                            selected.discard(p_idx)
+                        st.session_state[sel_key] = selected
+                with hdr_c2:
+                    crown = "👑 HERO" if p_idx == 0 else f"#{p_idx + 1}"
+                    st.caption(crown)
                 try:
                     st.image(url, use_container_width=True)
                 except Exception:
