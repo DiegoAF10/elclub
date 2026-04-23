@@ -189,6 +189,21 @@ def _render_detail(conn, fid, catalog):
 
     # FORM: Top-level editable fields
     st.markdown("### 📝 Datos top-level")
+
+    # Variantes estándar de equipación. Code normalizado → label en español.
+    # Si el fam.variant actual no matchea ninguno, se agrega como opción custom
+    # al final para no pisar el valor existente.
+    VARIANT_OPTIONS = [
+        ("home", "Local / Home"),
+        ("away", "Visitante / Away"),
+        ("third", "Tercera / Third"),
+        ("fourth", "Cuarta / Fourth"),
+        ("goalkeeper", "Arquero / Goalkeeper"),
+        ("prematch", "Prematch / Training"),
+        ("special", "Special / Edición limitada"),
+        ("retro", "Retro / Vintage"),
+    ]
+
     with st.form(key=f"pub_top_form_{fid}"):
         new_title = st.text_input("Title", value=fam.get("title") or "",
                                    help="Mostrado en grid/PDP")
@@ -196,6 +211,42 @@ def _render_detail(conn, fid, catalog):
                                         height=80, help="2-3 oraciones breves")
         new_historia = st.text_area("Historia", value=fam.get("historia") or "",
                                      height=150, help="Narrativa 50-80 palabras · tono Midnight Stadium")
+
+        # Specs de la family (team, season, variant) — determinan el card del vault
+        st.markdown("**🏷️ Specs de la equipación**")
+        specs_a, specs_b, specs_c = st.columns([2, 1, 2])
+        with specs_a:
+            new_team = st.text_input("Team", value=fam.get("team") or "",
+                                      help="Ej: Argentina, Barcelona, Boca Juniors")
+        with specs_b:
+            new_season = st.text_input("Season", value=fam.get("season") or "",
+                                        help="Ej: 2026 o '2023-24'")
+        with specs_c:
+            current_variant = (fam.get("variant") or "").lower()
+            variant_codes = [c for c, _ in VARIANT_OPTIONS]
+            options_display = [f"{c} — {lbl}" for c, lbl in VARIANT_OPTIONS]
+            if current_variant and current_variant not in variant_codes:
+                # Preservar valor custom existente como última opción
+                options_display.append(f"{current_variant} — (custom actual)")
+                variant_codes.append(current_variant)
+            try:
+                default_idx = variant_codes.index(current_variant) if current_variant else 0
+            except ValueError:
+                default_idx = 0
+            variant_choice = st.selectbox(
+                "Variant (tipo de equipación)",
+                options=options_display,
+                index=default_idx,
+                help="Local/Away/Third/etc. Cambia el filtro y el card en el vault.",
+            )
+            new_variant = variant_choice.split(" — ")[0]
+
+        new_variant_label = st.text_input(
+            "Variant label (display opcional)",
+            value=fam.get("variant_label") or "",
+            help=("Cómo se muestra en el vault. Ej: 'Tercera', 'Third Kit'. "
+                  "Si lo dejás vacío, el frontend deriva del variant code."),
+        )
 
         col_a, col_b, col_c = st.columns(3)
         with col_a:
@@ -216,6 +267,10 @@ def _render_detail(conn, fid, catalog):
                 "title": new_title.strip() or None,
                 "description": new_description.strip() or None,
                 "historia": new_historia.strip() or None,
+                "team": new_team.strip() or None,
+                "season": new_season.strip() or None,
+                "variant": new_variant or None,
+                "variant_label": new_variant_label.strip() or None,
                 "featured": bool(new_featured),
                 "meta_country": new_meta_country.strip() or None,
                 "meta_league": new_meta_league.strip() or None,
@@ -224,6 +279,15 @@ def _render_detail(conn, fid, catalog):
             changed = _apply_family_updates(fid, updates)
             st.success(f"✅ Guardado. Campos cambiados: {', '.join(changed) if changed else 'ninguno'}")
             st.rerun()
+
+    # Aviso sobre family_id (inmutable desde acá)
+    if fam.get("family_id", "").endswith(("-home", "-away", "-third", "-fourth")):
+        st.caption(
+            f"ℹ️ `family_id = {fam.get('family_id')}` es inmutable desde este form "
+            f"(renombrarlo impactaría URLs del vault, R2 keys y tracking). "
+            f"Los cambios de variant acá solo actualizan el metadata que se muestra "
+            f"en el card del vault — el family_id queda como estaba."
+        )
 
     # Per-modelo editor (price, sizes, sleeve, type corrections)
     st.markdown("---")
