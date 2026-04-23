@@ -636,6 +636,151 @@ def _render_gallery_editor(fid, modelo_idx, modelo):
                 if not _gem_ok:
                     st.caption("🌟 GEMINI_API_KEY no seteada en `.env`")
 
+                # Nivel 6 — Pintar mask manual (safety net 100% efectivo).
+                # Diego pinta con brush sobre el watermark y LaMa/SD procesa con
+                # esa mask. Para casos donde auto/force/sd/gemini fallaron.
+                _paint_key = f"paint_{fid}_{modelo_idx}_{p_idx}"
+                painting = st.session_state.get(_paint_key, False)
+                _paint_label = "❌ Cerrar canvas" if painting else "🖌️ Pintar mask"
+                if st.button(_paint_label,
+                             key=f"pub_wm_paint_{fid}_{modelo_idx}_{p_idx}",
+                             help=("Canvas interactivo: pintá con brush sobre el "
+                                   "watermark y LaMa/SD procesa SOLO esa área. "
+                                   "100% confiable pero ~15s/foto."),
+                             disabled=not lama_ok,
+                             use_container_width=True):
+                    st.session_state[_paint_key] = not painting
+                    st.rerun()
+
+                if painting:
+                    _render_paint_canvas(fid, modelo_idx, p_idx, url, _paint_key)
+
+
+def _render_paint_canvas(fid, modelo_idx, photo_idx, url, paint_key):
+    """Canvas interactivo: Diego pinta brush sobre el watermark y LaMa/SD
+    procesa con esa mask. Safety net 100% efectivo para cuando auto/force/
+    sd/gemini fallan. ~15s por foto con brush strokes razonables."""
+    try:
+        from streamlit_drawable_canvas import st_canvas
+    except ImportError:
+        st.error(
+            "`streamlit-drawable-canvas` no instalado. Correr: "
+            "`pip install streamlit-drawable-canvas`"
+        )
+        return
+
+    import requests
+    from PIL import Image
+    import io
+    import numpy as np
+
+    # Download foto original (dims reales)
+    try:
+        resp = requests.get(url, timeout=20)
+        if resp.status_code != 200:
+            st.error(f"DL fail: HTTP {resp.status_code}")
+            return
+        orig_img = Image.open(io.BytesIO(resp.content)).convert("RGB")
+    except Exception as e:
+        st.error(f"DL fail: {e}")
+        return
+
+    orig_w, orig_h = orig_img.size
+    # Scale para canvas display (max 600px wide). La mask se re-scale-a al tamaño
+    # original en custom_mask_inpaint_bytes vía cv2.resize.
+    max_display_w = 600
+    if orig_w > max_display_w:
+        scale = max_display_w / orig_w
+        disp_w = max_display_w
+        disp_h = int(orig_h * scale)
+        disp_img = orig_img.resize((disp_w, disp_h), Image.LANCZOS)
+    else:
+        disp_w, disp_h = orig_w, orig_h
+        disp_img = orig_img
+
+    with st.container(border=True):
+        st.markdown(f"**🖌️ Pintar mask · m{modelo_idx} foto #{photo_idx + 1}**")
+        ctrl_a, ctrl_b, ctrl_c = st.columns([1, 1, 2])
+        with ctrl_a:
+            brush_size = st.slider(
+                "Brush px", min_value=5, max_value=80, value=30,
+                key=f"{paint_key}_brush",
+                help="Grosor del brush. Ajustá según tamaño del watermark.",
+            )
+        with ctrl_b:
+            backend = st.radio(
+                "Backend",
+                options=["LaMa", "SD"],
+                horizontal=True,
+                key=f"{paint_key}_backend",
+                help="LaMa ~1-2s (rápido). SD ~10s (mejor quality en logos/texturas).",
+            )
+        with ctrl_c:
+            st.caption(
+                f"Pintá sobre TODAS las instancias del watermark con brush blanco. "
+                f"Imagen orig: {orig_w}×{orig_h}px · display: {disp_w}×{disp_h}px "
+                f"(la mask se re-escala automáticamente al original)."
+            )
+
+        canvas_result = st_canvas(
+            fill_color="rgba(255, 255, 255, 0.0)",
+            stroke_width=brush_size,
+            stroke_color="#ffffff",
+            background_image=disp_img,
+            update_streamlit=False,  # acumula strokes local; no rerun por stroke
+            height=disp_h,
+            width=disp_w,
+            drawing_mode="freedraw",
+            key=f"{paint_key}_canvas",
+        )
+
+        btn_a, btn_b = st.columns(2)
+        with btn_a:
+            apply_clicked = st.button(
+                "✅ Aplicar inpaint", key=f"{paint_key}_apply",
+                type="primary", use_container_width=True,
+            )
+        with btn_b:
+            cancel_clicked = st.button(
+                "❌ Cancelar", key=f"{paint_key}_cancel",
+                use_container_width=True,
+            )
+
+        if cancel_clicked:
+            st.session_state[paint_key] = False
+            st.rerun()
+
+        if apply_clicked:
+            if canvas_result.image_data is None:
+                st.error("Canvas vacío. Pintá sobre el watermark primero.")
+                return
+            alpha = canvas_result.image_data[:, :, 3]
+            if int(np.count_nonzero(alpha)) == 0:
+                st.error("Nada pintado. Usá el brush blanco sobre el watermark.")
+                return
+
+            # PNG mask bytes (binarizada)
+            mask_bin = (alpha > 0).astype(np.uint8) * 255
+            pil_mask = Image.fromarray(mask_bin, mode="L")
+            buf = io.BytesIO()
+            pil_mask.save(buf, format="PNG")
+            mask_bytes = buf.getvalue()
+
+            use_sd = (backend == "SD")
+            with st.spinner(f"🖌️ {'SD' if use_sd else 'LaMa'} inpainting…"):
+                res = _regen_watermark(
+                    fid, modelo_idx, photo_idx,
+                    mode="manual",
+                    mask_bytes=mask_bytes,
+                    use_sd_for_manual=use_sd,
+                )
+            if res.get("ok"):
+                st.toast(f"🖌️ Manual inpaint #{photo_idx + 1} listo")
+                st.session_state[paint_key] = False
+                st.rerun()
+            else:
+                st.error(f"⚠️ {res.get('error', 'unknown')}")
+
 
 def _gallery_set_hero(fid, modelo_idx, photo_idx):
     """Mueve photo_idx a la posición 0 (hero). Sync top-level si es primary modelo."""
@@ -819,7 +964,8 @@ def _backup_r2_before_overwrite(url):
     return {"ok": True, "status": "created", "backup_key": backup_key}
 
 
-def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto"):
+def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto",
+                     mask_bytes=None, use_sd_for_manual=False):
     """Descarga foto de R2, pasa por inpaint (LaMa local o Gemini), sube
     resultado al mismo key + cache-bust URL en catalog.
 
@@ -828,8 +974,10 @@ def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto"):
       "force"  — LaMa + mask hardcoded centro (dimensiones estándar Yupoo).
       "sd"     — Stable Diffusion inpaint (preserva logos/texturas mejor que LaMa).
       "gemini" — Gemini 2.5 Flash Image con prompt preservador quirúrgico.
-                 Úsalo cuando LaMa/SD dañan texturas complejas (check pattern adidas,
-                 escudos metálicos, embroidery). ~$0.04/foto pero quality mucho mayor.
+      "manual" — Custom mask pintada por Diego en canvas Streamlit.
+                 Requiere `mask_bytes` (PNG). Usa LaMa o SD según use_sd_for_manual.
+                 Safety net 100% efectivo para casos extremos (auto/force/sd/gemini
+                 fallaron). Latency ~1-2s (LaMa) o ~10s (SD).
     """
     import requests
     from datetime import datetime
@@ -863,7 +1011,17 @@ def _regen_watermark(fid, modelo_idx, photo_idx, mode="auto"):
     import local_inpaint as _li
     lama_ok = _li.local_inpaint_available()
 
-    if mode == "gemini":
+    if mode == "manual":
+        if not mask_bytes:
+            return {"error": "mode=manual requiere mask_bytes (pintá la mask primero)"}
+        if not lama_ok:
+            return {"error": "LaMa local no disponible (torch.cuda?)"}
+        gem = _li.custom_mask_inpaint_bytes(
+            img_bytes, mask_bytes, mime_type="image/jpeg",
+            use_sd=use_sd_for_manual,
+            family_id=fid, photo_index=photo_idx,
+        )
+    elif mode == "gemini":
         if not audit_enrich.gemini_available():
             return {"error": "GEMINI_API_KEY no seteada — revisar .env"}
         gem = audit_enrich.gemini_regen_image(

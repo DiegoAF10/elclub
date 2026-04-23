@@ -390,6 +390,92 @@ def force_inpaint_center_bytes(image_bytes, mime_type="image/jpeg",
     }
 
 
+def custom_mask_inpaint_bytes(image_bytes, mask_bytes, mime_type="image/jpeg",
+                                use_sd=False, prompt=None, negative_prompt=None,
+                                family_id=None, photo_index=None):
+    """Inpainting con mask custom provista por el caller (ej. pintada manualmente
+    por el user en el canvas del ERP). LaMa por default, SD si use_sd=True.
+
+    Args:
+        image_bytes: JPEG/PNG bytes de la imagen original.
+        mask_bytes: PNG bytes de la mask. Pixels blancos (>127) = área a reemplazar.
+                    Se normaliza a uint8 binaria. Debe tener mismas dims que la imagen
+                    (se resize si no — raise si aspect ratio muy distinto).
+        use_sd: True → Stable Diffusion inpaint (mejor para logos/badges con
+                conocimiento semántico). False → LaMa (default, más rápido).
+    """
+    try:
+        img_array = np.frombuffer(image_bytes, np.uint8)
+        img_bgr = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        if img_bgr is None:
+            return {"ok": False, "error": "invalid image bytes"}
+    except Exception as e:
+        return {"ok": False, "error": f"decode image: {type(e).__name__}: {e}"}
+
+    try:
+        mask_array = np.frombuffer(mask_bytes, np.uint8)
+        mask_img = cv2.imdecode(mask_array, cv2.IMREAD_GRAYSCALE)
+        if mask_img is None:
+            return {"ok": False, "error": "invalid mask bytes"}
+    except Exception as e:
+        return {"ok": False, "error": f"decode mask: {type(e).__name__}: {e}"}
+
+    h, w = img_bgr.shape[:2]
+    mh, mw = mask_img.shape[:2]
+    if (mh, mw) != (h, w):
+        # Resize mask a las dims de la imagen. Canvas de Streamlit viene en
+        # dims del display, no del original — común que haga falta resize.
+        mask_img = cv2.resize(mask_img, (w, h), interpolation=cv2.INTER_NEAREST)
+
+    # Binarize mask (>127 = pintado)
+    _, mask_bin = cv2.threshold(mask_img, 127, 255, cv2.THRESH_BINARY)
+    if np.count_nonzero(mask_bin) == 0:
+        return {"ok": False, "error": "mask vacía (nada pintado)"}
+
+    # Slight dilate para dar margen al inpainter
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    mask_bin = cv2.dilate(mask_bin, kernel, iterations=1)
+
+    try:
+        if use_sd:
+            if not sd_available():
+                return {"ok": False, "error": "SD model no disponible"}
+            model = _get_sd()
+            from iopaint.schema import InpaintRequest
+            req = InpaintRequest(
+                prompt=prompt or SD_DEFAULT_PROMPT,
+                negative_prompt=negative_prompt or SD_DEFAULT_NEGATIVE,
+                sd_steps=25, sd_guidance_scale=7.5, sd_strength=1.0,
+            )
+            img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+            result = model(img_rgb, mask_bin, req)
+        else:
+            model = _get_lama()
+            from iopaint.schema import InpaintRequest
+            img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+            result = model(img_rgb, mask_bin, InpaintRequest())
+        if result.dtype != np.uint8:
+            result = np.clip(result, 0, 255).astype(np.uint8)
+    except Exception as e:
+        backend = "SD" if use_sd else "LaMa"
+        return {"ok": False, "error": f"{backend}: {type(e).__name__}: {e}"}
+
+    try:
+        success, encoded = cv2.imencode(".jpg", result, [cv2.IMWRITE_JPEG_QUALITY, 92])
+        if not success:
+            return {"ok": False, "error": "JPEG encode failed"}
+    except Exception as e:
+        return {"ok": False, "error": f"encode: {type(e).__name__}: {e}"}
+
+    return {
+        "ok": True,
+        "image_bytes": bytes(encoded),
+        "mime_type": "image/jpeg",
+        "detection_method": "manual_mask_sd" if use_sd else "manual_mask_lama",
+        "mask_pixels": int(np.count_nonzero(mask_bin)),
+    }
+
+
 def watermark_inpaint_bytes(image_bytes, mime_type="image/jpeg",
                               prompt_variant="watermark",
                               family_id=None, photo_index=None):
