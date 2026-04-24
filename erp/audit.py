@@ -3190,7 +3190,7 @@ def render_mundial_dashboard(conn, catalog):
     try:
         from config.mundial_2026 import (
             MUNDIAL_2026_TEAMS, MUNDIAL_MIN_VARIANTS,
-            get_mundial_canonical, team_by_group,
+            get_mundial_canonical, team_by_group, is_mundial_season,
         )
     except ImportError as e:
         st.error(f"Config Mundial no cargó: {e}")
@@ -3204,13 +3204,17 @@ def render_mundial_dashboard(conn, catalog):
     )
 
     # Index SKUs del catalog por (team_canonical, variant, modelo_type, sleeve)
-    # Para que una celda del dashboard pueda hacer lookup O(1).
+    # Filtrado crítico: solo SKUs de season Mundial 2026 (cubre 2026, 25-26, 26-27).
+    # Sin este filter, retros vintage (01/02, 14/15) falsean el dashboard.
     sku_idx = audit_db.build_sku_index(catalog)
     index_by_key = {}  # (team_canonical, variant, type, sleeve) → (sku, status, published)
     for sku, (fam, modelo) in sku_idx.items():
         team = fam.get("team")
         canonical_team = get_mundial_canonical(team)
         if not canonical_team:
+            continue
+        # Gate de season: descarta retros y ciclos ajenos al Mundial 2026
+        if not is_mundial_season(fam.get("season")):
             continue
         variant = (fam.get("variant") or "").lower().strip()
         if modelo:

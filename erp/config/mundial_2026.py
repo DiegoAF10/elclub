@@ -127,6 +127,36 @@ def is_mundial_team(team_name):
     return team_name.lower().strip() in _ALIAS_TO_CANONICAL
 
 
+import re as _re
+
+# Patterns de seasons aceptables para el Mundial 2026:
+# - "2026"
+# - "25-26" o "25/26" (europea previa al torneo)
+# - "26-27" o "26/27" (europea del torneo)
+# - "2025-26" o "2025/26"
+# - "2026-27" o "2026/27"
+_MUNDIAL_SEASON_PATTERNS = [
+    _re.compile(r"\b2026\b"),
+    _re.compile(r"\b25[-/]26\b"),
+    _re.compile(r"\b26[-/]27\b"),
+    _re.compile(r"\b2025[-/]26\b"),
+    _re.compile(r"\b2026[-/]27\b"),
+]
+
+
+def is_mundial_season(season):
+    """True si la season matchea el ciclo del Mundial 2026 (cubre fan kits europeos
+    de temporada 25-26 o 26-27 y las camisas oficiales 2026 del torneo).
+
+    Evita matches con retros (01/02, 2014, etc) que pueden tener el team correcto
+    pero NO son del Mundial.
+    """
+    if not season:
+        return False
+    s = str(season).lower().strip()
+    return any(p.search(s) for p in _MUNDIAL_SEASON_PATTERNS)
+
+
 def get_mundial_canonical(team_name):
     """Retorna el nombre canonical en inglés si el team matchea, sino None.
     Útil para agrupar SKUs del mismo team bajo un nombre consistente."""
@@ -148,8 +178,14 @@ def matches_min_variant(item):
 
 
 def item_is_mundial_mvp(item):
-    """True si item es parte del Mundial MVP (team + variante mínima)."""
-    return is_mundial_team(item.get("team")) and matches_min_variant(item)
+    """True si item es parte del Mundial MVP:
+       team Mundial + season 2026/25-26/26-27 + variante mínima (home/away fan short).
+    """
+    return (
+        is_mundial_team(item.get("team"))
+        and is_mundial_season(item.get("season"))
+        and matches_min_variant(item)
+    )
 
 
 def team_by_group():
