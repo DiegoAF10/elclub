@@ -162,7 +162,7 @@ export async function appendStatusHistory(env, ref, from, to, axis, note) {
  *
  * @param {object} options
  * @param {number} [options.limit=50]
- * @param {string[]|null} [options.paymentStatuses]      CSV filter (OR-join). If null, excludes 'pending' by default.
+ * @param {string[]|null} [options.paymentStatuses]      CSV filter (OR-join). If null, excludes 'pending' and 'cancelled' by default.
  * @param {string[]|null} [options.fulfillmentStatuses]  CSV filter (OR-join).
  * @param {boolean|null}  [options.hasCoupon]            true|false filter; null = no filter.
  * @returns {Promise<object[]>}  light index entries (not full records)
