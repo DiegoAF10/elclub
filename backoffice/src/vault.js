@@ -257,9 +257,13 @@ function jsonResp(obj, status = 200) {
 // ── Handler: POST /api/vault/reservation ─────────────────────
 
 /**
- * Public endpoint. Creates a vault lead + Recurrente checkout session.
- * Task 5 will add F&F coupon gating. For now: always creates a pending lead
- * and returns the Recurrente checkout URL.
+ * Public endpoint. Creates a vault lead and either:
+ *   - If a valid `vault_ff` coupon is present: skips Recurrente (payment_status='waived_ff')
+ *     and returns { skip_payment: true, total_cod }.
+ *   - Otherwise: creates a Recurrente Q100 checkout and returns { checkout_url }.
+ *
+ * Percent/fixed coupons are tracked on the lead for analytics but flow through the
+ * standard Q100 Recurrente path — the discount applies at COD time (future task).
  */
 export async function handleVaultReservation(request, env) {
   let body;
@@ -270,6 +274,20 @@ export async function handleVaultReservation(request, env) {
   if (errors.length > 0) {
     return jsonResp({ ok: false, error: errors.join('; ') }, 400);
   }
+
+  // Coupon validation (optional)
+  let coupon = null;
+  if (nonEmpty(body.coupon_code)) {
+    coupon = await validateCouponForReservation(env, body.coupon_code);
+    if (coupon && !coupon.valid) {
+      return jsonResp({ ok: false, error: `Cupon invalido: ${coupon.error}` }, 400);
+    }
+  }
+
+  const isFFWaiver = coupon?.valid && coupon.type === 'vault_ff';
+  // For vault_ff: coupon.value is the COD amount (Q435 or Q400 etc)
+  // For percent/fixed: the discount applies at COD time, out of scope for the reservation. Still track coupon_code for analytics.
+  const totalCod = isFFWaiver ? coupon.value : (body.total - 100);
 
   const ref = generateRef();
   const nowIso = new Date().toISOString();
@@ -292,28 +310,46 @@ export async function handleVaultReservation(request, env) {
     },
     productos: body.productos,
     total: body.total,
-    total_cod: body.total - 100,   // Default Q335. Task 5 overrides for F&F coupons.
+    total_cod: totalCod,
     notas: nonEmpty(body.notas) ? body.notas.trim() : null,
     reorder_of: nonEmpty(body.reorder_of) ? body.reorder_of.trim() : null,
-    coupon_code: null,              // Task 5 sets this when F&F applies
-    payment_status: 'pending',
+    coupon_code: coupon?.valid ? coupon.code : null,
+    payment_status: isFFWaiver ? 'waived_ff' : 'pending',
     fulfillment_status: 'awaiting_import',
     source: 'vault.elclub.club',
   };
 
-  // Save lead first (even if Recurrente fails, we keep the record for debugging)
   await saveLead(env, lead);
-  await appendStatusHistory(env, ref, 'init', 'pending', 'payment',
-    'Lead creado, esperando pago Q100 via Recurrente');
 
-  // Create Recurrente checkout
+  if (isFFWaiver) {
+    await incrementCouponUsage(env, coupon.code);
+    await appendStatusHistory(env, ref, 'init', 'waived_ff', 'payment',
+      `Cupon F&F ${coupon.code} aplicado — sin cobro Q100, COD Q${totalCod}`);
+    return jsonResp({
+      ok: true,
+      lead_id: ref,
+      skip_payment: true,
+      total_cod: totalCod,
+    });
+  }
+
+  // Standard path: Recurrente checkout
+  await appendStatusHistory(env, ref, 'init', 'pending', 'payment',
+    coupon?.valid
+      ? `Lead creado con cupon ${coupon.code} (type=${coupon.type}); esperando pago Q100`
+      : 'Lead creado, esperando pago Q100 via Recurrente');
+
   let checkout;
   try {
     checkout = await createReservationCheckout(env, ref, lead.cliente.nombre);
   } catch (err) {
     console.error('Recurrente checkout creation failed:', err);
-    await updateLeadStatus(env, ref, 'payment', 'cancelled',
-      `Recurrente API fallo: ${String(err.message || err).slice(0,200)}`);
+    try {
+      await updateLeadStatus(env, ref, 'payment', 'cancelled',
+        `Recurrente API fallo: ${String(err.message || err).slice(0,200)}`);
+    } catch (updateErr) {
+      console.error('Failed to cancel lead after Recurrente error:', updateErr);
+    }
     return jsonResp({
       ok: false,
       error: 'No se pudo crear la sesion de pago. Probá otra vez o contactá por WhatsApp.',
@@ -325,4 +361,65 @@ export async function handleVaultReservation(request, env) {
     lead_id: ref,
     checkout_url: checkout.checkout_url,
   });
+}
+
+// ── Coupon validation for reservation ────────────────────────
+
+/**
+ * Fetch + validate a coupon. Returns a normalized object — never throws.
+ *
+ * @returns {Promise<{ valid: boolean, code?: string, type?: string, value?: number, notes?: string, error?: string } | null>}
+ *          null if no couponCode provided
+ */
+export async function validateCouponForReservation(env, couponCode) {
+  if (!couponCode) return null;
+
+  const code = couponCode.trim().toUpperCase();
+  const raw = await env.DATA.get(`coupon:${code}`);
+  if (!raw) return { valid: false, error: 'Cupon no existe' };
+
+  let coupon;
+  try { coupon = JSON.parse(raw); }
+  catch { return { valid: false, error: 'Cupon mal formado' }; }
+
+  if (!coupon.active) return { valid: false, error: 'Cupon inactivo' };
+  if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+    return { valid: false, error: 'Cupon expirado' };
+  }
+  if (typeof coupon.max_uses === 'number' && coupon.used >= coupon.max_uses) {
+    return { valid: false, error: 'Cupon agotado' };
+  }
+
+  return {
+    valid: true,
+    code: coupon.code,
+    type: coupon.type,
+    value: coupon.value,
+    notes: coupon.notes || null,
+  };
+}
+
+/**
+ * Atomically increment a coupon's `used` count. Safe to call for cupons that
+ * don't exist (no-op). Preserves `expires_at` TTL if set.
+ */
+export async function incrementCouponUsage(env, couponCode) {
+  if (!couponCode) return;
+  const code = couponCode.trim().toUpperCase();
+  const raw = await env.DATA.get(`coupon:${code}`);
+  if (!raw) return;
+
+  let coupon;
+  try { coupon = JSON.parse(raw); }
+  catch { return; }
+
+  coupon.used = (coupon.used || 0) + 1;
+
+  const putOptions = {};
+  if (coupon.expires_at) {
+    const ttl = Math.floor((new Date(coupon.expires_at).getTime() - Date.now()) / 1000);
+    if (ttl > 0) putOptions.expirationTtl = ttl;
+  }
+
+  await env.DATA.put(`coupon:${code}`, JSON.stringify(coupon), putOptions);
 }

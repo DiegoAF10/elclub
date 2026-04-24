@@ -577,6 +577,8 @@ async function handleCouponValidate(url, env) {
 
 // ── Coupon: Admin Create ─────────────────────────────────────
 
+function nonEmpty(v) { return typeof v === 'string' && v.trim().length > 0; }
+
 async function handleCouponAdmin(request, env) {
   // Auth check
   const adminKey = request.headers.get('X-Admin-Key');
@@ -597,8 +599,8 @@ async function handleCouponAdmin(request, env) {
   }
 
   const type = (body.type || 'percent').toLowerCase();
-  if (type !== 'percent' && type !== 'fixed') {
-    return { _status: 400, error: 'Tipo debe ser "percent" o "fixed"' };
+  if (!['percent', 'fixed', 'vault_ff'].includes(type)) {
+    return { _status: 400, error: 'Tipo debe ser "percent", "fixed" o "vault_ff"' };
   }
 
   const value = Number(body.value);
@@ -617,6 +619,7 @@ async function handleCouponAdmin(request, env) {
     max_uses: maxUses,
     used: 0,
     expires_at: expiresAt,
+    notes: nonEmpty(body.notes) ? body.notes.trim() : null,
     created_at: new Date().toISOString(),
   };
 
