@@ -19,7 +19,14 @@
  *   ADMIN_KEY               — Admin endpoint authentication
  */
 
-import { validateTransition } from './vault.js';
+import {
+  validateTransition,
+  saveLead,
+  findLeadByRef,
+  updateLeadStatus,
+  listLeads,
+  getLeadWithHistory,
+} from './vault.js';
 
 const ALLOWED_ORIGINS = [
   'https://elclub.club',
@@ -1103,6 +1110,50 @@ export default {
           );
         }
         const result = validateTransition(current, target, axis);
+        return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
+      }
+
+      // ── DEBUG: storage round-trip (temporary, remove before deploy) ──
+      if (url.pathname === '/__debug/save-lead' && request.method === 'POST') {
+        const data = await request.json();
+        const result = await saveLead(env, data);
+        return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
+      }
+
+      if (url.pathname === '/__debug/find-lead' && request.method === 'GET') {
+        const ref = url.searchParams.get('ref');
+        if (!ref) {
+          return new Response(JSON.stringify({ error: 'Param requerido: ref' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
+        const result = await findLeadByRef(env, ref);
+        return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
+      }
+
+      if (url.pathname === '/__debug/update-status' && request.method === 'POST') {
+        const { ref, axis, new_status, note } = await request.json();
+        if (!ref || !axis || !new_status) {
+          return new Response(JSON.stringify({ error: 'Body requiere: ref, axis, new_status' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
+        const result = await updateLeadStatus(env, ref, axis, new_status, note);
+        return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
+      }
+
+      if (url.pathname === '/__debug/list-leads' && request.method === 'GET') {
+        const paymentStatuses = url.searchParams.get('payment_status')?.split(',').filter(Boolean) || null;
+        const fulfillmentStatuses = url.searchParams.get('fulfillment_status')?.split(',').filter(Boolean) || null;
+        const hasCouponParam = url.searchParams.get('has_coupon');
+        const hasCoupon = hasCouponParam === 'true' ? true : hasCouponParam === 'false' ? false : null;
+        const limit = Number(url.searchParams.get('limit')) || 50;
+        const result = await listLeads(env, { limit, paymentStatuses, fulfillmentStatuses, hasCoupon });
+        return new Response(JSON.stringify({ count: result.length, leads: result }), { headers: { 'Content-Type': 'application/json' } });
+      }
+
+      if (url.pathname === '/__debug/get-lead-with-history' && request.method === 'GET') {
+        const ref = url.searchParams.get('ref');
+        if (!ref) {
+          return new Response(JSON.stringify({ error: 'Param requerido: ref' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
+        const result = await getLeadWithHistory(env, ref);
         return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
       }
 
