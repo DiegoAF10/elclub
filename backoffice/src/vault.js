@@ -423,3 +423,111 @@ export async function incrementCouponUsage(env, couponCode) {
 
   await env.DATA.put(`coupon:${code}`, JSON.stringify(coupon), putOptions);
 }
+
+// ── Admin handlers ───────────────────────────────────────────
+
+/**
+ * GET /api/vault/leads — list leads with optional filters.
+ * Query params:
+ *   - limit (default 50, max 500)
+ *   - payment_status (CSV, OR-join)
+ *   - fulfillment_status (CSV, OR-join)
+ *   - has_coupon (true|false)
+ */
+export async function handleListVaultLeads(url, env) {
+  const limitRaw = Number(url.searchParams.get('limit'));
+  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, Math.floor(limitRaw))) : 50;
+
+  const parseCSV = (p) => {
+    const v = url.searchParams.get(p);
+    return v ? v.split(',').map(s => s.trim()).filter(Boolean) : null;
+  };
+
+  const paymentStatuses     = parseCSV('payment_status');
+  const fulfillmentStatuses = parseCSV('fulfillment_status');
+  const hasCouponParam      = url.searchParams.get('has_coupon');
+  const hasCoupon = hasCouponParam === 'true'  ? true
+                 : hasCouponParam === 'false' ? false
+                 : null;
+
+  const entries = await listLeads(env, { limit, paymentStatuses, fulfillmentStatuses, hasCoupon });
+
+  // Hydrate: fetch full records for each index entry
+  const full = await Promise.all(entries.map(async entry => {
+    const record = await env.DATA.get(entry.key, { type: 'json' });
+    return record || entry;  // fall back to index entry if record vanished
+  }));
+
+  return jsonResp({ ok: true, count: full.length, leads: full });
+}
+
+/**
+ * GET /api/vault/lead/:ref — fetch single lead with full history.
+ */
+export async function handleVaultLeadDetail(env, ref) {
+  const result = await getLeadWithHistory(env, ref);
+  if (!result) return jsonResp({ ok: false, error: 'lead no encontrado' }, 404);
+  return jsonResp({ ok: true, ...result });
+}
+
+/**
+ * PATCH /api/vault/lead/:ref/payment — transition payment_status.
+ * Body: { status, note?, force? }
+ */
+export async function handlePatchPaymentStatus(request, env, ref) {
+  return await handlePatchAxisStatus(request, env, ref, 'payment');
+}
+
+/**
+ * PATCH /api/vault/lead/:ref/fulfillment — transition fulfillment_status.
+ * Body: { status, note?, force? }
+ */
+export async function handlePatchFulfillmentStatus(request, env, ref) {
+  return await handlePatchAxisStatus(request, env, ref, 'fulfillment');
+}
+
+async function handlePatchAxisStatus(request, env, ref, axis) {
+  let body;
+  try { body = await request.json(); }
+  catch { return jsonResp({ ok: false, error: 'JSON invalido' }, 400); }
+
+  const newStatus = body?.status;
+  const note = body?.note;
+  const force = body?.force === true;
+
+  if (!newStatus || typeof newStatus !== 'string') {
+    return jsonResp({ ok: false, error: 'status requerido' }, 400);
+  }
+
+  const found = await findLeadByRef(env, ref);
+  if (!found) return jsonResp({ ok: false, error: 'lead no encontrado' }, 404);
+
+  const field = axis === 'payment' ? 'payment_status' : 'fulfillment_status';
+  const current = found.record[field];
+
+  if (current === newStatus) {
+    return jsonResp({ ok: true, lead_id: ref, axis, status: current, unchanged: true });
+  }
+
+  if (!force) {
+    const validation = validateTransition(current, newStatus, axis);
+    if (!validation.valid) {
+      return jsonResp({
+        ok: false,
+        error: validation.error,
+        allowed_next: validation.allowed_next,
+      }, 409);
+    }
+  }
+
+  await updateLeadStatus(env, ref, axis, newStatus, note);
+
+  return jsonResp({
+    ok: true,
+    lead_id: ref,
+    axis,
+    from: current,
+    to: newStatus,
+    forced: force,
+  });
+}

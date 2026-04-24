@@ -28,6 +28,10 @@ import {
   getLeadWithHistory,
   handleVaultReservation,
   incrementCouponUsage,
+  handleListVaultLeads,
+  handleVaultLeadDetail,
+  handlePatchPaymentStatus,
+  handlePatchFulfillmentStatus,
 } from './vault.js';
 import { createReservationCheckout } from './vault-payment.js';
 
@@ -819,6 +823,24 @@ async function sendCustomOrderAlert(env, order) {
   console.log(`Custom order alert sent for ${order.order_code}`);
 }
 
+// ── Vault admin auth middleware ──────────────────────────────
+
+/**
+ * Validates `Authorization: Bearer <DASHBOARD_KEY>`. Returns a Response
+ * to send (401) if unauthorized, or null to proceed.
+ */
+function requireDashboardAuth(request, env) {
+  const auth = request.headers.get('Authorization') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!env.DASHBOARD_KEY || token !== env.DASHBOARD_KEY) {
+    return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  return null;
+}
+
 // ── Router ───────────────────────────────────────────────────
 
 export default {
@@ -1085,6 +1107,38 @@ export default {
       // ── Vault reservation (public — called by checkout form) ─────
       if (url.pathname === '/api/vault/reservation' && request.method === 'POST') {
         return await handleVaultReservation(request, env);
+      }
+
+      // ── Vault admin endpoints (auth: Bearer DASHBOARD_KEY) ───────
+
+      if (url.pathname === '/api/vault/leads' && request.method === 'GET') {
+        const unauth = requireDashboardAuth(request, env);
+        if (unauth) return unauth;
+        return await handleListVaultLeads(url, env);
+      }
+
+      // GET /api/vault/lead/:ref
+      const vaultDetailMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)$/);
+      if (vaultDetailMatch && request.method === 'GET') {
+        const unauth = requireDashboardAuth(request, env);
+        if (unauth) return unauth;
+        return await handleVaultLeadDetail(env, vaultDetailMatch[1]);
+      }
+
+      // PATCH /api/vault/lead/:ref/payment
+      const vaultPatchPayMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)\/payment$/);
+      if (vaultPatchPayMatch && request.method === 'PATCH') {
+        const unauth = requireDashboardAuth(request, env);
+        if (unauth) return unauth;
+        return await handlePatchPaymentStatus(request, env, vaultPatchPayMatch[1]);
+      }
+
+      // PATCH /api/vault/lead/:ref/fulfillment
+      const vaultPatchFulfMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)\/fulfillment$/);
+      if (vaultPatchFulfMatch && request.method === 'PATCH') {
+        const unauth = requireDashboardAuth(request, env);
+        if (unauth) return unauth;
+        return await handlePatchFulfillmentStatus(request, env, vaultPatchFulfMatch[1]);
       }
 
       // ── DEBUG auth gate (temporary, all /__debug/* endpoints behind this) ──
