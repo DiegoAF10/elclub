@@ -686,3 +686,67 @@ export async function notifyDiegoVaultPayment(env, lead) {
     throw new Error(`Resend ${res.status}`);
   }
 }
+
+// ── Supplier messages (migrated from VENTUS worker) ──────────
+
+const SUPPLIER_WA_NUMBER = '8615361409693';
+const VALID_VERSIONS = new Set(['Fan', 'Player', 'Woman', 'Baby', 'Kid', 'Retro']);
+
+function normalizeVersion(raw) {
+  if (!nonEmpty(raw)) return 'Fan';
+  const capped = raw.trim().charAt(0).toUpperCase() + raw.trim().slice(1).toLowerCase();
+  return VALID_VERSIONS.has(capped) ? capped : 'Fan';
+}
+
+/**
+ * Build the supplier message for a single item — English, exact format
+ * Bond Soccer Jersey expects. Image is attached manually by Diego in WhatsApp.
+ */
+export function formatSupplierMessage(item) {
+  const p = item?.personalization || {};
+  const name    = nonEmpty(p.name)    ? p.name.trim()  : '-';
+  const number  = (p.number === 0 || nonEmpty(String(p.number || ''))) ? String(p.number) : '-';
+  const patch   = nonEmpty(p.patch)   ? p.patch.trim() : '-';
+  const size    = nonEmpty(item?.size) ? item.size.trim() : '-';
+  const version = normalizeVersion(item?.version);
+
+  const headerBits = [item?.team, item?.season, item?.variant_label]
+    .filter(x => nonEmpty(x))
+    .map(x => x.trim());
+  const header = headerBits.length > 0 ? `${headerBits.join(' ')}\n` : '';
+
+  return `${header}Name: ${name}\nNumber: ${number}\nPatch: ${patch}\nSize: ${size}\nVersion: ${version}`;
+}
+
+/**
+ * GET /api/vault/lead/:ref/supplier-messages
+ * Returns WA message + wa.me link for each item in the lead.
+ */
+export async function handleVaultSupplierMessages(env, ref) {
+  const found = await findLeadByRef(env, ref);
+  if (!found) return jsonResp({ ok: false, error: 'lead no encontrado' }, 404);
+
+  const items = Array.isArray(found.record.productos) ? found.record.productos : [];
+  const messages = items.map((item, i) => {
+    const message = formatSupplierMessage(item);
+    return {
+      index: i,
+      family_id: item?.family_id || null,
+      team: item?.team || null,
+      season: item?.season || null,
+      variant_label: item?.variant_label || null,
+      size: item?.size || null,
+      version: normalizeVersion(item?.version),
+      message,
+      wa_link: `https://wa.me/${SUPPLIER_WA_NUMBER}?text=${encodeURIComponent(message)}`,
+    };
+  });
+
+  return jsonResp({
+    ok: true,
+    lead_id: ref,
+    supplier: { number: SUPPLIER_WA_NUMBER, name: 'Bond Soccer Jersey' },
+    count: messages.length,
+    messages,
+  });
+}

@@ -33,6 +33,7 @@ import {
   handlePatchPaymentStatus,
   handlePatchFulfillmentStatus,
   handleVaultPaymentSuccess,
+  handleVaultSupplierMessages,
 } from './vault.js';
 import { createReservationCheckout } from './vault-payment.js';
 
@@ -1160,6 +1161,14 @@ export default {
         const unauth = requireDashboardAuth(request, env);
         if (unauth) return unauth;
         return await handlePatchFulfillmentStatus(request, env, vaultPatchFulfMatch[1]);
+      }
+
+      // GET /api/vault/lead/:ref/supplier-messages
+      const vaultSupplierMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)\/supplier-messages$/);
+      if (vaultSupplierMatch && request.method === 'GET') {
+        const unauth = requireDashboardAuth(request, env);
+        if (unauth) return unauth;
+        return await handleVaultSupplierMessages(env, vaultSupplierMatch[1]);
       }
 
       // ── DEBUG auth gate (temporary, all /__debug/* endpoints behind this) ──
