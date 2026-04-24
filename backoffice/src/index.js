@@ -20,12 +20,6 @@
  */
 
 import {
-  validateTransition,
-  saveLead,
-  findLeadByRef,
-  updateLeadStatus,
-  listLeads,
-  getLeadWithHistory,
   handleVaultReservation,
   incrementCouponUsage,
   handleListVaultLeads,
@@ -35,11 +29,11 @@ import {
   handleVaultPaymentSuccess,
   handleVaultSupplierMessages,
 } from './vault.js';
-import { createReservationCheckout } from './vault-payment.js';
 
 const ALLOWED_ORIGINS = [
   'https://elclub.club',
   'https://www.elclub.club',
+  'https://vault.elclub.club',
   'http://localhost:5500',
   'http://127.0.0.1:5500',
 ];
@@ -851,13 +845,13 @@ async function sendCustomOrderAlert(env, order) {
  * Validates `Authorization: Bearer <DASHBOARD_KEY>`. Returns a Response
  * to send (401) if unauthorized, or null to proceed.
  */
-function requireDashboardAuth(request, env) {
+function requireDashboardAuth(request, env, cors = {}) {
   const auth = request.headers.get('Authorization') || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
   if (!env.DASHBOARD_KEY || token !== env.DASHBOARD_KEY) {
     return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), {
       status: 401,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...cors, 'Content-Type': 'application/json' },
     });
   }
   return null;
@@ -871,7 +865,10 @@ export default {
     const cors = getCorsHeaders(request);
 
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: cors });
+      return new Response(null, {
+        status: 204,
+        headers: { ...cors, 'Access-Control-Max-Age': '86400' },
+      });
     }
 
     try {
@@ -1128,147 +1125,47 @@ export default {
 
       // ── Vault reservation (public — called by checkout form) ─────
       if (url.pathname === '/api/vault/reservation' && request.method === 'POST') {
-        return await handleVaultReservation(request, env);
+        return await handleVaultReservation(request, env, cors);
       }
 
       // ── Vault admin endpoints (auth: Bearer DASHBOARD_KEY) ───────
 
       if (url.pathname === '/api/vault/leads' && request.method === 'GET') {
-        const unauth = requireDashboardAuth(request, env);
+        const unauth = requireDashboardAuth(request, env, cors);
         if (unauth) return unauth;
-        return await handleListVaultLeads(url, env);
+        return await handleListVaultLeads(url, env, cors);
       }
 
       // GET /api/vault/lead/:ref
       const vaultDetailMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)$/);
       if (vaultDetailMatch && request.method === 'GET') {
-        const unauth = requireDashboardAuth(request, env);
+        const unauth = requireDashboardAuth(request, env, cors);
         if (unauth) return unauth;
-        return await handleVaultLeadDetail(env, vaultDetailMatch[1]);
+        return await handleVaultLeadDetail(env, vaultDetailMatch[1], cors);
       }
 
       // PATCH /api/vault/lead/:ref/payment
       const vaultPatchPayMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)\/payment$/);
       if (vaultPatchPayMatch && request.method === 'PATCH') {
-        const unauth = requireDashboardAuth(request, env);
+        const unauth = requireDashboardAuth(request, env, cors);
         if (unauth) return unauth;
-        return await handlePatchPaymentStatus(request, env, vaultPatchPayMatch[1]);
+        return await handlePatchPaymentStatus(request, env, vaultPatchPayMatch[1], cors);
       }
 
       // PATCH /api/vault/lead/:ref/fulfillment
       const vaultPatchFulfMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)\/fulfillment$/);
       if (vaultPatchFulfMatch && request.method === 'PATCH') {
-        const unauth = requireDashboardAuth(request, env);
+        const unauth = requireDashboardAuth(request, env, cors);
         if (unauth) return unauth;
-        return await handlePatchFulfillmentStatus(request, env, vaultPatchFulfMatch[1]);
+        return await handlePatchFulfillmentStatus(request, env, vaultPatchFulfMatch[1], cors);
       }
 
       // GET /api/vault/lead/:ref/supplier-messages
       const vaultSupplierMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)\/supplier-messages$/);
       if (vaultSupplierMatch && request.method === 'GET') {
-        const unauth = requireDashboardAuth(request, env);
+        const unauth = requireDashboardAuth(request, env, cors);
         if (unauth) return unauth;
-        return await handleVaultSupplierMessages(env, vaultSupplierMatch[1]);
-      }
-
-      // ── DEBUG auth gate (temporary, all /__debug/* endpoints behind this) ──
-      if (url.pathname.startsWith('/__debug/')) {
-        const adminKey = request.headers.get('X-Admin-Key');
-        if (!env.ADMIN_KEY || adminKey !== env.ADMIN_KEY) {
-          return new Response(
-            JSON.stringify({ error: 'Unauthorized — debug endpoints require X-Admin-Key' }),
-            { status: 401, headers: { 'Content-Type': 'application/json' } }
-          );
-        }
-      }
-
-      // ── DEBUG: state machine validator (temporary, remove before deploy) ──
-      if (url.pathname === '/__debug/validate-transition' && request.method === 'GET') {
-        const current = url.searchParams.get('current');
-        const target  = url.searchParams.get('target');
-        const axis    = url.searchParams.get('axis');
-        if (!current || !target || !axis) {
-          return new Response(
-            JSON.stringify({ error: 'Params requeridos: current, target, axis' }),
-            { status: 400, headers: { 'Content-Type': 'application/json' } }
-          );
-        }
-        const result = validateTransition(current, target, axis);
-        return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
-      }
-
-      // ── DEBUG: storage round-trip (temporary, remove before deploy) ──
-      if (url.pathname === '/__debug/save-lead' && request.method === 'POST') {
-        const data = await request.json();
-        const result = await saveLead(env, data);
-        return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
-      }
-
-      if (url.pathname === '/__debug/find-lead' && request.method === 'GET') {
-        const ref = url.searchParams.get('ref');
-        if (!ref) {
-          return new Response(JSON.stringify({ error: 'Param requerido: ref' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-        }
-        const result = await findLeadByRef(env, ref);
-        return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
-      }
-
-      if (url.pathname === '/__debug/update-status' && request.method === 'POST') {
-        const { ref, axis, new_status, note } = await request.json();
-        if (!ref || !axis || !new_status) {
-          return new Response(JSON.stringify({ error: 'Body requiere: ref, axis, new_status' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-        }
-        const result = await updateLeadStatus(env, ref, axis, new_status, note);
-        return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
-      }
-
-      if (url.pathname === '/__debug/list-leads' && request.method === 'GET') {
-        const paymentStatuses = url.searchParams.get('payment_status')?.split(',').filter(Boolean) || null;
-        const fulfillmentStatuses = url.searchParams.get('fulfillment_status')?.split(',').filter(Boolean) || null;
-        const hasCouponParam = url.searchParams.get('has_coupon');
-        const hasCoupon = hasCouponParam === 'true' ? true : hasCouponParam === 'false' ? false : null;
-        const limit = Number(url.searchParams.get('limit')) || 50;
-        const result = await listLeads(env, { limit, paymentStatuses, fulfillmentStatuses, hasCoupon });
-        return new Response(JSON.stringify({ count: result.length, leads: result }), { headers: { 'Content-Type': 'application/json' } });
-      }
-
-      if (url.pathname === '/__debug/get-lead-with-history' && request.method === 'GET') {
-        const ref = url.searchParams.get('ref');
-        if (!ref) {
-          return new Response(JSON.stringify({ error: 'Param requerido: ref' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-        }
-        const result = await getLeadWithHistory(env, ref);
-        return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
-      }
-
-      if (url.pathname === '/__debug/create-reservation-checkout' && request.method === 'POST') {
-        const { vault_ref, customer_name } = await request.json();
-        if (!vault_ref || !customer_name) {
-          return new Response(JSON.stringify({ error: 'Body requiere: vault_ref, customer_name' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-        }
-        try {
-          const result = await createReservationCheckout(env, vault_ref, customer_name);
-          return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
-        } catch (err) {
-          return new Response(JSON.stringify({ error: String(err.message || err) }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-        }
-      }
-
-      if (url.pathname === '/__debug/simulate-vault-webhook' && request.method === 'POST') {
-        const body = await request.json();
-        const { vault_ref, payment_id, amount_in_cents, method } = body;
-        if (!vault_ref) {
-          return new Response(JSON.stringify({ error: 'Body requiere: vault_ref' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
-        }
-        const result = await handleVaultPaymentSuccess(env, vault_ref, {
-          id: payment_id || 'pi_test_' + Date.now(),
-          amount_in_cents: amount_in_cents || 10000,
-          payment_method: { type: method || 'card' },
-        });
-        return new Response(JSON.stringify(result), {
-          status: result.ok ? 200 : 400,
-          headers: { 'Content-Type': 'application/json' },
-        });
+        return await handleVaultSupplierMessages(env, vaultSupplierMatch[1], cors);
       }
 
       return new Response('Not Found', { status: 404 });

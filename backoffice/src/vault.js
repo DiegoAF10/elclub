@@ -248,12 +248,16 @@ function generateRef() {
   return 'V-' + Date.now().toString(36).toUpperCase();
 }
 
-function jsonResp(obj, status = 200) {
+/**
+ * Response helper. CORS headers come from the router — pass empty {} if calling
+ * outside the fetch handler (e.g. in the webhook where browser CORS is N/A).
+ */
+function jsonResp(obj, status = 200, cors = {}) {
   return new Response(JSON.stringify(obj), {
     status,
     headers: {
+      ...cors,
       'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',  // CORS tightened in Task 9
     },
   });
 }
@@ -269,14 +273,14 @@ function jsonResp(obj, status = 200) {
  * Percent/fixed coupons are tracked on the lead for analytics but flow through the
  * standard Q100 Recurrente path — the discount applies at COD time (future task).
  */
-export async function handleVaultReservation(request, env) {
+export async function handleVaultReservation(request, env, cors = {}) {
   let body;
   try { body = await request.json(); }
-  catch { return jsonResp({ ok: false, error: 'JSON invalido' }, 400); }
+  catch { return jsonResp({ ok: false, error: 'JSON invalido' }, 400, cors); }
 
   const errors = validateReservationPayload(body);
   if (errors.length > 0) {
-    return jsonResp({ ok: false, error: errors.join('; ') }, 400);
+    return jsonResp({ ok: false, error: errors.join('; ') }, 400, cors);
   }
 
   // Coupon validation (optional)
@@ -284,7 +288,7 @@ export async function handleVaultReservation(request, env) {
   if (nonEmpty(body.coupon_code)) {
     coupon = await validateCouponForReservation(env, body.coupon_code);
     if (coupon && !coupon.valid) {
-      return jsonResp({ ok: false, error: `Cupon invalido: ${coupon.error}` }, 400);
+      return jsonResp({ ok: false, error: `Cupon invalido: ${coupon.error}` }, 400, cors);
     }
   }
 
@@ -334,7 +338,7 @@ export async function handleVaultReservation(request, env) {
       lead_id: ref,
       skip_payment: true,
       total_cod: totalCod,
-    });
+    }, 200, cors);
   }
 
   // Standard path: Recurrente checkout
@@ -357,14 +361,14 @@ export async function handleVaultReservation(request, env) {
     return jsonResp({
       ok: false,
       error: 'No se pudo crear la sesion de pago. Probá otra vez o contactá por WhatsApp.',
-    }, 500);
+    }, 500, cors);
   }
 
   return jsonResp({
     ok: true,
     lead_id: ref,
     checkout_url: checkout.checkout_url,
-  });
+  }, 200, cors);
 }
 
 // ── Coupon validation for reservation ────────────────────────
@@ -438,7 +442,7 @@ export async function incrementCouponUsage(env, couponCode) {
  *   - fulfillment_status (CSV, OR-join)
  *   - has_coupon (true|false)
  */
-export async function handleListVaultLeads(url, env) {
+export async function handleListVaultLeads(url, env, cors = {}) {
   const limitRaw = Number(url.searchParams.get('limit'));
   const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(500, Math.floor(limitRaw))) : 50;
 
@@ -462,45 +466,45 @@ export async function handleListVaultLeads(url, env) {
     return record || entry;  // fall back to index entry if record vanished
   }));
 
-  return jsonResp({ ok: true, count: full.length, leads: full });
+  return jsonResp({ ok: true, count: full.length, leads: full }, 200, cors);
 }
 
 /**
  * GET /api/vault/lead/:ref — fetch single lead with full history.
  */
-export async function handleVaultLeadDetail(env, ref) {
+export async function handleVaultLeadDetail(env, ref, cors = {}) {
   const result = await getLeadWithHistory(env, ref);
-  if (!result) return jsonResp({ ok: false, error: 'lead no encontrado' }, 404);
-  return jsonResp({ ok: true, ...result });
+  if (!result) return jsonResp({ ok: false, error: 'lead no encontrado' }, 404, cors);
+  return jsonResp({ ok: true, ...result }, 200, cors);
 }
 
 /**
  * PATCH /api/vault/lead/:ref/payment — transition payment_status.
  * Body: { status, note?, force? }
  */
-export async function handlePatchPaymentStatus(request, env, ref) {
-  return await handlePatchAxisStatus(request, env, ref, 'payment');
+export async function handlePatchPaymentStatus(request, env, ref, cors = {}) {
+  return await handlePatchAxisStatus(request, env, ref, 'payment', cors);
 }
 
 /**
  * PATCH /api/vault/lead/:ref/fulfillment — transition fulfillment_status.
  * Body: { status, note?, force? }
  */
-export async function handlePatchFulfillmentStatus(request, env, ref) {
-  return await handlePatchAxisStatus(request, env, ref, 'fulfillment');
+export async function handlePatchFulfillmentStatus(request, env, ref, cors = {}) {
+  return await handlePatchAxisStatus(request, env, ref, 'fulfillment', cors);
 }
 
-async function handlePatchAxisStatus(request, env, ref, axis) {
+async function handlePatchAxisStatus(request, env, ref, axis, cors = {}) {
   let body;
   try { body = await request.json(); }
-  catch { return jsonResp({ ok: false, error: 'JSON invalido' }, 400); }
+  catch { return jsonResp({ ok: false, error: 'JSON invalido' }, 400, cors); }
 
   const newStatus = body?.status;
   const note = body?.note;
   const force = body?.force === true;
 
   if (!newStatus || typeof newStatus !== 'string') {
-    return jsonResp({ ok: false, error: 'status requerido' }, 400);
+    return jsonResp({ ok: false, error: 'status requerido' }, 400, cors);
   }
 
   // Guard: even with force=true, only accept known status values. Writing
@@ -511,17 +515,17 @@ async function handlePatchAxisStatus(request, env, ref, axis) {
       ok: false,
       error: `status desconocido: ${newStatus}`,
       valid_values: allStatuses,
-    }, 400);
+    }, 400, cors);
   }
 
   const found = await findLeadByRef(env, ref);
-  if (!found) return jsonResp({ ok: false, error: 'lead no encontrado' }, 404);
+  if (!found) return jsonResp({ ok: false, error: 'lead no encontrado' }, 404, cors);
 
   const field = axis === 'payment' ? 'payment_status' : 'fulfillment_status';
   const current = found.record[field];
 
   if (current === newStatus) {
-    return jsonResp({ ok: true, lead_id: ref, axis, status: current, unchanged: true });
+    return jsonResp({ ok: true, lead_id: ref, axis, status: current, unchanged: true }, 200, cors);
   }
 
   if (!force) {
@@ -531,7 +535,7 @@ async function handlePatchAxisStatus(request, env, ref, axis) {
         ok: false,
         error: validation.error,
         allowed_next: validation.allowed_next,
-      }, 409);
+      }, 409, cors);
     }
   }
 
@@ -544,7 +548,7 @@ async function handlePatchAxisStatus(request, env, ref, axis) {
     from: current,
     to: newStatus,
     forced: force,
-  });
+  }, 200, cors);
 }
 
 // ── Webhook vault branch ─────────────────────────────────────
@@ -722,9 +726,9 @@ export function formatSupplierMessage(item) {
  * GET /api/vault/lead/:ref/supplier-messages
  * Returns WA message + wa.me link for each item in the lead.
  */
-export async function handleVaultSupplierMessages(env, ref) {
+export async function handleVaultSupplierMessages(env, ref, cors = {}) {
   const found = await findLeadByRef(env, ref);
-  if (!found) return jsonResp({ ok: false, error: 'lead no encontrado' }, 404);
+  if (!found) return jsonResp({ ok: false, error: 'lead no encontrado' }, 404, cors);
 
   const items = Array.isArray(found.record.productos) ? found.record.productos : [];
   const messages = items.map((item, i) => {
@@ -748,5 +752,5 @@ export async function handleVaultSupplierMessages(env, ref) {
     supplier: { number: SUPPLIER_WA_NUMBER, name: 'Bond Soccer Jersey' },
     count: messages.length,
     messages,
-  });
+  }, 200, cors);
 }
