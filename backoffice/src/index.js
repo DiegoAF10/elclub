@@ -1098,6 +1098,17 @@ export default {
         return await handleWebhook(request, env);
       }
 
+      // ── DEBUG auth gate (temporary, all /__debug/* endpoints behind this) ──
+      if (url.pathname.startsWith('/__debug/')) {
+        const adminKey = request.headers.get('X-Admin-Key');
+        if (!env.ADMIN_KEY || adminKey !== env.ADMIN_KEY) {
+          return new Response(
+            JSON.stringify({ error: 'Unauthorized — debug endpoints require X-Admin-Key' }),
+            { status: 401, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
       // ── DEBUG: state machine validator (temporary, remove before deploy) ──
       if (url.pathname === '/__debug/validate-transition' && request.method === 'GET') {
         const current = url.searchParams.get('current');

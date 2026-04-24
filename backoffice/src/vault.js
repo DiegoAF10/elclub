@@ -174,8 +174,8 @@ export async function listLeads(env, { limit = 50, paymentStatuses = null, fulfi
   if (paymentStatuses && paymentStatuses.length > 0) {
     filtered = filtered.filter(e => paymentStatuses.includes(e.payment_status));
   } else {
-    // Default: hide huerfanos 'pending'
-    filtered = filtered.filter(e => e.payment_status !== 'pending');
+    // Default: hide huerfanos 'pending' and terminales 'cancelled'
+    filtered = filtered.filter(e => e.payment_status !== 'pending' && e.payment_status !== 'cancelled');
   }
 
   if (fulfillmentStatuses && fulfillmentStatuses.length > 0) {
