@@ -26,6 +26,7 @@ import {
   updateLeadStatus,
   listLeads,
   getLeadWithHistory,
+  handleVaultReservation,
 } from './vault.js';
 import { createReservationCheckout } from './vault-payment.js';
 
@@ -1097,6 +1098,11 @@ export default {
       // Recurrente webhook (Svix)
       if (url.pathname === '/webhook/recurrente' && request.method === 'POST') {
         return await handleWebhook(request, env);
+      }
+
+      // ── Vault reservation (public — called by checkout form) ─────
+      if (url.pathname === '/api/vault/reservation' && request.method === 'POST') {
+        return await handleVaultReservation(request, env);
       }
 
       // ── DEBUG auth gate (temporary, all /__debug/* endpoints behind this) ──

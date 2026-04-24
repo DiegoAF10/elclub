@@ -9,6 +9,8 @@
  * See: docs/superpowers/specs/2026-04-24-vault-q100-reservation-flow-design.md §3
  */
 
+import { createReservationCheckout } from './vault-payment.js';
+
 export const PAYMENT_TRANSITIONS = {
   pending:         ['paid', 'refunded_credit', 'cancelled'],
   paid:            ['cod_completed', 'refunded_credit'],
@@ -198,4 +200,129 @@ export async function getLeadWithHistory(env, ref) {
   if (!found) return null;
   const history = (await env.DATA.get(`vault_lead_status:${ref}`, { type: 'json' })) || [];
   return { lead: found.record, history };
+}
+
+// ── Validation ───────────────────────────────────────────────
+
+function validPhone(p) { return typeof p === 'string' && /^\d{8}$/.test(p.trim()); }
+
+/**
+ * Validate a reservation payload. Returns array of error messages (empty = valid).
+ *
+ * @param {object} body  - request body
+ * @returns {string[]}   - empty if valid
+ */
+export function validateReservationPayload(body) {
+  const errors = [];
+  if (!body) { errors.push('body vacio'); return errors; }
+
+  const cliente = body?.cliente || {};
+  if (!nonEmpty(cliente.nombre))           errors.push('cliente.nombre requerido');
+  if (!validPhone(cliente.telefono))       errors.push('cliente.telefono debe tener 8 digitos');
+
+  const envio = body?.envio || {};
+  if (!nonEmpty(envio.modalidad))          errors.push('envio.modalidad requerido');
+  if (envio.modalidad && !['entrega','retiro'].includes(envio.modalidad)) {
+    errors.push('envio.modalidad debe ser entrega|retiro');
+  }
+  if (!nonEmpty(envio.depto))              errors.push('envio.depto requerido');
+  if (!nonEmpty(envio.municipio))          errors.push('envio.municipio requerido');
+  if (!nonEmpty(envio.direccion))          errors.push('envio.direccion requerido');
+
+  if (!Array.isArray(body?.productos) || body.productos.length === 0) {
+    errors.push('productos[] requerido (min 1)');
+  }
+
+  if (typeof body?.total !== 'number' || body.total <= 0) {
+    errors.push('total debe ser numero positivo');
+  }
+
+  return errors;
+}
+
+function generateRef() {
+  return 'V-' + Date.now().toString(36).toUpperCase();
+}
+
+function jsonResp(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',  // CORS tightened in Task 9
+    },
+  });
+}
+
+// ── Handler: POST /api/vault/reservation ─────────────────────
+
+/**
+ * Public endpoint. Creates a vault lead + Recurrente checkout session.
+ * Task 5 will add F&F coupon gating. For now: always creates a pending lead
+ * and returns the Recurrente checkout URL.
+ */
+export async function handleVaultReservation(request, env) {
+  let body;
+  try { body = await request.json(); }
+  catch { return jsonResp({ ok: false, error: 'JSON invalido' }, 400); }
+
+  const errors = validateReservationPayload(body);
+  if (errors.length > 0) {
+    return jsonResp({ ok: false, error: errors.join('; ') }, 400);
+  }
+
+  const ref = generateRef();
+  const nowIso = new Date().toISOString();
+
+  const lead = {
+    ref,
+    timestamp: nowIso,
+    saved_at: nowIso,
+    cliente: {
+      nombre:   body.cliente.nombre.trim(),
+      telefono: body.cliente.telefono.trim(),
+      email:    nonEmpty(body.cliente.email) ? body.cliente.email.trim() : null,
+    },
+    envio: {
+      modalidad:   body.envio.modalidad,
+      depto:       body.envio.depto.trim(),
+      municipio:   body.envio.municipio.trim(),
+      direccion:   body.envio.direccion.trim(),
+      referencias: nonEmpty(body.envio.referencias) ? body.envio.referencias.trim() : null,
+    },
+    productos: body.productos,
+    total: body.total,
+    total_cod: body.total - 100,   // Default Q335. Task 5 overrides for F&F coupons.
+    notas: nonEmpty(body.notas) ? body.notas.trim() : null,
+    reorder_of: nonEmpty(body.reorder_of) ? body.reorder_of.trim() : null,
+    coupon_code: null,              // Task 5 sets this when F&F applies
+    payment_status: 'pending',
+    fulfillment_status: 'awaiting_import',
+    source: 'vault.elclub.club',
+  };
+
+  // Save lead first (even if Recurrente fails, we keep the record for debugging)
+  await saveLead(env, lead);
+  await appendStatusHistory(env, ref, 'init', 'pending', 'payment',
+    'Lead creado, esperando pago Q100 via Recurrente');
+
+  // Create Recurrente checkout
+  let checkout;
+  try {
+    checkout = await createReservationCheckout(env, ref, lead.cliente.nombre);
+  } catch (err) {
+    console.error('Recurrente checkout creation failed:', err);
+    await updateLeadStatus(env, ref, 'payment', 'cancelled',
+      `Recurrente API fallo: ${String(err.message || err).slice(0,200)}`);
+    return jsonResp({
+      ok: false,
+      error: 'No se pudo crear la sesion de pago. Probá otra vez o contactá por WhatsApp.',
+    }, 500);
+  }
+
+  return jsonResp({
+    ok: true,
+    lead_id: ref,
+    checkout_url: checkout.checkout_url,
+  });
 }
