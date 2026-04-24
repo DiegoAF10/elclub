@@ -38,10 +38,10 @@ MUNDIAL_2026_TEAMS = [
     {"canonical": "United States",     "group": "D", "aliases": ["united states", "usa", "estados unidos", "u.s.a.", "us"]},
     {"canonical": "Paraguay",          "group": "D", "aliases": ["paraguay"]},
     {"canonical": "Australia",         "group": "D", "aliases": ["australia"]},
-    {"canonical": "Turkey",            "group": "D", "aliases": ["turkey", "turquía", "turquia", "türkiye"]},
+    {"canonical": "Turkey",            "group": "D", "aliases": ["turkey", "turquía", "turquia", "türkiye", "turkiye", "türkiye cumhuriyeti"]},
 
     # ═══ Grupo E ═══
-    {"canonical": "Germany",           "group": "E", "aliases": ["germany", "alemania"]},
+    {"canonical": "Germany",           "group": "E", "aliases": ["germany", "alemania", "german", "deutschland"]},
     {"canonical": "Curacao",           "group": "E", "aliases": ["curacao", "curazao", "curaçao"]},
     {"canonical": "Ivory Coast",       "group": "E", "aliases": ["ivory coast", "costa de marfil", "côte d'ivoire", "cote d'ivoire"]},
     {"canonical": "Ecuador",           "group": "E", "aliases": ["ecuador"]},
@@ -80,7 +80,7 @@ MUNDIAL_2026_TEAMS = [
     {"canonical": "Portugal",          "group": "K", "aliases": ["portugal"]},
     {"canonical": "DR Congo",          "group": "K", "aliases": ["dr congo", "rd congo", "democratic republic of congo", "república democrática del congo", "republica democratica del congo", "congo dr"]},
     {"canonical": "Uzbekistan",        "group": "K", "aliases": ["uzbekistan", "uzbekistán"]},
-    {"canonical": "Colombia",          "group": "K", "aliases": ["colombia"]},
+    {"canonical": "Colombia",          "group": "K", "aliases": ["colombia", "columbia"]},
 
     # ═══ Grupo L ═══
     {"canonical": "England",           "group": "L", "aliases": ["england", "inglaterra"]},
