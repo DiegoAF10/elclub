@@ -27,6 +27,7 @@ import {
   listLeads,
   getLeadWithHistory,
   handleVaultReservation,
+  incrementCouponUsage,
 } from './vault.js';
 import { createReservationCheckout } from './vault-payment.js';
 
@@ -637,29 +638,7 @@ async function handleCouponAdmin(request, env) {
   return couponData;
 }
 
-// ── Coupon: Increment usage after payment ────────────────────
-
-async function incrementCouponUsage(env, couponCode) {
-  if (!couponCode) return;
-
-  const code = couponCode.trim().toUpperCase();
-  const raw = await env.DATA.get(`coupon:${code}`);
-  if (!raw) return;
-
-  const coupon = JSON.parse(raw);
-  coupon.used = (coupon.used || 0) + 1;
-
-  // Preserve original TTL by re-calculating from expires_at
-  const putOptions = {};
-  if (coupon.expires_at) {
-    const ttl = Math.floor((new Date(coupon.expires_at).getTime() - Date.now()) / 1000);
-    if (ttl > 0) putOptions.expirationTtl = ttl;
-  }
-
-  await env.DATA.put(`coupon:${code}`, JSON.stringify(coupon), putOptions);
-
-  console.log(`Coupon ${code} usage incremented to ${coupon.used}`);
-}
+// ── Coupon: increment usage after payment — imported from ./vault.js ──
 
 // ── ManyChat: WhatsApp order confirmation ────────────────────
 
