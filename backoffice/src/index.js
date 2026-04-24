@@ -19,9 +19,21 @@
  *   ADMIN_KEY               — Admin endpoint authentication
  */
 
+import {
+  handleVaultReservation,
+  incrementCouponUsage,
+  handleListVaultLeads,
+  handleVaultLeadDetail,
+  handlePatchPaymentStatus,
+  handlePatchFulfillmentStatus,
+  handleVaultPaymentSuccess,
+  handleVaultSupplierMessages,
+} from './vault.js';
+
 const ALLOWED_ORIGINS = [
   'https://elclub.club',
   'https://www.elclub.club',
+  'https://vault.elclub.club',
   'http://localhost:5500',
   'http://127.0.0.1:5500',
 ];
@@ -32,7 +44,7 @@ function getCorsHeaders(request) {
   return {
     'Access-Control-Allow-Origin': allowed,
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Key',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Key, Authorization',
   };
 }
 
@@ -224,6 +236,26 @@ async function handleWebhook(request, env) {
   const checkout = pi.checkout || {};
   const checkoutId = checkout.id;
   const amountCents = pi.amount_in_cents;
+
+  // ── Vault reservation branch ───────────────────────────────
+  // Runs BEFORE the catalog `pending:{checkoutId}` lookup so vault payments
+  // are resolved against vault_reservation:{checkoutId} first.
+  // Event type already filtered to payment_intent.succeeded above.
+  const vaultReservation = checkoutId
+    ? await env.DATA.get(`vault_reservation:${checkoutId}`, { type: 'json' })
+    : null;
+
+  if (vaultReservation) {
+    const result = await handleVaultPaymentSuccess(env, vaultReservation.vault_ref, pi);
+    // Cleanup reverse-lookup only on first success (not on idempotent replays)
+    if (result.ok && !result.idempotent) {
+      await env.DATA.delete(`vault_reservation:${checkoutId}`);
+    }
+    return new Response(JSON.stringify(result), {
+      status: result.ok ? 200 : 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
   // Customer data from Recurrente payload
   const customer = pi.customer || {};
@@ -566,6 +598,8 @@ async function handleCouponValidate(url, env) {
 
 // ── Coupon: Admin Create ─────────────────────────────────────
 
+function nonEmpty(v) { return typeof v === 'string' && v.trim().length > 0; }
+
 async function handleCouponAdmin(request, env) {
   // Auth check
   const adminKey = request.headers.get('X-Admin-Key');
@@ -586,8 +620,8 @@ async function handleCouponAdmin(request, env) {
   }
 
   const type = (body.type || 'percent').toLowerCase();
-  if (type !== 'percent' && type !== 'fixed') {
-    return { _status: 400, error: 'Tipo debe ser "percent" o "fixed"' };
+  if (!['percent', 'fixed', 'vault_ff'].includes(type)) {
+    return { _status: 400, error: 'Tipo debe ser "percent", "fixed" o "vault_ff"' };
   }
 
   const value = Number(body.value);
@@ -606,6 +640,7 @@ async function handleCouponAdmin(request, env) {
     max_uses: maxUses,
     used: 0,
     expires_at: expiresAt,
+    notes: nonEmpty(body.notes) ? body.notes.trim() : null,
     created_at: new Date().toISOString(),
   };
 
@@ -623,29 +658,7 @@ async function handleCouponAdmin(request, env) {
   return couponData;
 }
 
-// ── Coupon: Increment usage after payment ────────────────────
-
-async function incrementCouponUsage(env, couponCode) {
-  if (!couponCode) return;
-
-  const code = couponCode.trim().toUpperCase();
-  const raw = await env.DATA.get(`coupon:${code}`);
-  if (!raw) return;
-
-  const coupon = JSON.parse(raw);
-  coupon.used = (coupon.used || 0) + 1;
-
-  // Preserve original TTL by re-calculating from expires_at
-  const putOptions = {};
-  if (coupon.expires_at) {
-    const ttl = Math.floor((new Date(coupon.expires_at).getTime() - Date.now()) / 1000);
-    if (ttl > 0) putOptions.expirationTtl = ttl;
-  }
-
-  await env.DATA.put(`coupon:${code}`, JSON.stringify(coupon), putOptions);
-
-  console.log(`Coupon ${code} usage incremented to ${coupon.used}`);
-}
+// ── Coupon: increment usage after payment — imported from ./vault.js ──
 
 // ── ManyChat: WhatsApp order confirmation ────────────────────
 
@@ -826,6 +839,24 @@ async function sendCustomOrderAlert(env, order) {
   console.log(`Custom order alert sent for ${order.order_code}`);
 }
 
+// ── Vault admin auth middleware ──────────────────────────────
+
+/**
+ * Validates `Authorization: Bearer <DASHBOARD_KEY>`. Returns a Response
+ * to send (401) if unauthorized, or null to proceed.
+ */
+function requireDashboardAuth(request, env, cors = {}) {
+  const auth = request.headers.get('Authorization') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!env.DASHBOARD_KEY || token !== env.DASHBOARD_KEY) {
+    return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), {
+      status: 401,
+      headers: { ...cors, 'Content-Type': 'application/json' },
+    });
+  }
+  return null;
+}
+
 // ── Router ───────────────────────────────────────────────────
 
 export default {
@@ -834,7 +865,10 @@ export default {
     const cors = getCorsHeaders(request);
 
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: cors });
+      return new Response(null, {
+        status: 204,
+        headers: { ...cors, 'Access-Control-Max-Age': '86400' },
+      });
     }
 
     try {
@@ -1087,6 +1121,51 @@ export default {
       // Recurrente webhook (Svix)
       if (url.pathname === '/webhook/recurrente' && request.method === 'POST') {
         return await handleWebhook(request, env);
+      }
+
+      // ── Vault reservation (public — called by checkout form) ─────
+      if (url.pathname === '/api/vault/reservation' && request.method === 'POST') {
+        return await handleVaultReservation(request, env, cors);
+      }
+
+      // ── Vault admin endpoints (auth: Bearer DASHBOARD_KEY) ───────
+
+      if (url.pathname === '/api/vault/leads' && request.method === 'GET') {
+        const unauth = requireDashboardAuth(request, env, cors);
+        if (unauth) return unauth;
+        return await handleListVaultLeads(url, env, cors);
+      }
+
+      // GET /api/vault/lead/:ref
+      const vaultDetailMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)$/);
+      if (vaultDetailMatch && request.method === 'GET') {
+        const unauth = requireDashboardAuth(request, env, cors);
+        if (unauth) return unauth;
+        return await handleVaultLeadDetail(env, vaultDetailMatch[1], cors);
+      }
+
+      // PATCH /api/vault/lead/:ref/payment
+      const vaultPatchPayMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)\/payment$/);
+      if (vaultPatchPayMatch && request.method === 'PATCH') {
+        const unauth = requireDashboardAuth(request, env, cors);
+        if (unauth) return unauth;
+        return await handlePatchPaymentStatus(request, env, vaultPatchPayMatch[1], cors);
+      }
+
+      // PATCH /api/vault/lead/:ref/fulfillment
+      const vaultPatchFulfMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)\/fulfillment$/);
+      if (vaultPatchFulfMatch && request.method === 'PATCH') {
+        const unauth = requireDashboardAuth(request, env, cors);
+        if (unauth) return unauth;
+        return await handlePatchFulfillmentStatus(request, env, vaultPatchFulfMatch[1], cors);
+      }
+
+      // GET /api/vault/lead/:ref/supplier-messages
+      const vaultSupplierMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)\/supplier-messages$/);
+      if (vaultSupplierMatch && request.method === 'GET') {
+        const unauth = requireDashboardAuth(request, env, cors);
+        if (unauth) return unauth;
+        return await handleVaultSupplierMessages(env, vaultSupplierMatch[1], cors);
       }
 
       return new Response('Not Found', { status: 404 });
