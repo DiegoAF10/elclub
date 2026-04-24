@@ -1078,7 +1078,7 @@ def render_queue(conn, catalog):
 
     # Ops s14 — toggle "Ver borrados". Default OFF: esconde status='deleted' del queue
     # incluso cuando el status_filter es "(todos)". Turn ON para auditoría/recovery.
-    tfc1, tfc2 = st.columns([1, 1])
+    tfc1, tfc2, tfc3 = st.columns([1, 1, 2])
     with tfc1:
         show_deleted = st.checkbox(
             "Ver borrados", value=False, key="audit_show_deleted",
@@ -1091,6 +1091,17 @@ def render_queue(conn, catalog):
         show_qa_only = st.checkbox(
             "🎯 Solo QA priority", value=False, key="audit_qa_only",
             help="Solo los SKUs TOP para validar visualmente post-refetch. Corré `python scripts/mark-qa-priority.py` para regenerar.",
+        )
+    with tfc3:
+        # s14-mundial-#A: toggle Mundial MVP. Corta ruido 4281 → ~96 SKUs.
+        # Whitelist de 48 teams + variantes home/away fan-short.
+        show_mundial_mvp = st.checkbox(
+            "🏆 **Solo Mundial 2026 MVP** (home+away fan)",
+            value=False, key="audit_mundial_mvp",
+            help="Filtro Mundial Ship Mode: solo las 48 selecciones con sus "
+                 "variantes MÍNIMAS (Home Fan + Away Fan manga corta). "
+                 "96 SKUs objetivo para shipear. Ajustá la lista en "
+                 "erp/config/mundial_2026.py.",
         )
 
     # Ops s14d — si show_qa_only, bypassa el status filter (queremos ver los
@@ -1111,14 +1122,46 @@ def render_queue(conn, catalog):
     if show_qa_only:
         items = [i for i in items if i.get("qa_priority")]
 
+    # s14-mundial-#A: filtro Mundial MVP (48 teams × home/away fan-short)
+    if show_mundial_mvp:
+        try:
+            from config.mundial_2026 import item_is_mundial_mvp, MUNDIAL_2026_TEAMS
+            items = [i for i in items if item_is_mundial_mvp(i)]
+            st.info(
+                f"🏆 **Mundial 2026 MVP mode** · {len(items)} SKUs matching "
+                f"(de 96 objetivos: 48 teams × home/away fan-short). "
+                f"Teams cubiertos en config: {len(MUNDIAL_2026_TEAMS)}."
+            )
+        except ImportError as e:
+            st.error(f"Config Mundial no cargó: {e}")
+
+    # s14-mundial-#A: search global mejorado — también matchea por descripción del
+    # modelo (fan long, player corta, kid, mujer, etc) y variant (home/away/third).
+    # Expande tokens: 'brazil fan long' → team=brazil + modelo=fan + sleeve=long
     if search:
-        s = search.lower()
-        items = [
-            i for i in items
-            if s in (i.get("sku", "").lower())
-            or s in (i.get("team", "") or "").lower()
-            or s in (i.get("season", "") or "").lower()
-        ]
+        s_lower = search.lower().strip()
+        tokens = [t for t in s_lower.split() if t]
+
+        modelo_label_map_search = {
+            "fan_adult": "fan", "player_adult": "player", "retro_adult": "retro",
+            "woman": "mujer", "kid": "niño",
+        }
+        sleeve_label_map_search = {"short": "corta", "long": "larga"}
+
+        def _item_matches_search(i):
+            haystack = " ".join([
+                i.get("sku", "").lower(),
+                (i.get("team") or "").lower(),
+                (i.get("season") or "").lower(),
+                (i.get("variant") or "").lower(),
+                (i.get("variant_label") or "").lower(),
+                modelo_label_map_search.get(i.get("modelo_type") or "", ""),
+                sleeve_label_map_search.get(i.get("sleeve") or "", ""),
+                i.get("canonical_fid", "").lower(),
+            ])
+            return all(tok in haystack for tok in tokens)
+
+        items = [i for i in items if _item_matches_search(i)]
 
     st.caption(f"**{len(items)} items auditables** en queue (post-filtros) · cada uno es 1 modelo independiente")
 
