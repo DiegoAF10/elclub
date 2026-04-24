@@ -2288,9 +2288,11 @@ def _modelo_view_for_audit(sku, fam, modelo):
     }
 
 
-def _find_adjacent_pending(conn, current_sku, direction=1):
+def _find_adjacent_pending(conn, current_sku, direction=1, catalog=None):
     """Retorna el SKU del próximo (direction=1) o anterior (direction=-1) item
-    con status='pending' en el MISMO tier (o en el global order si current no tiene tier).
+    con status='pending'. Respeta el toggle 'audit_mundial_mvp' de session_state:
+    si está ON, SOLO salta a SKUs del Mundial MVP (48 teams × home/away fan short).
+
     Sort: tier asc, family_id asc (mismo orden que queue_families).
     """
     q = """
@@ -2303,9 +2305,39 @@ def _find_adjacent_pending(conn, current_sku, direction=1):
           END ASC, family_id ASC
     """
     rows = [r["family_id"] for r in conn.execute(q).fetchall()]
-    if not rows: return None
+    if not rows:
+        return None
+
+    # s14-mundial-#C: filtro Mundial mode. Solo navegar entre SKUs del MVP.
+    if st.session_state.get("audit_mundial_mvp"):
+        try:
+            from config.mundial_2026 import is_mundial_team, matches_min_variant
+            if catalog is None:
+                catalog = audit_db.load_catalog()
+            sku_idx = audit_db.build_sku_index(catalog)
+            filtered = []
+            for sku in rows:
+                resolved = sku_idx.get(sku)
+                if not resolved:
+                    continue
+                fam, modelo = resolved
+                team = fam.get("team")
+                if not is_mundial_team(team):
+                    continue
+                item_shape = {
+                    "variant": fam.get("variant"),
+                    "modelo_type": (modelo or {}).get("type") if modelo else fam.get("category"),
+                    "sleeve": (modelo or {}).get("sleeve") if modelo else None,
+                }
+                if matches_min_variant(item_shape):
+                    filtered.append(sku)
+            rows = filtered
+        except ImportError:
+            pass  # config no cargó, fallback a todos los pending
+
+    if not rows:
+        return None
     if current_sku not in rows:
-        # Not in pending list → return first pending
         return rows[0] if direction > 0 else rows[-1]
     i = rows.index(current_sku)
     j = i + direction
@@ -3139,6 +3171,206 @@ def render_pending_review(conn, catalog):
             _render_pending_preview(conn, fam, item)
 
 
+def render_mundial_dashboard(conn, catalog):
+    """s14-mundial-#B: Dashboard 'brújula' del Mundial 2026.
+
+    Tabla 48 × 2 (teams × [Home Fan / Away Fan]). Cada celda:
+      ✅ verified + published (live en vault)
+      🟢 verified (listo para publish)
+      ⏳ pending (falta auditar)
+      ⚠️ needs_rework (fallo al publish anterior)
+      🔴 flagged (rechazado)
+      ❌ no existe (falta scrapear o crear)
+
+    Click en celda ✅/🟢/⏳/⚠️/🔴 → lleva al detail del SKU.
+    Click en celda ❌ → busca en el queue con el team pre-filtrado.
+
+    Progress bar global arriba: "X/96 SKUs verified" (Mundial shipeable = 96).
+    """
+    try:
+        from config.mundial_2026 import (
+            MUNDIAL_2026_TEAMS, MUNDIAL_MIN_VARIANTS,
+            get_mundial_canonical, team_by_group,
+        )
+    except ImportError as e:
+        st.error(f"Config Mundial no cargó: {e}")
+        return
+
+    st.header("🏆 Mundial 2026 — Progress Dashboard")
+    st.caption(
+        "Tu brújula para el Mundial 2026. Target: **48 selecciones × 2 variantes "
+        "(Home Fan + Away Fan manga corta) = 96 SKUs shipeables**. "
+        "Click en cualquier celda para saltar al detail o al search del SKU."
+    )
+
+    # Index SKUs del catalog por (team_canonical, variant, modelo_type, sleeve)
+    # Para que una celda del dashboard pueda hacer lookup O(1).
+    sku_idx = audit_db.build_sku_index(catalog)
+    index_by_key = {}  # (team_canonical, variant, type, sleeve) → (sku, status, published)
+    for sku, (fam, modelo) in sku_idx.items():
+        team = fam.get("team")
+        canonical_team = get_mundial_canonical(team)
+        if not canonical_team:
+            continue
+        variant = (fam.get("variant") or "").lower().strip()
+        if modelo:
+            mtype = modelo.get("type")
+            sleeve = modelo.get("sleeve")
+        else:
+            mtype = fam.get("category")
+            sleeve = None
+        key = (canonical_team, variant, mtype, sleeve)
+        deci = audit_db.get_decision(conn, sku) or {}
+        published = bool(fam.get("published"))
+        # Prioridad: si hay múltiples SKUs matcheando la misma celda (raro),
+        # prefiero el verified + published sobre otros
+        current = index_by_key.get(key)
+        status = deci.get("status", "pending")
+        score = (4 if published and status == "verified" else
+                 3 if status == "verified" else
+                 2 if status == "needs_rework" else
+                 1 if status == "pending" else 0)
+        if not current or score > current[3]:
+            index_by_key[key] = (sku, status, published, score)
+
+    # Contadores para progress bar global
+    total_needed = len(MUNDIAL_2026_TEAMS) * len(MUNDIAL_MIN_VARIANTS)
+    counts = {"published": 0, "verified": 0, "pending": 0, "rework": 0, "flagged": 0, "missing": 0}
+
+    # Build rows por grupo
+    rows_by_group = team_by_group()
+
+    def _cell_status(team_canonical, variant_tuple):
+        variant, mtype, sleeve, _label = variant_tuple
+        key = (team_canonical, variant, mtype, sleeve)
+        entry = index_by_key.get(key)
+        if not entry:
+            return {"icon": "❌", "label": "falta", "color": "red",
+                    "sku": None, "status": "missing", "published": False}
+        sku, status, published, _score = entry
+        if published and status == "verified":
+            return {"icon": "✅", "label": "live", "color": "green",
+                    "sku": sku, "status": status, "published": True}
+        if status == "verified":
+            return {"icon": "🟢", "label": "verified (falta publish)", "color": "lightgreen",
+                    "sku": sku, "status": status, "published": False}
+        if status == "needs_rework":
+            return {"icon": "⚠️", "label": "needs_rework", "color": "orange",
+                    "sku": sku, "status": status, "published": False}
+        if status == "flagged":
+            return {"icon": "🔴", "label": "flagged", "color": "red",
+                    "sku": sku, "status": status, "published": False}
+        return {"icon": "⏳", "label": "pending", "color": "gray",
+                "sku": sku, "status": status, "published": False}
+
+    # Compute counts primero
+    all_cell_statuses = []
+    for group_letter, teams in rows_by_group.items():
+        for team_dict in teams:
+            for variant_tuple in MUNDIAL_MIN_VARIANTS:
+                cell = _cell_status(team_dict["canonical"], variant_tuple)
+                all_cell_statuses.append(cell)
+                st_k = cell["status"]
+                if st_k == "verified" and cell["published"]:
+                    counts["published"] += 1
+                elif st_k == "verified":
+                    counts["verified"] += 1
+                elif st_k == "pending":
+                    counts["pending"] += 1
+                elif st_k == "needs_rework":
+                    counts["rework"] += 1
+                elif st_k == "flagged":
+                    counts["flagged"] += 1
+                elif st_k == "missing":
+                    counts["missing"] += 1
+
+    # Progress bar + counters
+    published_pct = counts["published"] / total_needed
+    st.progress(
+        published_pct,
+        text=f"🏆 Mundial shipeable: **{counts['published']}/{total_needed} SKUs published live** "
+             f"({published_pct*100:.0f}%)",
+    )
+    cnt_c1, cnt_c2, cnt_c3, cnt_c4, cnt_c5, cnt_c6 = st.columns(6)
+    cnt_c1.metric("✅ Live", counts["published"])
+    cnt_c2.metric("🟢 Listas (pub)", counts["verified"])
+    cnt_c3.metric("⏳ Pending", counts["pending"])
+    cnt_c4.metric("⚠️ Rework", counts["rework"])
+    cnt_c5.metric("🔴 Flagged", counts["flagged"])
+    cnt_c6.metric("❌ Falta", counts["missing"])
+
+    st.markdown("---")
+
+    # Filter rápido: solo rows con ❌/⚠️/🔴 (lo que falta atender)
+    only_gaps = st.checkbox(
+        "🎯 Mostrar solo teams con gaps (❌/⚠️/🔴 en alguna variante)",
+        value=False, key="mundial_only_gaps",
+    )
+
+    # Render grupos A-L
+    for group_letter, teams in rows_by_group.items():
+        st.markdown(f"### Grupo {group_letter}")
+        for team_dict in teams:
+            cells = [_cell_status(team_dict["canonical"], v) for v in MUNDIAL_MIN_VARIANTS]
+            # Skip si only_gaps y todas verified/live
+            if only_gaps and all(c["status"] == "verified" for c in cells):
+                continue
+            team_canonical = team_dict["canonical"]
+
+            row_cols = st.columns([2, 2, 2, 1])
+            with row_cols[0]:
+                st.markdown(f"**{team_canonical}**")
+                # Mostrar aliases ES como caption
+                aliases_es = [a for a in team_dict["aliases"] if a != team_canonical.lower()]
+                if aliases_es:
+                    st.caption(f"_{aliases_es[0]}_")
+
+            for idx, (variant_tuple, cell) in enumerate(zip(MUNDIAL_MIN_VARIANTS, cells)):
+                variant, mtype, sleeve, label = variant_tuple
+                with row_cols[idx + 1]:
+                    if cell["sku"]:
+                        btn_label = f"{cell['icon']} {label}\n`{cell['sku']}`"
+                        if st.button(
+                            btn_label,
+                            key=f"mdcell_{team_canonical}_{variant}",
+                            use_container_width=True,
+                            help=f"Status: {cell['label']} · click para abrir en Audit Detail",
+                        ):
+                            st.session_state.audit_view = "detail"
+                            st.session_state.current_family = cell["sku"]
+                            st.rerun()
+                    else:
+                        btn_label = f"{cell['icon']} {label}\n(falta)"
+                        if st.button(
+                            btn_label,
+                            key=f"mdcell_{team_canonical}_{variant}_missing",
+                            use_container_width=True,
+                            help=f"No existe SKU. Click para ir al queue con filtro por team={team_canonical}.",
+                        ):
+                            # Pre-set search a este team
+                            st.session_state.audit_view = "queue"
+                            # Hack: no hay un setter limpio del filtro search.
+                            # Dejamos un toast con el nombre a copiar.
+                            st.toast(
+                                f"Buscá `{team_canonical}` + `{label}` en el queue. "
+                                f"Si no aparece, el SKU no fue scrapeado aún."
+                            )
+                            st.rerun()
+
+            with row_cols[3]:
+                # Resumen del team
+                n_ok = sum(1 for c in cells if c["status"] == "verified" and c["published"])
+                n_mis = sum(1 for c in cells if c["status"] == "missing")
+                if n_ok == len(cells):
+                    st.success("✅ Listo")
+                elif n_mis == len(cells):
+                    st.error("❌ Cero")
+                elif n_mis:
+                    st.warning(f"Falta {n_mis}")
+                else:
+                    st.info("En audit")
+
+
 def _run_batch_publish(conn, catalog, items):
     """Ops s11 — corre publish 1-a-1 sobre la lista de items pending review.
     Muestra progress bar + log streaming. Si un item falla (publish retorna por
@@ -3922,7 +4154,7 @@ def render_page(conn):
     _render_stats_header(conn)
     st.markdown("")
 
-    tc1, tc2, tc3 = st.columns(3)
+    tc1, tc2, tc3, tc4 = st.columns(4)
     with tc1:
         if st.button("📋 Queue", use_container_width=True, type="primary" if view == "queue" else "secondary"):
             st.session_state.audit_view = "queue"
@@ -3933,6 +4165,10 @@ def render_page(conn):
             st.session_state.audit_view = "detail"
             st.rerun()
     with tc3:
+        if st.button("🏆 Mundial 2026", use_container_width=True, type="primary" if view == "mundial" else "secondary"):
+            st.session_state.audit_view = "mundial"
+            st.rerun()
+    with tc4:
         if st.button("🤖 Pending Review", use_container_width=True, type="primary" if view == "pending" else "secondary"):
             st.session_state.audit_view = "pending"
             st.rerun()
@@ -3989,6 +4225,8 @@ def render_page(conn):
         render_queue(conn, catalog)
     elif view == "detail":
         render_detail(conn, catalog)
+    elif view == "mundial":
+        render_mundial_dashboard(conn, catalog)
     elif view == "pending":
         render_pending_review(conn, catalog)
     else:
