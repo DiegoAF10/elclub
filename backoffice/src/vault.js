@@ -333,6 +333,14 @@ export async function handleVaultReservation(request, env, cors = {}) {
     await incrementCouponUsage(env, coupon.code);
     await appendStatusHistory(env, ref, 'init', 'waived_ff', 'payment',
       `Cupon F&F ${coupon.code} aplicado — sin cobro Q100, COD Q${totalCod}`);
+
+    // Best-effort: notify Diego so F&F leads don't silently land in the dashboard.
+    try {
+      await notifyDiegoVaultPayment(env, lead, 'waived_ff');
+    } catch (err) {
+      console.error('Notify Diego F&F failed (non-fatal):', err);
+    }
+
     return jsonResp({
       ok: true,
       lead_id: ref,
@@ -617,10 +625,16 @@ export async function handleVaultPaymentSuccess(env, vaultRef, paymentIntent) {
 }
 
 /**
- * Send an email to Diego when a vault reservation is paid.
+ * Send an email to Diego when a vault reservation is created or paid.
  * Uses Resend. Silent-fail on errors (not critical for the webhook flow).
+ *
+ * @param {object} env
+ * @param {object} lead            The full lead record
+ * @param {'paid'|'waived_ff'} [kind='paid']  Which lifecycle event triggered the email.
+ *                                            'paid'     → Q100 Recurrente cobró
+ *                                            'waived_ff' → cupón F&F saltó el cobro
  */
-export async function notifyDiegoVaultPayment(env, lead) {
+export async function notifyDiegoVaultPayment(env, lead, kind = 'paid') {
   if (!env.RESEND_API_KEY) {
     console.warn('RESEND_API_KEY not set — skipping email notification');
     return;
@@ -644,13 +658,23 @@ export async function notifyDiegoVaultPayment(env, lead) {
   const envio = lead.envio || {};
   const cliente = lead.cliente || {};
 
+  const isFF = kind === 'waived_ff';
+  const headerIcon   = isFF ? '🎁' : '🏴';
+  const headerTitle  = isFF ? `Vault F&F reservado` : `Vault pagado`;
+  const paymentLine  = isFF
+    ? `<p style="margin:12px 0 4px"><strong>Cupón F&F aplicado (${lead.coupon_code || '—'}).</strong> Sin cobro Q100 upfront. COD a cobrar: <strong>Q${lead.total_cod || '?'}</strong></p>`
+    : `<p style="margin:12px 0 4px"><strong>Q100 reserva recibida.</strong> COD pendiente: <strong>Q${lead.total_cod || '?'}</strong></p>`;
+  const subject      = isFF
+    ? `${headerIcon} Vault ${lead.ref} F&F — ${lead.coupon_code || 'cupon'} (${cliente.nombre || 'cliente'})`
+    : `${headerIcon} Vault ${lead.ref} pagado — Q100 reserva (${cliente.nombre || 'cliente'})`;
+
   const html = `
     <div style="font-family:system-ui,sans-serif;max-width:560px;color:#111">
-      <h2 style="margin:0 0 8px">🏴 Vault pagado — ${lead.ref}</h2>
+      <h2 style="margin:0 0 8px">${headerIcon} ${headerTitle} — ${lead.ref}</h2>
       <p style="margin:0 0 4px"><strong>${cliente.nombre || '—'}</strong> · ${cliente.telefono || '—'}</p>
       ${cliente.email ? `<p style="margin:0 0 12px">Email: ${cliente.email}</p>` : ''}
 
-      <p style="margin:12px 0 4px"><strong>Q100 reserva recibida.</strong> COD pendiente: <strong>Q${lead.total_cod || '?'}</strong></p>
+      ${paymentLine}
 
       <h3 style="margin:20px 0 8px;font-size:14px;color:#666;text-transform:uppercase">Productos (${items.length})</h3>
       <ul style="margin:0 0 12px;padding-left:20px">${itemsHtml || '<li>sin items</li>'}</ul>
@@ -679,7 +703,7 @@ export async function notifyDiegoVaultPayment(env, lead) {
     body: JSON.stringify({
       from,
       to: [to],
-      subject: `🏴 Vault ${lead.ref} pagado — Q100 reserva (${lead.cliente?.nombre || 'cliente'})`,
+      subject,
       html,
     }),
   });
