@@ -120,8 +120,11 @@ export async function findLeadByRef(env, ref) {
  * Updates the full lead record, the index entry, and the history list.
  *
  * @param {'payment'|'fulfillment'} axis
+ * @param {object} [extraFields]  Optional extra fields merged into the record
+ *                                (e.g. Recurrente enrichment). Applied BEFORE the
+ *                                axis field so it cannot overwrite the new status.
  */
-export async function updateLeadStatus(env, ref, axis, newStatus, note) {
+export async function updateLeadStatus(env, ref, axis, newStatus, note, extraFields = null) {
   const found = await findLeadByRef(env, ref);
   if (!found) throw new Error(`lead ${ref} no existe`);
 
@@ -130,6 +133,7 @@ export async function updateLeadStatus(env, ref, axis, newStatus, note) {
 
   const updated = {
     ...found.record,
+    ...(extraFields || {}),
     [field]: newStatus,
     last_status_change: new Date().toISOString(),
   };
@@ -579,24 +583,28 @@ export async function handleVaultPaymentSuccess(env, vaultRef, paymentIntent) {
     };
   }
 
-  // Enrich the lead record with Recurrente metadata
-  const enriched = {
-    ...found.record,
+  // Merge Recurrente enrichment AND transition payment_status → paid in one
+  // atomic KV write (via updateLeadStatus extraFields). Avoids a double-write
+  // and the KV eventual-consistency window between them.
+  const method = paymentIntent?.payment_method?.type || 'unknown';
+  const amountCents = paymentIntent?.amount_in_cents || null;
+  const amountQ = (amountCents || 0) / 100;
+
+  const extraFields = {
     reservation_paid_at: new Date().toISOString(),
     recurrente_payment_id: paymentIntent?.id || null,
-    recurrente_amount: paymentIntent?.amount_in_cents || null,
-    recurrente_method: paymentIntent?.payment_method?.type || 'unknown',
+    recurrente_amount: amountCents,
+    recurrente_method: method,
   };
-  await env.DATA.put(found.entry.key, JSON.stringify(enriched));
 
-  // Transition payment_status → paid (also updates index + appends history)
-  const amountQ = (paymentIntent?.amount_in_cents || 0) / 100;
   await updateLeadStatus(env, vaultRef, 'payment', 'paid',
-    `Pago Q${amountQ} via Recurrente (${enriched.recurrente_method})`);
+    `Pago Q${amountQ} via Recurrente (${method})`, extraFields);
 
   // Best-effort: notify Diego. Failures are swallowed, not propagated.
+  // Build the enriched payload locally for the email (without another KV read).
+  const enrichedLead = { ...found.record, ...extraFields, payment_status: 'paid' };
   try {
-    await notifyDiegoVaultPayment(env, enriched);
+    await notifyDiegoVaultPayment(env, enrichedLead);
   } catch (err) {
     console.error('Notify Diego failed (non-fatal):', err);
   }
