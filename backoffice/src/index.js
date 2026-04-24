@@ -27,6 +27,7 @@ import {
   listLeads,
   getLeadWithHistory,
 } from './vault.js';
+import { createReservationCheckout } from './vault-payment.js';
 
 const ALLOWED_ORIGINS = [
   'https://elclub.club',
@@ -1166,6 +1167,19 @@ export default {
         }
         const result = await getLeadWithHistory(env, ref);
         return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
+      }
+
+      if (url.pathname === '/__debug/create-reservation-checkout' && request.method === 'POST') {
+        const { vault_ref, customer_name } = await request.json();
+        if (!vault_ref || !customer_name) {
+          return new Response(JSON.stringify({ error: 'Body requiere: vault_ref, customer_name' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
+        try {
+          const result = await createReservationCheckout(env, vault_ref, customer_name);
+          return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
+        } catch (err) {
+          return new Response(JSON.stringify({ error: String(err.message || err) }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+        }
       }
 
       return new Response('Not Found', { status: 404 });
