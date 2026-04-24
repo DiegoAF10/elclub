@@ -32,6 +32,7 @@ import {
   handleVaultLeadDetail,
   handlePatchPaymentStatus,
   handlePatchFulfillmentStatus,
+  handleVaultPaymentSuccess,
 } from './vault.js';
 import { createReservationCheckout } from './vault-payment.js';
 
@@ -240,6 +241,26 @@ async function handleWebhook(request, env) {
   const checkout = pi.checkout || {};
   const checkoutId = checkout.id;
   const amountCents = pi.amount_in_cents;
+
+  // ── Vault reservation branch ───────────────────────────────
+  // Runs BEFORE the catalog `pending:{checkoutId}` lookup so vault payments
+  // are resolved against vault_reservation:{checkoutId} first.
+  // Event type already filtered to payment_intent.succeeded above.
+  const vaultReservation = checkoutId
+    ? await env.DATA.get(`vault_reservation:${checkoutId}`, { type: 'json' })
+    : null;
+
+  if (vaultReservation) {
+    const result = await handleVaultPaymentSuccess(env, vaultReservation.vault_ref, pi);
+    // Cleanup reverse-lookup only on first success (not on idempotent replays)
+    if (result.ok && !result.idempotent) {
+      await env.DATA.delete(`vault_reservation:${checkoutId}`);
+    }
+    return new Response(JSON.stringify(result), {
+      status: result.ok ? 200 : 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
   // Customer data from Recurrente payload
   const customer = pi.customer || {};
@@ -1222,6 +1243,23 @@ export default {
         } catch (err) {
           return new Response(JSON.stringify({ error: String(err.message || err) }), { status: 500, headers: { 'Content-Type': 'application/json' } });
         }
+      }
+
+      if (url.pathname === '/__debug/simulate-vault-webhook' && request.method === 'POST') {
+        const body = await request.json();
+        const { vault_ref, payment_id, amount_in_cents, method } = body;
+        if (!vault_ref) {
+          return new Response(JSON.stringify({ error: 'Body requiere: vault_ref' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        }
+        const result = await handleVaultPaymentSuccess(env, vault_ref, {
+          id: payment_id || 'pi_test_' + Date.now(),
+          amount_in_cents: amount_in_cents || 10000,
+          payment_method: { type: method || 'card' },
+        });
+        return new Response(JSON.stringify(result), {
+          status: result.ok ? 200 : 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
 
       return new Response('Not Found', { status: 404 });

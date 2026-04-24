@@ -542,3 +542,139 @@ async function handlePatchAxisStatus(request, env, ref, axis) {
     forced: force,
   });
 }
+
+// ── Webhook vault branch ─────────────────────────────────────
+
+/**
+ * Called from the webhook handler when the incoming payment_intent
+ * (or bank_transfer_intent) corresponds to a vault reservation.
+ *
+ * Idempotent: if the lead is already 'paid', this is a no-op.
+ * Valid event types: payment_intent.succeeded, bank_transfer_intent.succeeded.
+ * Failed events are filtered by the caller.
+ *
+ * @returns {Promise<{ ok: boolean, idempotent?: boolean, vault_ref?: string, reason?: string, current?: string }>}
+ */
+export async function handleVaultPaymentSuccess(env, vaultRef, paymentIntent) {
+  const found = await findLeadByRef(env, vaultRef);
+  if (!found) {
+    console.error(`Vault webhook: lead ${vaultRef} no existe (ya borrado o TTL expirado)`);
+    return { ok: false, reason: 'lead_not_found' };
+  }
+
+  // Idempotency: if already paid, do nothing (Svix may retry)
+  if (found.record.payment_status === 'paid') {
+    console.log(`Vault webhook: lead ${vaultRef} ya esta paid (duplicate delivery, ignorado)`);
+    return { ok: true, idempotent: true, vault_ref: vaultRef };
+  }
+
+  // Validate transition: pending → paid (only path expected here)
+  const validation = validateTransition(found.record.payment_status, 'paid', 'payment');
+  if (!validation.valid) {
+    console.error(`Vault webhook: transicion invalida ${found.record.payment_status} → paid para ${vaultRef}`);
+    return {
+      ok: false,
+      reason: 'invalid_transition',
+      current: found.record.payment_status,
+    };
+  }
+
+  // Enrich the lead record with Recurrente metadata
+  const enriched = {
+    ...found.record,
+    reservation_paid_at: new Date().toISOString(),
+    recurrente_payment_id: paymentIntent?.id || null,
+    recurrente_amount: paymentIntent?.amount_in_cents || null,
+    recurrente_method: paymentIntent?.payment_method?.type || 'unknown',
+  };
+  await env.DATA.put(found.entry.key, JSON.stringify(enriched));
+
+  // Transition payment_status → paid (also updates index + appends history)
+  const amountQ = (paymentIntent?.amount_in_cents || 0) / 100;
+  await updateLeadStatus(env, vaultRef, 'payment', 'paid',
+    `Pago Q${amountQ} via Recurrente (${enriched.recurrente_method})`);
+
+  // Best-effort: notify Diego. Failures are swallowed, not propagated.
+  try {
+    await notifyDiegoVaultPayment(env, enriched);
+  } catch (err) {
+    console.error('Notify Diego failed (non-fatal):', err);
+  }
+
+  return { ok: true, vault_ref: vaultRef };
+}
+
+/**
+ * Send an email to Diego when a vault reservation is paid.
+ * Uses Resend. Silent-fail on errors (not critical for the webhook flow).
+ */
+export async function notifyDiegoVaultPayment(env, lead) {
+  if (!env.RESEND_API_KEY) {
+    console.warn('RESEND_API_KEY not set — skipping email notification');
+    return;
+  }
+
+  const to   = env.DIEGO_EMAIL || 'diegoarriazaflores@gmail.com';
+  const from = env.VAULT_EMAIL_FROM || 'El Club Vault <onboarding@resend.dev>';
+
+  const items = Array.isArray(lead.productos) ? lead.productos : [];
+  const itemsHtml = items.map(it => {
+    const label = [it.team, it.season, it.variant_label].filter(Boolean).join(' ') || 'jersey';
+    const p = it.personalization || {};
+    const pers = [
+      p.name && `Name: ${p.name}`,
+      (p.number !== undefined && p.number !== null && p.number !== '') && `#${p.number}`,
+      p.patch && `Patch: ${p.patch}`,
+    ].filter(Boolean).join(' · ');
+    return `<li><strong>${label}</strong> — Talla ${it.size || '—'} · Q${it.total_price || '—'}${pers ? ` <br><span style="color:#666">${pers}</span>` : ''}</li>`;
+  }).join('');
+
+  const envio = lead.envio || {};
+  const cliente = lead.cliente || {};
+
+  const html = `
+    <div style="font-family:system-ui,sans-serif;max-width:560px;color:#111">
+      <h2 style="margin:0 0 8px">🏴 Vault pagado — ${lead.ref}</h2>
+      <p style="margin:0 0 4px"><strong>${cliente.nombre || '—'}</strong> · ${cliente.telefono || '—'}</p>
+      ${cliente.email ? `<p style="margin:0 0 12px">Email: ${cliente.email}</p>` : ''}
+
+      <p style="margin:12px 0 4px"><strong>Q100 reserva recibida.</strong> COD pendiente: <strong>Q${lead.total_cod || '?'}</strong></p>
+
+      <h3 style="margin:20px 0 8px;font-size:14px;color:#666;text-transform:uppercase">Productos (${items.length})</h3>
+      <ul style="margin:0 0 12px;padding-left:20px">${itemsHtml || '<li>sin items</li>'}</ul>
+
+      <h3 style="margin:20px 0 8px;font-size:14px;color:#666;text-transform:uppercase">Envío</h3>
+      <p style="margin:0 0 4px">${envio.modalidad || '—'} · ${envio.depto || ''} / ${envio.municipio || ''}</p>
+      <p style="margin:0 0 4px;color:#555">${envio.direccion || '—'}</p>
+      ${envio.referencias ? `<p style="margin:0 0 4px;color:#666"><em>Ref: ${envio.referencias}</em></p>` : ''}
+
+      ${lead.notas ? `<p style="margin:12px 0;color:#666"><em>Notas: ${lead.notas}</em></p>` : ''}
+
+      <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+      <p style="margin:0;font-size:12px;color:#888">
+        Siguiente paso: marcar <code>arrived</code> cuando llegue el container.<br>
+        <code>PATCH /api/vault/lead/${lead.ref}/fulfillment</code> con <code>{"status":"arrived"}</code>
+      </p>
+    </div>
+  `;
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject: `🏴 Vault ${lead.ref} pagado — Q100 reserva (${lead.cliente?.nombre || 'cliente'})`,
+      html,
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    console.error(`Resend email failed ${res.status}: ${errText}`);
+    throw new Error(`Resend ${res.status}`);
+  }
+}
