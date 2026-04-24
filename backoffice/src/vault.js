@@ -499,6 +499,17 @@ async function handlePatchAxisStatus(request, env, ref, axis) {
     return jsonResp({ ok: false, error: 'status requerido' }, 400);
   }
 
+  // Guard: even with force=true, only accept known status values. Writing
+  // unknown strings would break validateTransition permanently for this lead.
+  const allStatuses = axis === 'payment' ? ALL_PAYMENT_STATUSES : ALL_FULFILLMENT_STATUSES;
+  if (!allStatuses.includes(newStatus)) {
+    return jsonResp({
+      ok: false,
+      error: `status desconocido: ${newStatus}`,
+      valid_values: allStatuses,
+    }, 400);
+  }
+
   const found = await findLeadByRef(env, ref);
   if (!found) return jsonResp({ ok: false, error: 'lead no encontrado' }, 404);
 
