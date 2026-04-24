@@ -19,6 +19,8 @@
  *   ADMIN_KEY               — Admin endpoint authentication
  */
 
+import { validateTransition } from './vault.js';
+
 const ALLOWED_ORIGINS = [
   'https://elclub.club',
   'https://www.elclub.club',
@@ -1091,11 +1093,16 @@ export default {
 
       // ── DEBUG: state machine validator (temporary, remove before deploy) ──
       if (url.pathname === '/__debug/validate-transition' && request.method === 'GET') {
-        const { validateTransition } = await import('./vault.js');
         const current = url.searchParams.get('current');
         const target  = url.searchParams.get('target');
         const axis    = url.searchParams.get('axis');
-        const result  = validateTransition(current, target, axis);
+        if (!current || !target || !axis) {
+          return new Response(
+            JSON.stringify({ error: 'Params requeridos: current, target, axis' }),
+            { status: 400, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        const result = validateTransition(current, target, axis);
         return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
       }
 
