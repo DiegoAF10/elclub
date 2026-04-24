@@ -1089,6 +1089,16 @@ export default {
         return await handleWebhook(request, env);
       }
 
+      // ── DEBUG: state machine validator (temporary, remove before deploy) ──
+      if (url.pathname === '/__debug/validate-transition' && request.method === 'GET') {
+        const { validateTransition } = await import('./vault.js');
+        const current = url.searchParams.get('current');
+        const target  = url.searchParams.get('target');
+        const axis    = url.searchParams.get('axis');
+        const result  = validateTransition(current, target, axis);
+        return new Response(JSON.stringify(result), { headers: { 'Content-Type': 'application/json' } });
+      }
+
       return new Response('Not Found', { status: 404 });
 
     } catch (error) {
