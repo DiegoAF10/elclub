@@ -1,4 +1,37 @@
-# CLAUDE.md
+# CLAUDE.md — el-club (ERP + worker)
+
+## ⚠️ Lectura obligatoria antes de tocar ciertos paths
+
+### Audit tool / catalog schema / scraping integration
+Antes de tocar cualquiera de:
+- `erp/audit.py`, `erp/publicados.py`, `erp/schema.sql`
+- Scripts que lean/escriban `data/catalog.json` del repo hermano `elclub-catalogo-priv`
+- Config que replique listas de teams/categorías (**NUNCA duplicar** `wc2026-classified.json` acá)
+
+**LEÉ COMPLETO:** [`../elclub-catalogo-priv/docs/YUPOO-SCRAPING-PLAYBOOK.md`](../elclub-catalogo-priv/docs/YUPOO-SCRAPING-PLAYBOOK.md)
+
+15+ aprendizajes acumulados sobre schema canonical, SKU format, primary modelo priority, supplier gaps. El audit tool depende de estos invariantes.
+
+### Strategy coordination
+Strategy mantiene docs en el repo hermano `elclub-catalogo-priv/docs/` — PROGRESS.md, LOG.md, PARKED.md, HANDOFF.md. Consultalos antes de tomar decisiones cross-cutting.
+
+---
+
+## Repos hermanos
+
+- **`C:\Users\Diego\elclub-catalogo-priv\`** — catálogo + frontend vault + docs Strategy. Source-of-truth del schema catalog.json.
+
+---
+
+## Invariantes sagrados
+
+1. **`audit_decisions.status='verified' AND final_verified=1`** NUNCA se borra sin comando explícito Diego. Scripts de wipe/migration siempre lo preservan.
+
+2. **Schema `audit_decisions` cambios** requieren sincronizar con `elclub-catalogo-priv/data/catalog.json` por `family_id`. No cambiar keys sin notificar Strategy.
+
+3. **`wc2026-classified.json` es source-of-truth de Mundial** — está en `elclub-catalogo-priv/data/`. ERP config (`erp/config/*.py`) DEBE cargar desde ahí. NUNCA duplicar la lista de teams en un archivo Python paralelo.
+
+---
 
 <!-- autoskills:start -->
 
