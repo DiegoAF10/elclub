@@ -60,6 +60,40 @@ def fid_prefix(fid: str) -> str:
     return m.group(1) if m else fid.lower()
 
 
+def season_includes_2026(season: str, fid: str) -> bool:
+    """Detecta si la season incluye el año 2026 — handles 4 formatos:
+    - "2026"          → True
+    - "26-27" / "25-26" cross-year → True (ambos cubren 2026)
+    - fid con "-2026-" o termina en "-2026" → True
+    - fid con "-25-26-" / "-26-27-" → True
+
+    Sin esto, families con season cross-year (formato YY-YY) quedaban con
+    wc2026_eligible=null porque el backfill solo matcheaba "2026" literal.
+    Bug detectado 2026-04-25 con Ivory Coast + 19 families más.
+    """
+    import re
+    season_lower = (season or "").lower()
+    fid_lower = fid.lower()
+
+    # Caso simple: "2026" en season o fid
+    if "2026" in season_lower:
+        return True
+    if "-2026-" in fid_lower or fid_lower.endswith("-2026"):
+        return True
+
+    # Cross-year YY-YY: extraer ambos años y chequear si alguno es 2026
+    for source in (season_lower, fid_lower):
+        for m in re.finditer(r"(\d{2})-(\d{2})", source):
+            try:
+                y1 = 2000 + int(m.group(1))
+                y2 = 2000 + int(m.group(2))
+                if y1 == 2026 or y2 == 2026:
+                    return True
+            except ValueError:
+                continue
+    return False
+
+
 def main(dry_run: bool = False):
     # 1. Load wc2026 classified teams
     with open(WC_FILE, "r", encoding="utf-8") as f:
@@ -101,10 +135,8 @@ def main(dry_run: bool = False):
             if fam.get("meta_confederation") != conf_display:
                 fam["meta_confederation"] = conf_display
                 stats["meta_confederation_set"] += 1
-            # Eligible solo si season incluye 2026 (o -2026-)
-            season = (fam.get("season") or "").lower()
-            fid_has_2026 = "-2026-" in fid.lower() or fid.lower().endswith("-2026")
-            if ("2026" in season or fid_has_2026) and fam.get("wc2026_eligible") is None:
+            # Eligible si la season incluye 2026 (4 formatos soportados, ver helper).
+            if season_includes_2026(fam.get("season") or "", fid) and fam.get("wc2026_eligible") is None:
                 fam["wc2026_eligible"] = True
                 stats["wc2026_eligible_set"] += 1
 

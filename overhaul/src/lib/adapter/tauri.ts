@@ -14,6 +14,7 @@ import type {
 	BatchCleanResult,
 	CatalogRow,
 	CommitResult,
+	BackfillMetaResult,
 	DeleteFamilyResult,
 	DeleteSkuResult,
 	EditModeloTypeResult,
@@ -211,6 +212,10 @@ export const tauriAdapter: Adapter = {
 
 	async deleteFamily(familyId: string, motivo: string): Promise<DeleteFamilyResult> {
 		return invoke<DeleteFamilyResult>('delete_family', { args: { familyId, motivo } });
+	},
+
+	async backfillMeta(): Promise<BackfillMetaResult> {
+		return invoke<BackfillMetaResult>('backfill_meta');
 	},
 
 	async editModeloType(

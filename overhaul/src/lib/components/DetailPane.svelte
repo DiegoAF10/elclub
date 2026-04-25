@@ -617,6 +617,48 @@
 	// Edit modelo type/sleeve: lógica vive en EditModeloPanel.svelte (inline UI).
 	// Trigger del chip togglea editPanelOpen — declarado arriba.
 
+	// Auto-fix backfill: corre backfill_catalog_meta.py vía bridge para llenar
+	// meta_country, meta_confederation, wc2026_eligible cuando faltan.
+	// Resuelve los 3 issues "fixable" del L1 validator sin terminal.
+	const BACKFILL_FIXABLE_KINDS = new Set([
+		'meta-country-missing',
+		'meta-confederation-missing',
+		'wc2026-not-eligible'
+	]);
+	let backfillState = $state<'idle' | 'busy'>('idle');
+
+	async function handleBackfillMeta() {
+		if (backfillState === 'busy') return;
+		backfillState = 'busy';
+		onFlash('Backfill meta corriendo…');
+		try {
+			const result = await adapter.backfillMeta();
+			if (result.ok) {
+				const stats = result.stats || {};
+				const filled =
+					(stats.meta_country_set ?? 0) +
+					(stats.meta_confederation_set ?? 0) +
+					(stats.wc2026_eligible_set ?? 0);
+				if (filled > 0) {
+					onFlash(`✓ Backfill: ${filled} campos llenos`);
+				} else {
+					onFlash('Backfill: nada que llenar (data ya OK)');
+				}
+				onRefresh();
+			} else {
+				onFlash(`✗ Backfill falló: ${result.error ?? 'error desconocido'}`);
+			}
+		} catch (err) {
+			if (err instanceof NotAvailableInBrowser) {
+				onFlash('Backfill: requiere el .exe');
+			} else {
+				onFlash(`Backfill falló: ${err instanceof Error ? err.message : err}`);
+			}
+		} finally {
+			backfillState = 'idle';
+		}
+	}
+
 	// Batch clean — scope: modelo (solo actual) o family (todos los modelos)
 	let batchCleanState = $state<'idle' | 'busy'>('idle');
 	// Progress streaming desde Python bridge → Tauri event 'bridge-progress'
@@ -1442,6 +1484,22 @@
 										</div>
 									{/if}
 								</div>
+								{#if BACKFILL_FIXABLE_KINDS.has(issue.kind)}
+									<button
+										type="button"
+										onclick={handleBackfillMeta}
+										disabled={backfillState === 'busy'}
+										title="Corre backfill_catalog_meta.py — llena meta_country, conf, wc26 si faltan"
+										class="flex flex-shrink-0 items-center gap-1 self-center rounded-[3px] border border-[var(--color-accent)]/40 bg-[var(--color-accent-soft)] px-2 py-1 text-[10.5px] font-semibold text-[var(--color-accent)] transition-colors hover:border-[var(--color-accent)] hover:bg-[var(--color-accent)]/20 disabled:cursor-not-allowed disabled:opacity-50"
+									>
+										{#if backfillState === 'busy'}
+											<Loader2 size={10} class="animate-spin" />
+											Fixing…
+										{:else}
+											⚡ Auto-fix
+										{/if}
+									</button>
+								{/if}
 							</div>
 						{/each}
 					{/if}

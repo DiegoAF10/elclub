@@ -912,6 +912,57 @@ def cmd_delete_family(args):
     })
 
 
+def cmd_backfill_meta(args):
+    """Corre el script backfill_catalog_meta.py para llenar meta_country,
+    meta_confederation, wc2026_eligible, primary_modelo_idx, y precios
+    default — solo en campos que están null. Idempotente.
+
+    Útil para fixear families recién importadas que aún no recibieron meta,
+    o cuando se agregan nuevos aliases a wc2026-classified.json.
+
+    Returns: stats dict con cuántos campos se llenaron.
+    """
+    import importlib.util  # type: ignore
+    import os  # type: ignore
+
+    # Importar el script como módulo (vive en mismo erp/scripts/ folder)
+    script_path = os.path.join(os.path.dirname(__file__), "backfill_catalog_meta.py")
+    if not os.path.exists(script_path):
+        return _err(f"backfill_catalog_meta.py no encontrado en {script_path}")
+
+    spec = importlib.util.spec_from_file_location("backfill_meta", script_path)
+    if spec is None or spec.loader is None:
+        return _err("no se pudo cargar backfill_catalog_meta.py como módulo")
+    mod = importlib.util.module_from_spec(spec)
+
+    # Capturar stdout del script (que printea las stats) y emitirlo limpio
+    import io
+    import contextlib
+    captured = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(captured):
+            spec.loader.exec_module(mod)
+            mod.main(dry_run=False)
+    except Exception as e:
+        return _err(f"backfill falló: {e}")
+
+    output = captured.getvalue()
+    # Parse las stats del output (formato "  key  N")
+    stats = {}
+    for line in output.splitlines():
+        line = line.strip()
+        if line.startswith(("meta_", "wc2026_", "primary_", "prices_", "families_")):
+            parts = line.split()
+            if len(parts) >= 2 and parts[-1].isdigit():
+                stats[parts[0]] = int(parts[-1])
+
+    _reply({
+        "ok": True,
+        "stats": stats,
+        "raw_output": output[-500:],  # last 500 chars para debug si algo raro
+    })
+
+
 COMMANDS = {
     "ping": cmd_ping,
     "regen_watermark": cmd_regen_watermark,
@@ -924,6 +975,7 @@ COMMANDS = {
     "set_family_variant": cmd_set_family_variant,
     "move_modelo": cmd_move_modelo,
     "delete_r2_objects": cmd_delete_r2_objects,
+    "backfill_meta": cmd_backfill_meta,
 }
 
 

@@ -1406,6 +1406,34 @@ fn invalidate_cache(state: tauri::State<AppState>) -> Result<()> {
 }
 
 #[derive(Debug, Serialize)]
+pub struct BackfillMetaResult {
+    pub ok: bool,
+    pub stats: Option<serde_json::Value>,
+    pub error: Option<String>,
+}
+
+/// Corre backfill_catalog_meta.py vía bridge — llena meta_country, conf,
+/// wc2026_eligible, primary_modelo_idx, prices default donde estén null.
+/// Idempotente. Útil cuando aparece un warning L1 en checks pre-publish.
+#[tauri::command]
+async fn backfill_meta(state: tauri::State<'_, AppState>) -> Result<BackfillMetaResult> {
+    let payload = serde_json::json!({ "cmd": "backfill_meta" });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    invalidate_catalog(&state);
+
+    Ok(BackfillMetaResult {
+        ok: result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false),
+        stats: result.get("stats").cloned(),
+        error: result
+            .get("error")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+    })
+}
+
+#[derive(Debug, Serialize)]
 pub struct BatchCleanResult {
     pub ok: bool,
     pub total: u32,
@@ -1721,6 +1749,7 @@ pub fn run() {
             edit_modelo_type,
             move_modelo,
             delete_family,
+            backfill_meta,
             invalidate_cache,
             batch_clean_family,
             open_msi_folder,

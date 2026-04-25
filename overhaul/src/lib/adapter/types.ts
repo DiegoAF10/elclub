@@ -97,6 +97,12 @@ export interface DeleteFamilyResult {
 	error?: string;
 }
 
+export interface BackfillMetaResult {
+	ok: boolean;
+	stats?: Record<string, number>;
+	error?: string;
+}
+
 export interface BatchCleanResult {
 	ok: boolean;
 	total: number;
@@ -227,6 +233,7 @@ export interface Adapter {
 	gitStatus(): Promise<GitStatusInfo>;
 	deleteSku(sku: string, motivo: string): Promise<DeleteSkuResult>;
 	deleteFamily(familyId: string, motivo: string): Promise<DeleteFamilyResult>;
+	backfillMeta(): Promise<BackfillMetaResult>;
 	editModeloType(
 		fid: string,
 		modeloIdx: number,
