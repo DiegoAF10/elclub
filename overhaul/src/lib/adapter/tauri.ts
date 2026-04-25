@@ -1,0 +1,240 @@
+// Tauri adapter — scaffolding listo para Fase 2.
+// Las Rust commands se implementan en src-tauri/src/main.rs (Fase 2).
+// Esta impl delegará a `invoke()` del @tauri-apps/api cuando esté wired.
+//
+// En Fase 1 este módulo está inactivo (isTauri() retorna false sin runtime).
+// En Fase 2 se importará dinámicamente @tauri-apps/api y las Rust commands
+// estarán registradas en el Rust backend.
+
+import type {
+	Adapter,
+	AdapterCapabilities,
+	AuditDecision,
+	AuditStatus,
+	BatchCleanResult,
+	CatalogRow,
+	CommitResult,
+	DeleteSkuResult,
+	EditModeloTypeResult,
+	GitStatusInfo,
+	ListFilter,
+	MoveModeloArgs,
+	MoveModeloResult,
+	PhotoAction,
+	RemovePhotosResult,
+	SetFamilyVariantResult,
+	WatermarkArgs,
+	WatermarkResult
+} from './types';
+import type { Family } from '../data/types';
+import { transformFamily } from './transform';
+
+// ─── Detection ────────────────────────────────────────────────────────
+// Tauri 2 expone `window.__TAURI_INTERNALS__` en el runtime nativo.
+// En browser mode, esta property no existe → isTauri() = false.
+export function isTauri(): boolean {
+	if (typeof window === 'undefined') return false;
+	// Check both v1 (__TAURI__) and v2 (__TAURI_INTERNALS__) for forward-compat.
+	return (
+		// @ts-expect-error — window augmentation at runtime
+		typeof window.__TAURI_INTERNALS__ !== 'undefined' ||
+		// @ts-expect-error — window augmentation at runtime
+		typeof window.__TAURI__ !== 'undefined'
+	);
+}
+
+// ─── Dynamic invoke — importa @tauri-apps/api solo si corre en Tauri ──
+// Evita que el build browser falle por import no resuelto.
+async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+	if (!isTauri()) {
+		throw new Error(
+			`Tauri runtime not detected — tried to invoke "${cmd}" but window.__TAURI_INTERNALS__ is undefined.`
+		);
+	}
+	const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
+	return (await tauriInvoke(cmd, args)) as T;
+}
+
+export const tauriAdapter: Adapter = {
+	capabilities: {
+		reads: true,
+		writes: true,
+		watermark: true,
+		git: true,
+		platform: 'tauri'
+	} as AdapterCapabilities,
+
+	// ─── Reads ──────────────────────────────────────────────────────────
+	async listFamilies(filter?: ListFilter): Promise<Family[]> {
+		// Rust devuelve raw catalog rows. Merge con decisions + transform acá
+		// (mismo pipeline que browser.ts, single source of truth en transform.ts).
+		const [rows, decisionsList] = await Promise.all([
+			invoke<CatalogRow[]>('list_families', { filter }),
+			invoke<AuditDecision[]>('list_decisions', { filter: undefined }).catch(
+				() => [] as AuditDecision[]
+			)
+		]);
+		const decisionsBySku = new Map(decisionsList.map((d) => [d.sku, d]));
+		return rows.map((r) => transformFamily(r, decisionsBySku));
+	},
+
+	async getFamily(id: string): Promise<Family | null> {
+		const [row, decisionsList] = await Promise.all([
+			invoke<CatalogRow | null>('get_family', { id }),
+			invoke<AuditDecision[]>('list_decisions', { filter: undefined }).catch(
+				() => [] as AuditDecision[]
+			)
+		]);
+		if (!row) return null;
+		const decisionsBySku = new Map(decisionsList.map((d) => [d.sku, d]));
+		return transformFamily(row, decisionsBySku);
+	},
+
+	async getDecision(sku: string): Promise<AuditDecision | null> {
+		return invoke<AuditDecision | null>('get_decision', { sku });
+	},
+
+	async listDecisions(filter?: ListFilter): Promise<AuditDecision[]> {
+		return invoke<AuditDecision[]>('list_decisions', { filter });
+	},
+
+	async getPhotoActions(familyId: string): Promise<PhotoAction[]> {
+		return invoke<PhotoAction[]>('get_photo_actions', { familyId });
+	},
+
+	// ─── Writes — requieren Rust commands registrados en src-tauri ─────
+	async setDecisionStatus(
+		sku: string,
+		status: AuditStatus,
+		opts?: { override?: boolean }
+	): Promise<void> {
+		// Tauri auto-converts JS camelCase → Rust snake_case; pasamos overrideSagrado
+		// para matchear `override_sagrado: Option<bool>` en lib.rs.
+		return invoke<void>('set_decision_status', {
+			sku,
+			status,
+			overrideSagrado: !!opts?.override
+		});
+	},
+
+	async setFinalVerified(sku: string, verified: boolean): Promise<void> {
+		return invoke<void>('set_final_verified', { sku, verified });
+	},
+
+	async updateGalleryOrder(
+		canonicalFid: string,
+		modeloIdx: number,
+		newOrder: string[]
+	): Promise<void> {
+		return invoke<void>('update_gallery_order', {
+			canonicalFid,
+			modeloIdx,
+			newOrder
+		});
+	},
+
+	async removeModeloPhotos(
+		familyId: string,
+		modeloIdx: number,
+		photoIndices: number[],
+		alsoDeleteR2?: boolean
+	): Promise<RemovePhotosResult> {
+		return invoke<RemovePhotosResult>('remove_modelo_photos', {
+			familyId,
+			modeloIdx,
+			photoIndices,
+			alsoDeleteR2: !!alsoDeleteR2
+		});
+	},
+
+	async setFamilyPublished(familyId: string, published: boolean): Promise<void> {
+		return invoke<void>('set_family_published', { familyId, published });
+	},
+
+	async setFamilyFeatured(familyId: string, featured: boolean): Promise<void> {
+		return invoke<void>('set_family_featured', { familyId, featured });
+	},
+
+	async setFamilyArchived(familyId: string, archived: boolean): Promise<void> {
+		return invoke<void>('set_family_archived', { familyId, archived });
+	},
+
+	async setPrimaryModeloIdx(familyId: string, modeloIdx: number): Promise<void> {
+		return invoke<void>('set_primary_modelo_idx', { familyId, modeloIdx });
+	},
+
+	async setFamilyVariant(
+		familyId: string,
+		newVariant: string,
+		newVariantLabel?: string
+	): Promise<SetFamilyVariantResult> {
+		return invoke<SetFamilyVariantResult>('set_family_variant', {
+			familyId,
+			newVariant,
+			newVariantLabel: newVariantLabel ?? null
+		});
+	},
+
+	async moveModelo(args: MoveModeloArgs): Promise<MoveModeloResult> {
+		return invoke<MoveModeloResult>('move_modelo', { args });
+	},
+
+	async setModeloSoldOut(familyId: string, modeloIdx: number, soldOut: boolean): Promise<void> {
+		return invoke<void>('set_modelo_sold_out', { familyId, modeloIdx, soldOut });
+	},
+
+	async setModeloField(
+		familyId: string,
+		modeloIdx: number,
+		field: 'price' | 'sizes' | 'notes',
+		value: string | number | null
+	): Promise<void> {
+		return invoke<void>('set_modelo_field', { familyId, modeloIdx, field, value });
+	},
+
+	async invokeWatermark(args: WatermarkArgs): Promise<WatermarkResult> {
+		return invoke<WatermarkResult>('invoke_watermark', { args });
+	},
+
+	async commitAndPush(message: string): Promise<CommitResult> {
+		return invoke<CommitResult>('commit_and_push', { message });
+	},
+
+	async gitStatus(): Promise<GitStatusInfo> {
+		return invoke<GitStatusInfo>('git_status');
+	},
+
+	async deleteSku(sku: string, motivo: string): Promise<DeleteSkuResult> {
+		return invoke<DeleteSkuResult>('delete_sku', { args: { sku, motivo } });
+	},
+
+	async editModeloType(
+		fid: string,
+		modeloIdx: number,
+		newType: string,
+		newSleeve: string | null,
+		motivo?: string
+	): Promise<EditModeloTypeResult> {
+		return invoke<EditModeloTypeResult>('edit_modelo_type', {
+			args: {
+				fid,
+				modeloIdx,
+				newType,
+				newSleeve,
+				motivo: motivo ?? ''
+			}
+		});
+	},
+
+	async invalidateCache(): Promise<void> {
+		return invoke<void>('invalidate_cache');
+	},
+
+	async openMsiFolder(): Promise<void> {
+		return invoke<void>('open_msi_folder');
+	},
+
+	async batchCleanFamily(familyId: string, modeloIdx?: number): Promise<BatchCleanResult> {
+		return invoke<BatchCleanResult>('batch_clean_family', { familyId, modeloIdx });
+	}
+};
