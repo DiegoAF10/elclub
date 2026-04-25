@@ -55,27 +55,38 @@
 	function handleDndFinalize(famId: string, e: CustomEvent<{ items: Modelo[] }>) {
 		const newModelos = e.detail.items;
 		// Detect cross-family: ¿hay un sku nuevo en este zone que venía de otra family?
-		const prevSkus = new Set((localFamilies.get(famId) ?? []).map((m) => m.sku));
+		let crossFamilyDetected = false;
 		for (const m of newModelos) {
 			const originFid = skuSourceMap.get(m.sku);
 			if (originFid && originFid !== famId) {
-				// Cross-family move detected
-				// Source modelo_idx desde el groups prop (estado original, pre-drag)
+				crossFamilyDetected = true;
 				const sourceFamFresh = findFamily(originFid);
 				const srcIdx =
 					sourceFamFresh?.modelos.findIndex((x) => x.sku === m.sku) ?? -1;
 				if (srcIdx >= 0) {
 					onMoveModelo(originFid, srcIdx, famId);
 				}
-				// Actualizar el mapping para evitar re-dispatch si user undo
 				skuSourceMap.set(m.sku, famId);
 			}
 		}
-		// Persist local state — la UI queda optimistic hasta que el padre
-		// invalide y re-cargue el catalog real.
+
+		// Reset al state real (groups prop). Esto cubre 2 casos:
+		// 1. Cross-family: el parent va a re-cargar el catalog vía onMoveModelo;
+		//    el $effect actualiza localFamilies cuando llegue el nuevo groups.
+		//    Hasta entonces, mantenemos el estado actual del groups (no el optimistic).
+		// 2. Same-family (drop dentro de la misma): svelte-dnd-action a veces NO
+		//    restaura el item al final cuando target==source → quedaba length-1
+		//    permanente, modelo "desaparecido" hasta restart. Reset = restore.
+		const sourceFam = findFamily(famId);
 		const next = new Map(localFamilies);
-		next.set(famId, newModelos);
+		if (sourceFam) {
+			next.set(famId, [...sourceFam.modelos]);
+		} else {
+			// No debería pasar, pero defensive: si no encontramos family, mantenemos items
+			next.set(famId, newModelos);
+		}
 		localFamilies = next;
+		void crossFamilyDetected; // silenciar warning unused (mantiene la rama de detección)
 	}
 
 	function findFamily(fid: string): Family | undefined {

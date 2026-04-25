@@ -151,6 +151,10 @@
 		try {
 			await adapter.setDecisionStatus(sku, status);
 			flash(`${label} · ${sku}`);
+			// Refresh UI: sin esto, el chip status del SKU queda visualmente
+			// igual aunque audit_decisions se actualizó en backend → Diego cree
+			// que el shortcut no funcionó.
+			await invalidateAll();
 		} catch (err) {
 			if (err instanceof NotAvailableInBrowser) {
 				flash(`${label}: requiere el .exe — browser mode es read-only`);
