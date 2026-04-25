@@ -1299,6 +1299,97 @@ async fn delete_sku(
     })
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteFamilyArgs {
+    pub family_id: String,
+    pub motivo: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteFamilyResult {
+    pub ok: bool,
+    pub family_id: Option<String>,
+    pub deleted_skus: Vec<String>,
+    pub delete_log_rows: u32,
+    pub was_published: bool,
+    pub committed: bool,
+    pub push_error: Option<String>,
+    pub error: Option<String>,
+}
+
+/// Soft-delete de una family entera. Refuses si published=true.
+/// - audit_decisions: status='deleted' para todos los SKUs
+/// - audit_delete_log: row per SKU con motivo
+/// - catalog: fam.status='deleted', modelos=[], published=false
+/// - commit + push automático
+#[tauri::command]
+async fn delete_family(
+    args: DeleteFamilyArgs,
+    state: tauri::State<'_, AppState>,
+) -> Result<DeleteFamilyResult> {
+    if args.motivo.trim().is_empty() {
+        return Err(ErpError::Other(
+            "motivo requerido — explicá por qué se borra esta family".to_string(),
+        ));
+    }
+
+    let payload = serde_json::json!({
+        "cmd": "delete_family",
+        "family_id": args.family_id,
+        "motivo": args.motivo,
+    });
+
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    invalidate_catalog(&state);
+
+    let to_strs = |v: &serde_json::Value| -> Vec<String> {
+        v.as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|s| s.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+
+    Ok(DeleteFamilyResult {
+        ok: result.get("ok").and_then(|v| v.as_bool()).unwrap_or(false),
+        family_id: result
+            .get("family_id")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        deleted_skus: result
+            .get("deleted_skus")
+            .map(to_strs)
+            .unwrap_or_default(),
+        delete_log_rows: result
+            .get("delete_log_rows")
+            .and_then(|v| v.as_u64())
+            .map(|n| n as u32)
+            .unwrap_or(0),
+        was_published: result
+            .get("was_published")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        committed: result
+            .get("committed")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        push_error: result
+            .get("push_error")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        error: result
+            .get("error")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+    })
+}
+
 /// Limpia el cache de catalog.json en memoria. Siguiente `list_families`
 /// re-lee el archivo desde disco. Útil cuando ops/scraper escribió al catalog
 /// y querés que la UI refresque sin reiniciar la app.
@@ -1623,6 +1714,7 @@ pub fn run() {
             delete_sku,
             edit_modelo_type,
             move_modelo,
+            delete_family,
             invalidate_cache,
             batch_clean_family,
             open_msi_folder,

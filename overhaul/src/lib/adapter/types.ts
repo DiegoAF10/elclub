@@ -86,6 +86,17 @@ export interface DeleteSkuResult {
 	error?: string;
 }
 
+export interface DeleteFamilyResult {
+	ok: boolean;
+	familyId?: string;
+	deletedSkus: string[];
+	deleteLogRows: number;
+	wasPublished: boolean;
+	committed: boolean;
+	pushError?: string;
+	error?: string;
+}
+
 export interface BatchCleanResult {
 	ok: boolean;
 	total: number;
@@ -215,6 +226,7 @@ export interface Adapter {
 	commitAndPush(message: string): Promise<CommitResult>;
 	gitStatus(): Promise<GitStatusInfo>;
 	deleteSku(sku: string, motivo: string): Promise<DeleteSkuResult>;
+	deleteFamily(familyId: string, motivo: string): Promise<DeleteFamilyResult>;
 	editModeloType(
 		fid: string,
 		modeloIdx: number,

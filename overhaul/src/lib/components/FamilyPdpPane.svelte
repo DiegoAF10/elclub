@@ -46,6 +46,71 @@
 		}
 	}
 
+	let deleteState = $state<'idle' | 'busy'>('idle');
+
+	async function handleDeleteFamily() {
+		if (deleteState === 'busy') return;
+
+		// Guard 1: published=true es sagrado. UI block antes del Python check.
+		if (family.published) {
+			onFlash(
+				`✗ Family ${family.id} está publicada — despublicar primero (toggle en SPECS), después borrar`
+			);
+			return;
+		}
+
+		const modelosCount = family.modelos.length;
+		const summary = modelosCount === 0
+			? `${family.id} (vacío)`
+			: `${family.id} con ${modelosCount} modelo${modelosCount === 1 ? '' : 's'}`;
+
+		const confirmed = window.confirm(
+			`Borrar family completa: ${summary}?\n\n` +
+				`Esto:\n` +
+				`  • Marca audit_decisions.status='deleted' para cada SKU\n` +
+				`  • Inserta row en audit_delete_log con tu motivo\n` +
+				`  • Borra modelos[] del catalog.json\n` +
+				`  • Commit + push automático al vault\n\n` +
+				`Las families published=true NO se borran (sagrado).`
+		);
+		if (!confirmed) return;
+
+		const motivo = window.prompt(
+			`Motivo del delete (requerido):\n\n` +
+				`Ej. "duplicado de mexico-2026-home", "scrape-error: no es México",\n` +
+				`"family vacía sin valor para audit"`,
+			''
+		);
+		if (motivo === null) return; // Cancel
+		if (!motivo.trim()) {
+			onFlash('✗ Delete cancelado: motivo requerido');
+			return;
+		}
+
+		deleteState = 'busy';
+		onFlash(`🗑 Borrando ${family.id}…`);
+		try {
+			const result = await adapter.deleteFamily(family.id, motivo.trim());
+			if (result.ok) {
+				const skus = result.deletedSkus.length;
+				const committed = result.committed ? ' · pushed al vault' : '';
+				const pushFail = result.pushError ? ` · push falló: ${result.pushError}` : '';
+				onFlash(`✓ Family ${family.id} borrada (${skus} SKU${skus === 1 ? '' : 's'})${committed}${pushFail}`);
+				onRefresh();
+			} else {
+				onFlash(`✗ Delete falló: ${result.error ?? 'error desconocido'}`);
+			}
+		} catch (err) {
+			if (err instanceof NotAvailableInBrowser) {
+				onFlash('Delete family: requiere el .exe');
+			} else {
+				onFlash(`Delete falló: ${err instanceof Error ? err.message : err}`);
+			}
+		} finally {
+			deleteState = 'idle';
+		}
+	}
+
 	const MODELO_LABEL: Record<string, string> = {
 		fan_adult: 'Fan adulto',
 		player_adult: 'Player adulto',
@@ -383,10 +448,15 @@
 				</button>
 				<button
 					type="button"
-					class="ml-auto flex items-center gap-1.5 rounded-[4px] border border-[var(--color-flagged)]/30 bg-[var(--color-flagged)]/10 px-2.5 py-1.5 text-[11.5px] font-medium text-[var(--color-flagged)] transition-colors hover:border-[var(--color-flagged)]/60 hover:bg-[var(--color-flagged)]/20"
+					onclick={handleDeleteFamily}
+					disabled={deleteState === 'busy' || family.published}
+					title={family.published
+						? 'Family publicada — despublicar primero (sagrado)'
+						: 'Borrar family entera (motivo requerido)'}
+					class="ml-auto flex items-center gap-1.5 rounded-[4px] border border-[var(--color-flagged)]/30 bg-[var(--color-flagged)]/10 px-2.5 py-1.5 text-[11.5px] font-medium text-[var(--color-flagged)] transition-colors hover:border-[var(--color-flagged)]/60 hover:bg-[var(--color-flagged)]/20 disabled:cursor-not-allowed disabled:opacity-40"
 				>
 					<Trash2 size={13} strokeWidth={1.8} />
-					Delete family
+					{deleteState === 'busy' ? 'Borrando…' : 'Delete family'}
 				</button>
 			</div>
 		</div>

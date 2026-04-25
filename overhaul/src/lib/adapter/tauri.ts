@@ -14,6 +14,7 @@ import type {
 	BatchCleanResult,
 	CatalogRow,
 	CommitResult,
+	DeleteFamilyResult,
 	DeleteSkuResult,
 	EditModeloTypeResult,
 	GitStatusInfo,
@@ -206,6 +207,10 @@ export const tauriAdapter: Adapter = {
 
 	async deleteSku(sku: string, motivo: string): Promise<DeleteSkuResult> {
 		return invoke<DeleteSkuResult>('delete_sku', { args: { sku, motivo } });
+	},
+
+	async deleteFamily(familyId: string, motivo: string): Promise<DeleteFamilyResult> {
+		return invoke<DeleteFamilyResult>('delete_family', { args: { familyId, motivo } });
 	},
 
 	async editModeloType(

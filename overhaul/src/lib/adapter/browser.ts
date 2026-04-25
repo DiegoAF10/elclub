@@ -10,6 +10,7 @@ import type {
 	BatchCleanResult,
 	CatalogRow,
 	CommitResult,
+	DeleteFamilyResult,
 	DeleteSkuResult,
 	EditModeloTypeResult,
 	GitStatusInfo,
@@ -202,6 +203,10 @@ export const browserAdapter: Adapter = {
 
 	async deleteSku(_sku: string, _motivo: string): Promise<DeleteSkuResult> {
 		throw new NotAvailableInBrowser('deleteSku');
+	},
+
+	async deleteFamily(_familyId: string, _motivo: string): Promise<DeleteFamilyResult> {
+		throw new NotAvailableInBrowser('deleteFamily');
 	},
 
 	async editModeloType(): Promise<EditModeloTypeResult> {
