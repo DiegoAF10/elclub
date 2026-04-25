@@ -500,7 +500,13 @@
 									<div
 										class="relative h-16 w-16 shrink-0 overflow-hidden rounded-[3px] border border-[var(--color-border)]"
 									>
-										<img src={f.url} alt="" class="h-full w-full object-cover" />
+										<img
+											src={f.url}
+											alt=""
+											loading="lazy"
+											fetchpriority="low"
+											class="h-full w-full object-cover"
+										/>
 										{#if f.isHero}
 											<span
 												class="absolute top-0.5 right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-[2px] bg-[var(--color-accent)]/95 text-white"

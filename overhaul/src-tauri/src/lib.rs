@@ -283,6 +283,12 @@ fn list_families(
     let out: Vec<Value> = catalog
         .into_iter()
         .filter(|fam| {
+            // Filter zombies: families con status='deleted' (post delete_family).
+            // El entry queda en catalog para audit trail pero NO debe aparecer en UI.
+            let status = fam.get("status").and_then(|v| v.as_str()).unwrap_or("");
+            if status == "deleted" {
+                return false;
+            }
             if let Some(p) = f.published {
                 let is_pub = fam.get("published").and_then(|v| v.as_bool()).unwrap_or(false);
                 if is_pub != p {

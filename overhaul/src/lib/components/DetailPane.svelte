@@ -1168,6 +1168,8 @@
 								<img
 									src={foto.url}
 									alt=""
+									loading="lazy"
+									fetchpriority="low"
 									class="h-full w-full object-cover"
 									draggable="false"
 									onclick={(e) => {

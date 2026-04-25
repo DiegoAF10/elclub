@@ -68,6 +68,9 @@ async function loadDecisions(): Promise<Map<string, AuditDecision>> {
 }
 
 function matchesFilter(fam: CatalogRow, filter?: ListFilter): boolean {
+	// Filter zombies: families con status='deleted' (post delete_family).
+	// El entry queda en catalog para audit trail pero NO debe aparecer en UI.
+	if (fam.status === 'deleted') return false;
 	if (!filter) return true;
 	if (filter.published !== undefined && !!fam.published !== filter.published) return false;
 	if (filter.category !== undefined && fam.category !== filter.category) return false;
