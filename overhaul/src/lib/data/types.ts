@@ -68,6 +68,21 @@ export interface Family {
 	/** Índice del modelo que se muestra como card principal en el vault grid */
 	primaryModeloIdx?: number;
 	modelos: Modelo[];
+
+	// ─── Meta fields del catalog (proyectados desde catalog.json) ─────────
+	// Necesarios para pre-publish validation (ver lib/data/publishValidation.ts).
+	// Source-of-truth: wc2026-classified.json + backfill_catalog_meta.py.
+
+	/** País canónico inglés ("Switzerland", "Brazil"). Null si no matcheó alias. */
+	metaCountry?: string | null;
+	/** Liga si aplica (clubes). Null para selecciones. */
+	metaLeague?: string | null;
+	/** Confederation TitleCase ("Conmebol", "Concacaf", "UEFA"). */
+	metaConfederation?: string | null;
+	/** True si team está clasificado al Mundial 2026. */
+	wc2026Eligible?: boolean | null;
+	/** True si el team NO existe en el supplier H&B (anfitriones honorary, etc.). */
+	supplierGap?: boolean | null;
 }
 
 export interface MundialProgress {

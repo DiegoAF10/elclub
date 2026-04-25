@@ -256,8 +256,11 @@ export interface CatalogRow {
 	sku?: string | null;
 	modelos?: CatalogModeloRow[];
 	_priority?: number;
-	meta_country?: string;
-	meta_league?: string;
+	meta_country?: string | null;
+	meta_league?: string | null;
+	meta_confederation?: string | null;
+	wc2026_eligible?: boolean | null;
+	supplier_gap?: boolean | null;
 	[key: string]: unknown;
 }
 

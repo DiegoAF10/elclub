@@ -329,7 +329,13 @@ export function transformFamily(
 		archived: !!fam.archived,
 		priority: fam._priority || 0,
 		primaryModeloIdx,
-		modelos
+		modelos,
+		// Meta fields para pre-publish validation (L1)
+		metaCountry: fam.meta_country ?? null,
+		metaLeague: fam.meta_league ?? null,
+		metaConfederation: fam.meta_confederation ?? null,
+		wc2026Eligible: fam.wc2026_eligible ?? null,
+		supplierGap: fam.supplier_gap ?? null
 	};
 }
 

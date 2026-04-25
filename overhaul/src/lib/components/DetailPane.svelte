@@ -36,6 +36,7 @@
 	import EditModeloPanel from './EditModeloPanel.svelte';
 	import { dndzone } from 'svelte-dnd-action';
 	import { adapter, NotAvailableInBrowser } from '$lib/adapter';
+	import { validateForPublish } from '$lib/data/publishValidation';
 
 	interface Props {
 		family: Family | null;
@@ -449,18 +450,15 @@
 		}
 	}
 
-	let checks = $derived.by(() => {
-		if (!family || !modelo) return [];
-		const photos = modelo.fotos.length;
-		const dirty = modelo.fotos.filter((p) => p.isDirty).length;
-		const hasHero = modelo.fotos.some((p) => p.isHero);
-		return [
-			{ ok: !!family.team && !!family.season && !!family.variant, label: 'Specs completos' },
-			{ ok: photos >= 3, label: `Gallery ≥ 3 fotos (${photos})` },
-			{ ok: dirty === 0, label: `Sin DIRTY · ${dirty} pendientes` },
-			{ ok: hasHero, label: 'Hero configurado' },
-			{ ok: !!modelo.price && modelo.price > 0, label: `Precio · Q${modelo.price || '?'}` }
-		];
+	// Validación pre-publish (L1) — block/warn/info
+	// Reemplaza el `checks` legacy. Se computa contra la family + primary modelo
+	// (el visible en el card del vault). Si no hay primary explícito, usa el
+	// modelo seleccionado actualmente.
+	let validation = $derived.by(() => {
+		if (!family || !modelo) return null;
+		const primaryIdx = family.primaryModeloIdx ?? 0;
+		const primary = family.modelos[primaryIdx] ?? modelo;
+		return validateForPublish(family, primary);
 	});
 
 	let familyReady = $derived.by(() => {
@@ -1381,37 +1379,70 @@
 				</div>
 			</div>
 
-			<!-- Checks -->
+			<!-- Checks pre-publish (L1 validation: block/warn/info) -->
 			<div class="border-b border-[var(--color-border)] px-6 py-4">
-				<div class="text-display mb-2.5 text-[9.5px] text-[var(--color-text-tertiary)]">
-					Checks pre-publish
+				<div class="text-display mb-2.5 flex items-center justify-between text-[9.5px] text-[var(--color-text-tertiary)]">
+					<span>Checks pre-publish</span>
+					{#if validation && validation.isClean}
+						<span class="flex items-center gap-1 text-[var(--color-success)]">
+							<Check size={10} strokeWidth={2.5} />
+							Todo OK
+						</span>
+					{:else if validation && !validation.canPublish}
+						<span class="flex items-center gap-1 text-[var(--color-danger)]">
+							<AlertTriangle size={10} strokeWidth={2.5} />
+							{validation.issues.filter((i) => i.severity === 'block').length} bloquea
+						</span>
+					{:else if validation && validation.issues.length > 0}
+						<span class="flex items-center gap-1 text-[var(--color-warning)]">
+							<AlertTriangle size={10} strokeWidth={2.5} />
+							{validation.issues.length} aviso{validation.issues.length === 1 ? '' : 's'}
+						</span>
+					{/if}
 				</div>
 				<div class="flex flex-col gap-1.5">
-					{#each checks as c}
-						<div class="flex items-center gap-2 text-[12px]">
+					{#if validation && validation.isClean}
+						<div class="flex items-center gap-2 text-[12px] text-[var(--color-success)]">
 							<span
 								class="flex h-4 w-4 items-center justify-center rounded-full"
-								style="background: {c.ok
-									? 'rgba(74, 222, 128, 0.12)'
-									: 'rgba(244, 63, 94, 0.12)'}; color: {c.ok
-									? 'var(--color-success)'
-									: 'var(--color-danger)'};"
+								style="background: rgba(74, 222, 128, 0.12);"
 							>
-								{#if c.ok}
-									<Check size={11} strokeWidth={2.5} />
-								{:else}
-									<X size={11} strokeWidth={2.5} />
-								{/if}
+								<Check size={11} strokeWidth={2.5} />
 							</span>
-							<span
-								style="color: {c.ok
-									? 'var(--color-text-primary)'
-									: 'var(--color-text-secondary)'};"
-							>
-								{c.label}
-							</span>
+							<span>Lista para publicar</span>
 						</div>
-					{/each}
+					{:else if validation}
+						{#each validation.issues as issue (issue.kind)}
+							{@const tone =
+								issue.severity === 'block'
+									? { bg: 'rgba(244, 63, 94, 0.12)', fg: 'var(--color-danger)' }
+									: issue.severity === 'warn'
+										? { bg: 'rgba(251, 191, 36, 0.14)', fg: 'var(--color-warning)' }
+										: { bg: 'rgba(96, 165, 250, 0.14)', fg: 'var(--color-info, #60a5fa)' }}
+							<div
+								class="flex items-start gap-2 rounded-[4px] px-2 py-1.5 text-[11.5px]"
+								style="background: {tone.bg};"
+							>
+								<span class="mt-0.5 flex-shrink-0" style="color: {tone.fg};">
+									{#if issue.severity === 'block'}
+										<X size={11} strokeWidth={2.5} />
+									{:else if issue.severity === 'warn'}
+										<AlertTriangle size={11} strokeWidth={2.2} />
+									{:else}
+										<Check size={11} strokeWidth={2} />
+									{/if}
+								</span>
+								<div class="min-w-0 flex-1">
+									<div style="color: {tone.fg};">{issue.message}</div>
+									{#if issue.suggestion}
+										<div class="mt-0.5 text-[10.5px] text-[var(--color-text-tertiary)]">
+											{issue.suggestion}
+										</div>
+									{/if}
+								</div>
+							</div>
+						{/each}
+					{/if}
 				</div>
 			</div>
 
@@ -1495,7 +1526,7 @@
 				<div class="text-display mb-2.5 text-[9.5px] text-[var(--color-text-tertiary)]">
 					Publish
 				</div>
-				{#if familyReady.ready}
+				{#if familyReady.ready && validation && validation.canPublish}
 					<button
 						type="button"
 						onclick={handlePublishFamily}
@@ -1511,7 +1542,13 @@
 							Publicar family + Commit + Push · {familyReady.total} modelos
 						{/if}
 					</button>
-				{:else}
+					{#if validation.issues.length > 0}
+						<div class="mt-2 text-[10.5px] text-[var(--color-text-tertiary)]">
+							{validation.issues.length} aviso{validation.issues.length === 1 ? '' : 's'}
+							no-bloqueante{validation.issues.length === 1 ? '' : 's'} — revisá arriba.
+						</div>
+					{/if}
+				{:else if !familyReady.ready}
 					<div class="mb-2 text-[11.5px] text-[var(--color-text-secondary)]">
 						<span class="text-mono font-semibold tabular-nums text-[var(--color-text-primary)]"
 							>{familyReady.verified}/{familyReady.total}</span
@@ -1528,6 +1565,25 @@
 					>
 						<Upload size={14} strokeWidth={1.8} />
 						Publicar family · disabled
+					</button>
+				{:else}
+					<!-- familyReady.ready=true PERO validation.canPublish=false → hay block issues -->
+					<div class="mb-2 text-[11.5px] text-[var(--color-danger)]">
+						{validation?.issues.filter((i) => i.severity === 'block').length} regla{validation &&
+						validation.issues.filter((i) => i.severity === 'block').length === 1
+							? ''
+							: 's'} bloquea{validation &&
+						validation.issues.filter((i) => i.severity === 'block').length === 1
+							? ''
+							: 'n'} la publicación · revisá arriba.
+					</div>
+					<button
+						type="button"
+						disabled
+						class="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-[4px] border border-[var(--color-danger)]/30 bg-[var(--color-danger)]/10 px-4 py-2.5 text-[12.5px] font-semibold text-[var(--color-danger)]"
+					>
+						<Upload size={14} strokeWidth={1.8} />
+						Publicar family · bloqueado
 					</button>
 				{/if}
 			</div>
