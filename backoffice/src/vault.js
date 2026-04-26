@@ -759,7 +759,7 @@ export async function handleConfirmCod(env, ref, source = 'bot') {
   }
 
   return { ok: true, action: 'confirmed', ref,
-    message: 'Pedido confirmado. Te contactamos cuando llegue de China.' };
+    message: 'Pedido confirmado. Te avisamos apenas llegue tu pieza al archivo.' };
 }
 
 /**
