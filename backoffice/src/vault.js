@@ -11,10 +11,16 @@
 
 import { createReservationCheckout } from './vault-payment.js';
 
+// Pricing model (decisión 2026-04-25, spec §1)
+const PRICE_RESERVATION_FLAT = 415;     // Q415 todo incluido si reserva
+const PRICE_BASE_NORESERVATION = 435;   // Q435 base sin reserva (addons separados)
+const RESERVATION_AMOUNT = 100;         // Q100 anticipo
+
 export const PAYMENT_TRANSITIONS = {
   pending:         ['paid', 'refunded_credit', 'cancelled'],
   paid:            ['cod_completed', 'refunded_credit'],
   waived_ff:       ['cod_completed', 'cancelled'],
+  cod_only:        ['cod_completed', 'cancelled'],   // NEW: customer chose no reservation
   cod_completed:   [],
   refunded_credit: [],
   cancelled:       [],
@@ -244,6 +250,31 @@ export function validateReservationPayload(body) {
   return errors;
 }
 
+/**
+ * Validate that body.total is coherent with the chosen payment path.
+ * Anti-manipulation: prevents a malicious client from sending total=100 with
+ * payment_choice='reservation' to get the jersey at the reservation amount.
+ *
+ * @param {number} total
+ * @param {'reservation'|'cod'} paymentChoice
+ * @returns {string|null}  error message or null if valid
+ */
+export function validatePricingCoherence(total, paymentChoice) {
+  if (paymentChoice === 'reservation') {
+    if (total !== PRICE_RESERVATION_FLAT) {
+      return `total invalido para path reserva: esperado Q${PRICE_RESERVATION_FLAT} (todo incluido), recibido Q${total}`;
+    }
+    return null;
+  }
+  if (paymentChoice === 'cod') {
+    if (typeof total !== 'number' || total < PRICE_BASE_NORESERVATION) {
+      return `total invalido para path COD: minimo Q${PRICE_BASE_NORESERVATION}, recibido Q${total}`;
+    }
+    return null;
+  }
+  return `payment_choice invalido: ${paymentChoice}`;
+}
+
 function generateRef() {
   return 'V-' + Date.now().toString(36).toUpperCase();
 }
@@ -283,6 +314,9 @@ export async function handleVaultReservation(request, env, cors = {}) {
     return jsonResp({ ok: false, error: errors.join('; ') }, 400, cors);
   }
 
+  // Determine payment choice (default 'reservation' for backward compat with Sesión A)
+  const paymentChoice = body.payment_choice === 'cod' ? 'cod' : 'reservation';
+
   // Coupon validation (optional)
   let coupon = null;
   if (nonEmpty(body.coupon_code)) {
@@ -293,9 +327,24 @@ export async function handleVaultReservation(request, env, cors = {}) {
   }
 
   const isFFWaiver = coupon?.valid && coupon.type === 'vault_ff';
-  // For vault_ff: coupon.value is the COD amount (Q435 or Q400 etc)
-  // For percent/fixed: the discount applies at COD time, out of scope for the reservation. Still track coupon_code for analytics.
-  const totalCod = isFFWaiver ? coupon.value : (body.total - 100);
+
+  // Validate pricing coherence (skip if F&F — coupon.value is ground truth)
+  if (!isFFWaiver) {
+    const pricingError = validatePricingCoherence(body.total, paymentChoice);
+    if (pricingError) {
+      return jsonResp({ ok: false, error: pricingError }, 400, cors);
+    }
+  }
+
+  // total_cod calculation per path:
+  //   F&F:        coupon.value (Q400)
+  //   reservation: body.total - 100 = Q315 (since body.total === Q415)
+  //   cod:         body.total (Q435+addons, no reservation deducted)
+  const totalCod = isFFWaiver
+    ? coupon.value
+    : paymentChoice === 'cod'
+      ? body.total
+      : body.total - RESERVATION_AMOUNT;
 
   const ref = generateRef();
   const nowIso = new Date().toISOString();
@@ -322,7 +371,11 @@ export async function handleVaultReservation(request, env, cors = {}) {
     notas: nonEmpty(body.notas) ? body.notas.trim() : null,
     reorder_of: nonEmpty(body.reorder_of) ? body.reorder_of.trim() : null,
     coupon_code: coupon?.valid ? coupon.code : null,
-    payment_status: isFFWaiver ? 'waived_ff' : 'pending',
+    payment_status: isFFWaiver
+      ? 'waived_ff'
+      : paymentChoice === 'cod'
+        ? 'cod_only'
+        : 'pending',
     fulfillment_status: 'awaiting_import',
     source: 'vault.elclub.club',
   };
@@ -334,7 +387,6 @@ export async function handleVaultReservation(request, env, cors = {}) {
     await appendStatusHistory(env, ref, 'init', 'waived_ff', 'payment',
       `Cupon F&F ${coupon.code} aplicado — sin cobro Q100, COD Q${totalCod}`);
 
-    // Best-effort: notify Diego so F&F leads don't silently land in the dashboard.
     try {
       await notifyDiegoVaultPayment(env, lead, 'waived_ff');
     } catch (err) {
@@ -346,6 +398,26 @@ export async function handleVaultReservation(request, env, cors = {}) {
       lead_id: ref,
       skip_payment: true,
       total_cod: totalCod,
+      path: 'ff',
+    }, 200, cors);
+  }
+
+  if (paymentChoice === 'cod') {
+    await appendStatusHistory(env, ref, 'init', 'cod_only', 'payment',
+      `Sin reserva — todo COD Q${totalCod}`);
+
+    try {
+      await notifyDiegoVaultPayment(env, lead, 'cod_only');
+    } catch (err) {
+      console.error('Notify Diego cod_only failed (non-fatal):', err);
+    }
+
+    return jsonResp({
+      ok: true,
+      lead_id: ref,
+      skip_payment: true,
+      total_cod: totalCod,
+      path: 'cod',
     }, 200, cors);
   }
 
@@ -375,6 +447,7 @@ export async function handleVaultReservation(request, env, cors = {}) {
   return jsonResp({
     ok: true,
     lead_id: ref,
+    path: 'reservation',
     checkout_url: checkout.checkout_url,
   }, 200, cors);
 }
