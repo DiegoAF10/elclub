@@ -115,6 +115,71 @@ CREATE TABLE IF NOT EXISTS audit_delete_log (
 
 CREATE INDEX IF NOT EXISTS idx_delete_log_fid ON audit_delete_log(family_id);
 CREATE INDEX IF NOT EXISTS idx_delete_log_ts ON audit_delete_log(timestamp);
+
+-- ─── Comercial schema (R1) ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS leads (
+    lead_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    handle TEXT,                  -- IG handle, FB id, etc
+    phone TEXT,                   -- +502...
+    platform TEXT NOT NULL,       -- 'wa' | 'ig' | 'messenger'
+    sender_id TEXT NOT NULL,      -- ManyChat sender_id
+    source_campaign_id TEXT,      -- Meta campaign id que lo trajo
+    first_contact_at TEXT NOT NULL,
+    last_activity_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'new',   -- 'new'|'qualified'|'converted'|'lost'
+    traits_json TEXT DEFAULT '{}',
+    UNIQUE(platform, sender_id)
+);
+
+CREATE TABLE IF NOT EXISTS conversations (
+    conv_id TEXT PRIMARY KEY,             -- matches Cloudflare KV key
+    brand TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    sender_id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT NOT NULL,
+    outcome TEXT,                         -- 'sale'|'abandoned'|'inquiry'|...
+    order_id TEXT,                        -- FK a sales.ref si aplica
+    messages_total INTEGER DEFAULT 0,
+    messages_json TEXT NOT NULL,          -- transcripción serializada
+    tags_json TEXT DEFAULT '[]',
+    analyzed INTEGER DEFAULT 0,
+    synced_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_platform_sender ON conversations(platform, sender_id);
+CREATE INDEX IF NOT EXISTS idx_conv_outcome ON conversations(outcome);
+
+CREATE TABLE IF NOT EXISTS campaigns_snapshot (
+    snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id TEXT NOT NULL,
+    captured_at TEXT NOT NULL,
+    impressions INTEGER DEFAULT 0,
+    clicks INTEGER DEFAULT 0,
+    spend_gtq REAL DEFAULT 0,
+    conversions INTEGER DEFAULT 0,
+    revenue_attributed_gtq REAL DEFAULT 0,
+    raw_json TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_camp_id_time ON campaigns_snapshot(campaign_id, captured_at);
+
+CREATE TABLE IF NOT EXISTS comercial_events (
+    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,                   -- 'order_pending_24h'|'campaign_drop'|'lead_unanswered'|...
+    severity TEXT NOT NULL,               -- 'crit'|'warn'|'info'|'strat'
+    title TEXT NOT NULL,
+    sub TEXT,
+    items_affected_json TEXT DEFAULT '[]', -- [{type, id, ...}]
+    detected_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active', -- 'active'|'resolved'|'ignored'
+    resolved_at TEXT,
+    push_sent INTEGER DEFAULT 0           -- 1 si ya se mandó push WA
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_status_severity ON comercial_events(status, severity);
+CREATE INDEX IF NOT EXISTS idx_events_type ON comercial_events(type);
 """
 
 
