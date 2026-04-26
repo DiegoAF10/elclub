@@ -963,6 +963,231 @@ def cmd_backfill_meta(args):
     })
 
 
+def cmd_list_events(args):
+    """Lista eventos de comercial_events con filtros opcionales."""
+    import sqlite3, json
+    from db import get_conn
+
+    status = args.get("status")          # 'active'|'resolved'|'ignored'|None
+    severity = args.get("severity")      # 'crit'|'warn'|'info'|'strat'|None
+
+    conn = get_conn()
+    try:
+        sql = "SELECT event_id, type, severity, title, sub, items_affected_json, detected_at, status, resolved_at, push_sent FROM comercial_events"
+        clauses = []
+        params = []
+        if status:
+            clauses.append("status = ?"); params.append(status)
+        if severity:
+            clauses.append("severity = ?"); params.append(severity)
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY CASE severity WHEN 'crit' THEN 1 WHEN 'warn' THEN 2 WHEN 'info' THEN 3 ELSE 4 END, detected_at DESC"
+
+        rows = conn.execute(sql, params).fetchall()
+        events = []
+        for r in rows:
+            events.append({
+                "eventId": r[0],
+                "type": r[1],
+                "severity": r[2],
+                "title": r[3],
+                "sub": r[4],
+                "itemsAffected": json.loads(r[5] or '[]'),
+                "detectedAt": r[6],
+                "status": r[7],
+                "resolvedAt": r[8],
+                "pushSent": bool(r[9]),
+            })
+        return {"ok": True, "events": events}
+    finally:
+        conn.close()
+
+
+def cmd_set_event_status(args):
+    """Cambia status de un evento (active/resolved/ignored)."""
+    from db import get_conn
+
+    event_id = args.get("eventId")
+    status = args.get("status")
+    if not event_id or status not in ("active", "resolved", "ignored"):
+        return {"ok": False, "error": "eventId/status missing or invalid"}
+
+    conn = get_conn()
+    try:
+        if status == "resolved":
+            conn.execute(
+                "UPDATE comercial_events SET status=?, resolved_at=datetime('now') WHERE event_id=?",
+                (status, event_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE comercial_events SET status=? WHERE event_id=?",
+                (status, event_id),
+            )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+def cmd_get_order(args):
+    """Devuelve OrderForModal para una orden por su ref (CE-XXXX)."""
+    from db import get_conn
+
+    ref = args.get("ref")
+    if not ref:
+        return {"ok": False, "error": "ref missing"}
+
+    conn = get_conn()
+    try:
+        # Sales table
+        sale = conn.execute("""
+            SELECT s.ref, s.fulfillment_status, s.paid_at, s.shipped_at, s.total_gtq,
+                   s.payment_method, s.notes,
+                   c.name, c.phone, c.handle, c.platform
+            FROM sales s
+            LEFT JOIN customers c ON c.customer_id = s.customer_id
+            WHERE s.ref = ?
+        """, (ref,)).fetchone()
+
+        if not sale:
+            return {"ok": True, "order": None}
+
+        # Items
+        items = conn.execute("""
+            SELECT family_id, jersey_sku, size, unit_price_gtq, unit_cost_gtq, personalization_json
+            FROM sale_items
+            WHERE sale_id = (SELECT sale_id FROM sales WHERE ref = ?)
+        """, (ref,)).fetchall()
+
+        order = {
+            "ref": sale[0],
+            "status": sale[1] or "paid",
+            "paidAt": sale[2],
+            "shippedAt": sale[3],
+            "totalGtq": sale[4],
+            "paymentMethod": sale[5] or "recurrente",
+            "notes": sale[6],
+            "customer": {
+                "name": sale[7] or "(sin nombre)",
+                "phone": sale[8],
+                "handle": sale[9],
+                "platform": sale[10] or "web",
+            },
+            "items": [
+                {
+                    "familyId": i[0],
+                    "jerseySku": i[1],
+                    "size": i[2],
+                    "unitPriceGtq": i[3],
+                    "unitCostGtq": i[4],
+                    "personalizationJson": i[5],
+                }
+                for i in items
+            ],
+        }
+        return {"ok": True, "order": order}
+    finally:
+        conn.close()
+
+
+def cmd_mark_order_shipped(args):
+    """Marca orden como shipped, opcionalmente con tracking_code."""
+    from db import get_conn
+
+    ref = args.get("ref")
+    tracking = args.get("trackingCode")
+    if not ref:
+        return {"ok": False, "error": "ref missing"}
+
+    conn = get_conn()
+    try:
+        if tracking:
+            conn.execute(
+                "UPDATE sales SET fulfillment_status='shipped', shipped_at=datetime('now'), tracking_code=? WHERE ref=?",
+                (tracking, ref),
+            )
+        else:
+            conn.execute(
+                "UPDATE sales SET fulfillment_status='shipped', shipped_at=datetime('now') WHERE ref=?",
+                (ref,),
+            )
+
+        # También resolver el evento order_pending_24h asociado si existe
+        conn.execute("""
+            UPDATE comercial_events
+            SET status='resolved', resolved_at=datetime('now')
+            WHERE type='order_pending_24h' AND status='active'
+              AND items_affected_json LIKE '%' || ? || '%'
+        """, (ref,))
+        conn.commit()
+        return {"ok": True, "ref": ref}
+    finally:
+        conn.close()
+
+
+def cmd_list_sales_in_range(args):
+    """Lista sales con paid_at entre start y end."""
+    from db import get_conn
+    start = args.get("start")
+    end = args.get("end")
+    if not start or not end:
+        return {"ok": False, "error": "start/end missing"}
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT ref, total_gtq, paid_at, fulfillment_status FROM sales WHERE paid_at BETWEEN ? AND ?",
+            (start, end),
+        ).fetchall()
+        return {
+            "ok": True,
+            "sales": [{"ref": r[0], "totalGtq": r[1], "paidAt": r[2], "status": r[3]} for r in rows]
+        }
+    finally:
+        conn.close()
+
+
+def cmd_list_leads_in_range(args):
+    """Lista leads con first_contact_at entre start y end."""
+    from db import get_conn
+    start = args.get("start"); end = args.get("end")
+    if not start or not end:
+        return {"ok": False, "error": "start/end missing"}
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT lead_id, first_contact_at FROM leads WHERE first_contact_at BETWEEN ? AND ?",
+            (start, end),
+        ).fetchall()
+        return {
+            "ok": True,
+            "leads": [{"leadId": r[0], "firstContactAt": r[1]} for r in rows]
+        }
+    finally:
+        conn.close()
+
+
+def cmd_list_ad_spend_in_range(args):
+    """Lista ad spend snapshots entre start y end."""
+    from db import get_conn
+    start = args.get("start"); end = args.get("end")
+    if not start or not end:
+        return {"ok": False, "error": "start/end missing"}
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT campaign_id, spend_gtq, captured_at FROM campaigns_snapshot WHERE captured_at BETWEEN ? AND ?",
+            (start, end),
+        ).fetchall()
+        return {
+            "ok": True,
+            "ad_spend": [{"campaignId": r[0], "spendGtq": r[1], "capturedAt": r[2]} for r in rows]
+        }
+    finally:
+        conn.close()
+
+
 COMMANDS = {
     "ping": cmd_ping,
     "regen_watermark": cmd_regen_watermark,
@@ -976,6 +1201,13 @@ COMMANDS = {
     "move_modelo": cmd_move_modelo,
     "delete_r2_objects": cmd_delete_r2_objects,
     "backfill_meta": cmd_backfill_meta,
+    "list_events": cmd_list_events,
+    "set_event_status": cmd_set_event_status,
+    "get_order": cmd_get_order,
+    "mark_order_shipped": cmd_mark_order_shipped,
+    "list_sales_in_range": cmd_list_sales_in_range,
+    "list_leads_in_range": cmd_list_leads_in_range,
+    "list_ad_spend_in_range": cmd_list_ad_spend_in_range,
 }
 
 
@@ -994,7 +1226,9 @@ def main():
         return _err(f"cmd desconocido: {cmd!r}. Usar: {list(COMMANDS.keys())}")
 
     try:
-        COMMANDS[cmd](payload)
+        result = COMMANDS[cmd](payload)
+        if result is not None:
+            _reply(result)
     except SystemExit:
         raise
     except Exception as e:
