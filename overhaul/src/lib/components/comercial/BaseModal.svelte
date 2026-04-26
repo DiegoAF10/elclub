@@ -31,7 +31,7 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKey} />
+<svelte:window onkeydown={handleKey} />
 
 {#if open}
   <div
@@ -65,7 +65,7 @@
 
       <!-- Stats strip (opcional) -->
       {#if stats}
-        <div class="border-b border-[var(--color-border)] bg-[var(--color-surface-0)] px-6 py-3">
+        <div class="border-b border-[var(--color-border)] bg-[var(--color-surface-1)] px-6 py-3">
           {@render stats()}
         </div>
       {/if}
@@ -77,7 +77,7 @@
 
       <!-- Footer (opcional) -->
       {#if footer}
-        <div class="border-t border-[var(--color-border)] bg-[var(--color-surface-0)] px-6 py-3">
+        <div class="border-t border-[var(--color-border)] bg-[var(--color-surface-1)] px-6 py-3">
           {@render footer()}
         </div>
       {/if}
