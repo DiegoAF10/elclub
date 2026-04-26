@@ -251,6 +251,10 @@ export const browserAdapter: Adapter = {
 		throw new NotAvailableInBrowser('markOrderShipped');
 	},
 
+	async insertEvent() {
+		throw new NotAvailableInBrowser('insertEvent');
+	},
+
 	async listSalesInRange() {
 		return [];
 	},

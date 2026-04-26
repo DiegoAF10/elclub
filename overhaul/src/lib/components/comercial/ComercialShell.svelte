@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import type { ComercialTab } from '$lib/data/comercial';
   import ComercialTabs from './ComercialTabs.svelte';
   import PulsoBar from './PulsoBar.svelte';
@@ -8,18 +8,25 @@
   import InboxTab from './tabs/InboxTab.svelte';
   import AdsTab from './tabs/AdsTab.svelte';
   import SettingsTab from './tabs/SettingsTab.svelte';
+  import { startDetectorLoop } from '$lib/data/eventDetector';
 
   const TABS: ComercialTab[] = ['funnel', 'customers', 'inbox', 'ads', 'settings'];
   const STORAGE_KEY = 'comercial:lastTab';
 
   let activeTab = $state<ComercialTab>('funnel');
+  let stopDetector: (() => void) | null = null;
 
-  // Restaurar último tab abierto
+  // Restaurar último tab abierto + arrancar detector de eventos
   onMount(() => {
     const saved = localStorage.getItem(STORAGE_KEY) as ComercialTab | null;
     if (saved && TABS.includes(saved)) {
       activeTab = saved;
     }
+    stopDetector = startDetectorLoop();
+  });
+
+  onDestroy(() => {
+    stopDetector?.();
   });
 
   function selectTab(tab: ComercialTab) {

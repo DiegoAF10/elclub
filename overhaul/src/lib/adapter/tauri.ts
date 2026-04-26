@@ -28,7 +28,7 @@ import type {
 	WatermarkArgs,
 	WatermarkResult
 } from './types';
-import type { ComercialEvent, EventStatus, OrderForModal, PeriodRange } from '../data/comercial';
+import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange } from '../data/comercial';
 import type { Family } from '../data/types';
 import { transformFamily } from './transform';
 
@@ -264,6 +264,18 @@ export const tauriAdapter: Adapter = {
 
 	async markOrderShipped(ref: string, trackingCode?: string): Promise<void> {
 		return invoke<void>('comercial_mark_order_shipped', { ref, trackingCode: trackingCode ?? null });
+	},
+
+	async insertEvent(detected: DetectedEvent): Promise<number> {
+		return invoke<number>('comercial_insert_event', {
+			args: {
+				type: detected.type,
+				severity: detected.severity,
+				title: detected.title,
+				sub: detected.sub,
+				itemsAffected: detected.itemsAffected
+			}
+		});
 	},
 
 	async listSalesInRange(range: PeriodRange) {

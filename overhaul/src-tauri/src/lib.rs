@@ -1818,6 +1818,33 @@ async fn comercial_list_ad_spend_in_range(start: String, end: String) -> Result<
     Ok(result.get("adSpend").and_then(|v| v.as_array()).cloned().unwrap_or_default())
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InsertEventArgs {
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub severity: String,
+    pub title: String,
+    pub sub: Option<String>,
+    pub items_affected: Vec<Value>,
+}
+
+#[tauri::command]
+async fn comercial_insert_event(args: InsertEventArgs) -> Result<i64> {
+    let payload = serde_json::json!({
+        "cmd": "insert_event",
+        "type": args.type_,
+        "severity": args.severity,
+        "title": args.title,
+        "sub": args.sub,
+        "itemsAffected": args.items_affected,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("eventId").and_then(|v| v.as_i64()).unwrap_or(-1))
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1863,6 +1890,7 @@ pub fn run() {
             comercial_list_sales_in_range,
             comercial_list_leads_in_range,
             comercial_list_ad_spend_in_range,
+            comercial_insert_event,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");

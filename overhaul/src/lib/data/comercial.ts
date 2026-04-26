@@ -35,6 +35,14 @@ export interface ItemAffected {
 
 export type ComercialTab = 'funnel' | 'customers' | 'inbox' | 'ads' | 'settings';
 
+export interface DetectedEvent {
+  type: string;
+  severity: 'crit' | 'warn' | 'info' | 'strat';
+  title: string;
+  sub: string | null;
+  itemsAffected: Array<{ type: string; id: string; hint?: string }>;
+}
+
 export type Period = 'today' | '7d' | '30d' | 'custom';
 
 export interface PeriodRange {

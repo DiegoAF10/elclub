@@ -2,7 +2,7 @@
 // Implementaciones concretas: browser.ts (dev sin Tauri) + tauri.ts (app nativa).
 
 import type { Family, Status } from '../data/types';
-import type { ComercialEvent, EventStatus, OrderForModal, PeriodRange } from '../data/comercial';
+import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange } from '../data/comercial';
 
 export type AuditStatus =
 	| 'pending'
@@ -251,6 +251,8 @@ export interface Adapter {
 	setEventStatus(eventId: number, status: EventStatus): Promise<void>;
 	getOrderForModal(ref: string): Promise<OrderForModal | null>;
 	markOrderShipped(ref: string, trackingCode?: string): Promise<void>;
+
+	insertEvent(detected: DetectedEvent): Promise<number>;
 
 	// Sales/leads/ads en range — para el pulso
 	listSalesInRange(range: PeriodRange): Promise<Array<{ ref: string; totalGtq: number; paidAt: string; status: string }>>;

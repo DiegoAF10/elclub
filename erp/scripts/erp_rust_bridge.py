@@ -963,6 +963,33 @@ def cmd_backfill_meta(args):
     })
 
 
+def cmd_insert_event(args):
+    """Inserta un evento nuevo en comercial_events."""
+    import json
+    from db import get_conn
+
+    type_ = args.get("type")
+    severity = args.get("severity")
+    title = args.get("title")
+    sub = args.get("sub")
+    items = args.get("itemsAffected") or []
+
+    if not type_ or not severity or not title:
+        return {"ok": False, "error": "type/severity/title required"}
+
+    conn = get_conn()
+    try:
+        cur = conn.execute("""
+            INSERT INTO comercial_events
+              (type, severity, title, sub, items_affected_json, detected_at, status)
+            VALUES (?, ?, ?, ?, ?, datetime('now'), 'active')
+        """, (type_, severity, title, sub, json.dumps(items)))
+        conn.commit()
+        return {"ok": True, "eventId": cur.lastrowid}
+    finally:
+        conn.close()
+
+
 def cmd_list_events(args):
     """Lista eventos de comercial_events con filtros opcionales."""
     import json
@@ -1202,6 +1229,7 @@ COMMANDS = {
     "move_modelo": cmd_move_modelo,
     "delete_r2_objects": cmd_delete_r2_objects,
     "backfill_meta": cmd_backfill_meta,
+    "insert_event": cmd_insert_event,
     "list_events": cmd_list_events,
     "set_event_status": cmd_set_event_status,
     "get_order": cmd_get_order,
