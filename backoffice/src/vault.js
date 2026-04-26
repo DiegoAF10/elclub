@@ -703,9 +703,10 @@ export async function handleVaultPaymentSuccess(env, vaultRef, paymentIntent) {
  *
  * @param {object} env
  * @param {object} lead            The full lead record
- * @param {'paid'|'waived_ff'} [kind='paid']  Which lifecycle event triggered the email.
+ * @param {'paid'|'waived_ff'|'cod_only'} [kind='paid']  Which lifecycle event triggered the email.
  *                                            'paid'     → Q100 Recurrente cobró
  *                                            'waived_ff' → cupón F&F saltó el cobro
+ *                                            'cod_only' → cliente eligió sin reserva (todo COD)
  */
 export async function notifyDiegoVaultPayment(env, lead, kind = 'paid') {
   if (!env.RESEND_API_KEY) {
@@ -731,19 +732,29 @@ export async function notifyDiegoVaultPayment(env, lead, kind = 'paid') {
   const envio = lead.envio || {};
   const cliente = lead.cliente || {};
 
-  const isFF = kind === 'waived_ff';
-  const headerIcon   = isFF ? '🎁' : '🏴';
-  const headerTitle  = isFF ? `Vault F&F reservado` : `Vault pagado`;
-  const paymentLine  = isFF
-    ? `<p style="margin:12px 0 4px"><strong>Cupón F&F aplicado (${lead.coupon_code || '—'}).</strong> Sin cobro Q100 upfront. COD a cobrar: <strong>Q${lead.total_cod || '?'}</strong></p>`
-    : `<p style="margin:12px 0 4px"><strong>Q100 reserva recibida.</strong> COD pendiente: <strong>Q${lead.total_cod || '?'}</strong></p>`;
-  const subject      = isFF
-    ? `${headerIcon} Vault ${lead.ref} F&F — ${lead.coupon_code || 'cupon'} (${cliente.nombre || 'cliente'})`
-    : `${headerIcon} Vault ${lead.ref} pagado — Q100 reserva (${cliente.nombre || 'cliente'})`;
+  const kindMeta = {
+    paid:      { icon: '🏴', title: 'Vault pagado',          subjectFragment: 'pagado — Q100 reserva' },
+    waived_ff: { icon: '🎁', title: 'Vault F&F reservado',   subjectFragment: 'F&F' },
+    cod_only:  { icon: '📦', title: 'Vault sin reserva',     subjectFragment: 'sin reserva (COD)' },
+  };
+  const meta = kindMeta[kind] || kindMeta.paid;
+
+  const paymentLine = (() => {
+    if (kind === 'waived_ff') {
+      return `<p style="margin:12px 0 4px"><strong>Cupón F&F aplicado (${lead.coupon_code || '—'}).</strong> Sin cobro Q100 upfront. COD a cobrar: <strong>Q${lead.total_cod || '?'}</strong></p>`;
+    }
+    if (kind === 'cod_only') {
+      return `<p style="margin:12px 0 4px"><strong>Cliente eligió sin reserva.</strong> Sin pago hoy. COD a cobrar al entregar: <strong>Q${lead.total_cod || '?'}</strong></p>`;
+    }
+    // 'paid' default
+    return `<p style="margin:12px 0 4px"><strong>Q100 reserva recibida.</strong> COD pendiente: <strong>Q${lead.total_cod || '?'}</strong></p>`;
+  })();
+
+  const subject = `${meta.icon} Vault ${lead.ref} ${meta.subjectFragment} (${lead.cliente?.nombre || 'cliente'})`;
 
   const html = `
     <div style="font-family:system-ui,sans-serif;max-width:560px;color:#111">
-      <h2 style="margin:0 0 8px">${headerIcon} ${headerTitle} — ${lead.ref}</h2>
+      <h2 style="margin:0 0 8px">${meta.icon} ${meta.title} — ${lead.ref}</h2>
       <p style="margin:0 0 4px"><strong>${cliente.nombre || '—'}</strong> · ${cliente.telefono || '—'}</p>
       ${cliente.email ? `<p style="margin:0 0 12px">Email: ${cliente.email}</p>` : ''}
 
