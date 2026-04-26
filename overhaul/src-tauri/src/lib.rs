@@ -1719,6 +1719,105 @@ fn erp_health() -> HealthStatus {
     }
 }
 
+// ─── Comercial R1 ──────────────────────────────────────────
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ListEventsFilter {
+    pub status: Option<String>,
+    pub severity: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_list_events(filter: ListEventsFilter) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({
+        "cmd": "list_events",
+        "status": filter.status,
+        "severity": filter.severity,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+
+    Ok(result.get("events").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
+#[tauri::command]
+async fn comercial_set_event_status(event_id: i64, status: String) -> Result<()> {
+    let payload = serde_json::json!({ "cmd": "set_event_status", "eventId": event_id, "status": status });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(())
+}
+
+// IMPORTANT: `ref` is a reserved keyword in Rust. Use a struct with serde rename:
+#[derive(Debug, Deserialize)]
+pub struct GetOrderArgs {
+    #[serde(rename = "ref")]
+    pub reff: String,
+}
+
+#[tauri::command]
+async fn comercial_get_order(args: GetOrderArgs) -> Result<Option<Value>> {
+    let payload = serde_json::json!({ "cmd": "get_order", "ref": args.reff });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("order").cloned().filter(|v| !v.is_null()))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MarkShippedArgs {
+    #[serde(rename = "ref")]
+    pub reff: String,
+    #[serde(rename = "trackingCode")]
+    pub tracking_code: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_mark_order_shipped(args: MarkShippedArgs) -> Result<()> {
+    let payload = serde_json::json!({
+        "cmd": "mark_order_shipped",
+        "ref": args.reff,
+        "trackingCode": args.tracking_code,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(())
+}
+
+#[tauri::command]
+async fn comercial_list_sales_in_range(start: String, end: String) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({ "cmd": "list_sales_in_range", "start": start, "end": end });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("sales").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
+#[tauri::command]
+async fn comercial_list_leads_in_range(start: String, end: String) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({ "cmd": "list_leads_in_range", "start": start, "end": end });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("leads").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
+// IMPORTANT: Python's cmd_list_ad_spend_in_range returns the array under key "adSpend"
+// (camelCase), NOT "ad_spend". This was fixed in Task 10 fix commit 631f8f1.
+// Use "adSpend" in result.get(...) below.
+#[tauri::command]
+async fn comercial_list_ad_spend_in_range(start: String, end: String) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({ "cmd": "list_ad_spend_in_range", "start": start, "end": end });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("adSpend").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1756,6 +1855,14 @@ pub fn run() {
             commit_and_push,
             git_status,
             erp_health,
+            // Comercial R1
+            comercial_list_events,
+            comercial_set_event_status,
+            comercial_get_order,
+            comercial_mark_order_shipped,
+            comercial_list_sales_in_range,
+            comercial_list_leads_in_range,
+            comercial_list_ad_spend_in_range,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
