@@ -28,6 +28,7 @@ import type {
 	WatermarkArgs,
 	WatermarkResult
 } from './types';
+import type { ComercialEvent, EventStatus, OrderForModal, PeriodRange } from '../data/comercial';
 import type { Family } from '../data/types';
 import { transformFamily } from './transform';
 
@@ -246,5 +247,43 @@ export const tauriAdapter: Adapter = {
 
 	async batchCleanFamily(familyId: string, modeloIdx?: number): Promise<BatchCleanResult> {
 		return invoke<BatchCleanResult>('batch_clean_family', { familyId, modeloIdx });
+	},
+
+	// ─── Comercial R1 ──────────────────────────────────────────
+	async listEvents(filter?: { status?: EventStatus; severity?: string }): Promise<ComercialEvent[]> {
+		return invoke<ComercialEvent[]>('comercial_list_events', { filter: filter ?? {} });
+	},
+
+	async setEventStatus(eventId: number, status: EventStatus): Promise<void> {
+		return invoke<void>('comercial_set_event_status', { eventId, status });
+	},
+
+	async getOrderForModal(ref: string): Promise<OrderForModal | null> {
+		return invoke<OrderForModal | null>('comercial_get_order', { ref });
+	},
+
+	async markOrderShipped(ref: string, trackingCode?: string): Promise<void> {
+		return invoke<void>('comercial_mark_order_shipped', { ref, trackingCode: trackingCode ?? null });
+	},
+
+	async listSalesInRange(range: PeriodRange) {
+		return invoke<Array<{ ref: string; totalGtq: number; paidAt: string; status: string }>>(
+			'comercial_list_sales_in_range',
+			{ start: range.start, end: range.end }
+		);
+	},
+
+	async listLeadsInRange(range: PeriodRange) {
+		return invoke<Array<{ leadId: number; firstContactAt: string }>>(
+			'comercial_list_leads_in_range',
+			{ start: range.start, end: range.end }
+		);
+	},
+
+	async listAdSpendInRange(range: PeriodRange) {
+		return invoke<Array<{ campaignId: string; spendGtq: number; capturedAt: string }>>(
+			'comercial_list_ad_spend_in_range',
+			{ start: range.start, end: range.end }
+		);
 	}
 };

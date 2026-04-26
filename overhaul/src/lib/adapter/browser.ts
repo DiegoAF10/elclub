@@ -232,6 +232,35 @@ export const browserAdapter: Adapter = {
 
 	async batchCleanFamily(_familyId: string, _modeloIdx?: number): Promise<BatchCleanResult> {
 		throw new NotAvailableInBrowser('batchCleanFamily');
+	},
+
+	// ─── Comercial R1 ──────────────────────────────────────────
+	async listEvents() {
+		return [];
+	},
+
+	async setEventStatus() {
+		throw new NotAvailableInBrowser('setEventStatus');
+	},
+
+	async getOrderForModal() {
+		return null;
+	},
+
+	async markOrderShipped() {
+		throw new NotAvailableInBrowser('markOrderShipped');
+	},
+
+	async listSalesInRange() {
+		return [];
+	},
+
+	async listLeadsInRange() {
+		return [];
+	},
+
+	async listAdSpendInRange() {
+		return [];
 	}
 };
 
