@@ -474,6 +474,13 @@ def init_audit_schema():
     if "qa_priority" not in cols:
         conn.execute("ALTER TABLE audit_decisions ADD COLUMN qa_priority INTEGER DEFAULT 0")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_qa_priority ON audit_decisions(qa_priority)")
+    # Comercial R1: ensure shipped_at column exists on sales (additive migration).
+    # SQLite is permissive: ALTER TABLE ADD COLUMN is non-blocking and reversible.
+    # Wrap in try/except because sqlite3 raises OperationalError if column exists.
+    try:
+        conn.execute("ALTER TABLE sales ADD COLUMN shipped_at TEXT")
+    except sqlite3.OperationalError:
+        pass  # column already exists, safe to ignore
     conn.commit()
     conn.close()
 

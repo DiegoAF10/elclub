@@ -965,7 +965,7 @@ def cmd_backfill_meta(args):
 
 def cmd_list_events(args):
     """Lista eventos de comercial_events con filtros opcionales."""
-    import sqlite3, json
+    import json
     from db import get_conn
 
     status = args.get("status")          # 'active'|'resolved'|'ignored'|None
@@ -1041,11 +1041,12 @@ def cmd_get_order(args):
 
     conn = get_conn()
     try:
-        # Sales table
+        # NOTA: customers no tiene handle/platform en esta versión del schema.
+        # Defaults: handle=null, platform="web". Enriquecimiento desde leads en R6+.
         sale = conn.execute("""
-            SELECT s.ref, s.fulfillment_status, s.paid_at, s.shipped_at, s.total_gtq,
+            SELECT s.ref, s.fulfillment_status, s.occurred_at, s.shipped_at, s.total,
                    s.payment_method, s.notes,
-                   c.name, c.phone, c.handle, c.platform
+                   c.name, c.phone
             FROM sales s
             LEFT JOIN customers c ON c.customer_id = s.customer_id
             WHERE s.ref = ?
@@ -1056,7 +1057,7 @@ def cmd_get_order(args):
 
         # Items
         items = conn.execute("""
-            SELECT family_id, jersey_sku, size, unit_price_gtq, unit_cost_gtq, personalization_json
+            SELECT family_id, jersey_id, size, unit_price, unit_cost, personalization_json
             FROM sale_items
             WHERE sale_id = (SELECT sale_id FROM sales WHERE ref = ?)
         """, (ref,)).fetchall()
@@ -1064,21 +1065,21 @@ def cmd_get_order(args):
         order = {
             "ref": sale[0],
             "status": sale[1] or "paid",
-            "paidAt": sale[2],
-            "shippedAt": sale[3],
+            "paidAt": sale[2],          # occurred_at = momento del pago
+            "shippedAt": sale[3],        # shipped_at = null hasta marcar shipped
             "totalGtq": sale[4],
             "paymentMethod": sale[5] or "recurrente",
             "notes": sale[6],
             "customer": {
                 "name": sale[7] or "(sin nombre)",
                 "phone": sale[8],
-                "handle": sale[9],
-                "platform": sale[10] or "web",
+                "handle": None,           # no existe en customers schema (R1)
+                "platform": "web",        # default; orden originada via vault/web
             },
             "items": [
                 {
                     "familyId": i[0],
-                    "jerseySku": i[1],
+                    "jerseySku": i[1],     # jersey_id en DB; jerseySku en API
                     "size": i[2],
                     "unitPriceGtq": i[3],
                     "unitCostGtq": i[4],
@@ -1137,7 +1138,7 @@ def cmd_list_sales_in_range(args):
     conn = get_conn()
     try:
         rows = conn.execute(
-            "SELECT ref, total_gtq, paid_at, fulfillment_status FROM sales WHERE paid_at BETWEEN ? AND ?",
+            "SELECT ref, total, occurred_at, fulfillment_status FROM sales WHERE occurred_at BETWEEN ? AND ?",
             (start, end),
         ).fetchall()
         return {
@@ -1182,7 +1183,7 @@ def cmd_list_ad_spend_in_range(args):
         ).fetchall()
         return {
             "ok": True,
-            "ad_spend": [{"campaignId": r[0], "spendGtq": r[1], "capturedAt": r[2]} for r in rows]
+            "adSpend": [{"campaignId": r[0], "spendGtq": r[1], "capturedAt": r[2]} for r in rows]
         }
     finally:
         conn.close()
