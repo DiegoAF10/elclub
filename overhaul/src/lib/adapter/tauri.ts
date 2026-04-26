@@ -259,11 +259,11 @@ export const tauriAdapter: Adapter = {
 	},
 
 	async getOrderForModal(ref: string): Promise<OrderForModal | null> {
-		return invoke<OrderForModal | null>('comercial_get_order', { ref });
+		return invoke<OrderForModal | null>('comercial_get_order', { args: { ref } });
 	},
 
 	async markOrderShipped(ref: string, trackingCode?: string): Promise<void> {
-		return invoke<void>('comercial_mark_order_shipped', { ref, trackingCode: trackingCode ?? null });
+		return invoke<void>('comercial_mark_order_shipped', { args: { ref, trackingCode: trackingCode ?? null } });
 	},
 
 	async insertEvent(detected: DetectedEvent): Promise<number> {
