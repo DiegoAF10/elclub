@@ -3,6 +3,8 @@ import type { DetectedEvent } from './comercial';
 
 export type { DetectedEvent };
 
+const WORKER_BASE = 'https://ventus-backoffice.ventusgt.workers.dev';
+
 /**
  * Corre el detector "órdenes pendientes despacho >24h".
  * Compara sales con status='paid' y paid_at >24h pero shipped_at=null.
@@ -48,7 +50,27 @@ export async function persistEvent(detected: DetectedEvent): Promise<void> {
   const dup = existing.find((e) => e.type === detected.type);
   if (dup) return; // ya existe activo
 
-  await adapter.insertEvent(detected);
+  const eventId = await adapter.insertEvent(detected);
+
+  // Push notification a WA Diego SOLO para crit (R1 scope)
+  if (detected.severity === 'crit') {
+    try {
+      await fetch(`${WORKER_BASE}/api/comercial/notify-diego`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId,
+          severity: detected.severity,
+          title: detected.title,
+          sub: detected.sub
+        })
+      });
+      // Note: markEventPushSent is R6 polish; for R1 we don't track push_sent.
+    } catch (e) {
+      console.warn('[detector] push failed', e);
+      // Si falla, queda con push_sent=0 y reintentamos en el próximo ciclo (15min)
+    }
+  }
 }
 
 /**
