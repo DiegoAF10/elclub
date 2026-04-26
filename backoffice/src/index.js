@@ -1168,6 +1168,36 @@ export default {
         return await handleVaultSupplierMessages(env, vaultSupplierMatch[1], cors);
       }
 
+      // GET /api/vault/lead/:ref/status — PUBLIC, no auth, returns ONLY non-PII fields.
+      // Used by gracias.html to poll for payment confirmation post-Recurrente.
+      const statusMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)\/status$/);
+      if (statusMatch && request.method === 'GET') {
+        const { findLeadByRef } = await import('./vault.js');
+        const found = await findLeadByRef(env, statusMatch[1]);
+        if (!found) {
+          return new Response(JSON.stringify({ ok: false, error: 'lead no encontrado' }), {
+            status: 404,
+            headers: { ...cors, 'Content-Type': 'application/json' },
+          });
+        }
+        // Only return safe fields — no telefono, direccion, email, etc.
+        return new Response(JSON.stringify({
+          ok: true,
+          ref: found.record.ref,
+          payment_status: found.record.payment_status,
+          fulfillment_status: found.record.fulfillment_status,
+          total_cod: found.record.total_cod,
+          cliente_nombre: found.record.cliente?.nombre || null,
+          productos: (found.record.productos || []).map(p => ({
+            team: p.team, season: p.season, variant_label: p.variant_label, size: p.size,
+          })),
+          recurrente_amount: found.record.recurrente_amount || null,
+        }), {
+          status: 200,
+          headers: { ...cors, 'Content-Type': 'application/json' },
+        });
+      }
+
       return new Response('Not Found', { status: 404 });
 
     } catch (error) {

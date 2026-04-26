@@ -1,5 +1,8 @@
 node_modules
 
+# Superpowers brainstorming visual companion (mockups persist locally)
+.superpowers/
+
 # Output
 .output
 .vercel
