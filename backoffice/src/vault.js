@@ -257,18 +257,22 @@ export function validateReservationPayload(body) {
  *
  * @param {number} total
  * @param {'reservation'|'cod'} paymentChoice
+ * @param {number} itemCount  cantidad de jerseys en el cart (min 1)
  * @returns {string|null}  error message or null if valid
  */
-export function validatePricingCoherence(total, paymentChoice) {
+export function validatePricingCoherence(total, paymentChoice, itemCount = 1) {
+  const n = Math.max(1, itemCount);
   if (paymentChoice === 'reservation') {
-    if (total !== PRICE_RESERVATION_FLAT) {
-      return `total invalido para path reserva: esperado Q${PRICE_RESERVATION_FLAT} (todo incluido), recibido Q${total}`;
+    const expected = PRICE_RESERVATION_FLAT * n;
+    if (total !== expected) {
+      return `total invalido para path reserva: esperado Q${expected} (Q${PRICE_RESERVATION_FLAT} × ${n}), recibido Q${total}`;
     }
     return null;
   }
   if (paymentChoice === 'cod') {
-    if (typeof total !== 'number' || total < PRICE_BASE_NORESERVATION) {
-      return `total invalido para path COD: minimo Q${PRICE_BASE_NORESERVATION}, recibido Q${total}`;
+    const minimum = PRICE_BASE_NORESERVATION * n;
+    if (typeof total !== 'number' || total < minimum) {
+      return `total invalido para path COD: minimo Q${minimum} (Q${PRICE_BASE_NORESERVATION} × ${n}), recibido Q${total}`;
     }
     return null;
   }
@@ -330,7 +334,7 @@ export async function handleVaultReservation(request, env, cors = {}) {
 
   // Validate pricing coherence (skip if F&F — coupon.value is ground truth)
   if (!isFFWaiver) {
-    const pricingError = validatePricingCoherence(body.total, paymentChoice);
+    const pricingError = validatePricingCoherence(body.total, paymentChoice, body.productos?.length || 1);
     if (pricingError) {
       return jsonResp({ ok: false, error: pricingError }, 400, cors);
     }
@@ -338,8 +342,9 @@ export async function handleVaultReservation(request, env, cors = {}) {
 
   // total_cod calculation per path:
   //   F&F:        coupon.value (Q400)
-  //   reservation: body.total - 100 = Q315 (since body.total === Q415)
-  //   cod:         body.total (Q435+addons, no reservation deducted)
+  //   reservation: body.total - 100 (Q100 flat upfront universal, resto al COD)
+  //                e.g. 1 jersey: Q415 - Q100 = Q315 / 2 jerseys: Q830 - Q100 = Q730
+  //   cod:         body.total (Q435+addons por jersey, sin reserva deducida)
   const totalCod = isFFWaiver
     ? coupon.value
     : paymentChoice === 'cod'
