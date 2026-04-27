@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { ComercialTab } from '$lib/data/comercial';
-  import { TrendingUp, Users, Inbox, DollarSign, Settings } from 'lucide-svelte';
+  import { TrendingUp, Users, Inbox, DollarSign, Settings, Package } from 'lucide-svelte';
 
   interface Props {
     activeTab: ComercialTab;
@@ -13,6 +13,7 @@
 
   const TABS: { id: ComercialTab; label: string; icon: any }[] = [
     { id: 'funnel', label: 'Funnel', icon: TrendingUp },
+    { id: 'sales', label: 'Sales', icon: Package },
     { id: 'customers', label: 'Customers', icon: Users },
     { id: 'inbox', label: 'Inbox', icon: Inbox },
     { id: 'ads', label: 'Ads', icon: DollarSign },
