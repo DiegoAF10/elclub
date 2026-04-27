@@ -1561,7 +1561,7 @@ def cmd_get_customer_profile(args):
             from datetime import datetime
             try:
                 last_dt = datetime.fromisoformat(last_order_at.replace('Z', '+00:00').replace(' ', 'T'))
-                days_inactive = (datetime.utcnow() - last_dt.replace(tzinfo=None)).days
+                days_inactive = (datetime.now() - last_dt.replace(tzinfo=None)).days
             except Exception:
                 days_inactive = None
 
@@ -1592,7 +1592,7 @@ def cmd_get_customer_profile(args):
         # Conversations: join by phone (best-effort)
         if c[2]:
             conv_rows = conn.execute("""
-                SELECT c.conv_id, c.platform, c.outcome, c.messages_total, c.ended_at
+                SELECT DISTINCT c.conv_id, c.platform, c.outcome, c.messages_total, c.ended_at
                 FROM conversations c
                 JOIN leads l ON l.platform = c.platform AND l.sender_id = c.sender_id
                 WHERE l.phone = ?
@@ -1658,7 +1658,7 @@ def cmd_create_customer(args):
     try:
         cur = conn.execute("""
             INSERT INTO customers (name, phone, email, source, first_order_at, created_at)
-            VALUES (?, ?, ?, ?, '', datetime('now'))
+            VALUES (?, ?, ?, ?, NULL, datetime('now', 'localtime'))
         """, (name.strip(), phone, email, source))
         conn.commit()
         return {"ok": True, "customerId": cur.lastrowid}
@@ -1683,10 +1683,12 @@ def cmd_update_customer_traits(args):
 
     conn = get_conn()
     try:
-        conn.execute(
+        cur = conn.execute(
             "UPDATE customers SET tags_json = ? WHERE customer_id = ?",
             (json.dumps(traits), customer_id),
         )
+        if cur.rowcount == 0:
+            return {"ok": False, "error": f"customer {customer_id} not found"}
         conn.commit()
         return {"ok": True}
     finally:
@@ -1704,10 +1706,12 @@ def cmd_set_customer_blocked(args):
 
     conn = get_conn()
     try:
-        conn.execute(
+        cur = conn.execute(
             "UPDATE customers SET blocked = ? WHERE customer_id = ?",
             (1 if blocked else 0, customer_id),
         )
+        if cur.rowcount == 0:
+            return {"ok": False, "error": f"customer {customer_id} not found"}
         conn.commit()
         return {"ok": True}
     finally:
@@ -1725,10 +1729,12 @@ def cmd_update_customer_source(args):
 
     conn = get_conn()
     try:
-        conn.execute(
+        cur = conn.execute(
             "UPDATE customers SET source = ? WHERE customer_id = ?",
             (source, customer_id),
         )
+        if cur.rowcount == 0:
+            return {"ok": False, "error": f"customer {customer_id} not found"}
         conn.commit()
         return {"ok": True}
     finally:
@@ -1805,8 +1811,8 @@ def cmd_create_manual_order(args):
                       (ref, occurred_at, modality, origin, customer_id, payment_method,
                        fulfillment_status, shipping_method, tracking_code, subtotal, shipping_fee,
                        discount, total, source_vault_ref, notes, created_at)
-                    VALUES (?, datetime('now'), 'stock', 'manual', ?, ?, ?, NULL, NULL,
-                            ?, ?, ?, ?, NULL, ?, datetime('now'))
+                    VALUES (?, datetime('now', 'localtime'), 'stock', 'manual', ?, ?, ?, NULL, NULL,
+                            ?, ?, ?, ?, NULL, ?, datetime('now', 'localtime'))
                 """, (candidate, customer_id, payment_method, fulfillment_status,
                       subtotal, shipping_fee, discount, total, notes))
                 ref = candidate
