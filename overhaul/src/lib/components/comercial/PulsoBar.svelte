@@ -8,7 +8,7 @@
     period?: Period;
     setPeriod?: (p: Period) => void;
   }
-  let { period = 'today', setPeriod }: Props = $props();
+  let { period = '30d', setPeriod }: Props = $props();
   let kpis = $state<PulsoKPIs | null>(null);
   let loading = $state(false);
 

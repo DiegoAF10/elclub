@@ -20,7 +20,7 @@
   let stopDetector: (() => void) | null = null;
 
   // Period state hoisted from PulsoBar (R2-combo)
-  let activePeriod = $state<Period>('today');
+  let activePeriod = $state<Period>('30d');
 
   // ManyChat sync loop (R2-combo)
   let stopSync: (() => void) | null = null;
