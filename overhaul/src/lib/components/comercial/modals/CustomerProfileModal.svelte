@@ -1,7 +1,7 @@
 <script lang="ts">
   import { adapter } from '$lib/adapter';
   import type { CustomerProfile, TimelineEntry, ConversationMeta } from '$lib/data/comercial';
-  import { Star, Loader2, ShoppingCart } from 'lucide-svelte';
+  import { Star, Loader2, ShoppingCart, Ticket } from 'lucide-svelte';
   import BaseModal from '../BaseModal.svelte';
   import OrderDetailModal from './OrderDetailModal.svelte';
   import ConversationThreadModal from './ConversationThreadModal.svelte';
@@ -34,6 +34,14 @@
 
   let blockedToggling = $state(false);
   let blockedError = $state<string | null>(null);
+
+  let editingCoupon = $state(false);
+  let couponType = $state<'percent' | 'amount'>('percent');
+  let couponValue = $state(10);
+  let couponDays = $state(30);
+  let couponResult = $state<{ code: string; type?: string; discountPercent?: number | null; discountAmount?: number | null } | null>(null);
+  let couponError = $state<string | null>(null);
+  let couponSaving = $state(false);
 
   const SOURCES = ['f&f', 'ads_meta', 'organic_wa', 'organic_ig', 'messenger', 'web', 'manual', 'otro'];
 
@@ -122,6 +130,45 @@
     } catch (e) {
       sourceError = e instanceof Error ? e.message : String(e);
       console.warn('[customer-profile] source update failed', e);
+    }
+  }
+
+  // === Coupon ===
+  function startCoupon() {
+    if (!profile) return;
+    couponType = 'percent';
+    couponValue = 10;
+    couponDays = 30;
+    couponResult = null;
+    couponError = null;
+    editingCoupon = true;
+  }
+
+  async function submitCoupon() {
+    if (!profile || couponSaving) return;
+    couponError = null;
+    couponSaving = true;
+    try {
+      const result = await adapter.generateCoupon({
+        customerId: profile.customerId,
+        type: couponType,
+        value: couponValue,
+        expiresInDays: couponDays,
+      });
+      if (result.ok && result.code) {
+        couponResult = {
+          code: result.code,
+          type: (result as any).type,
+          discountPercent: (result as any).discountPercent ?? null,
+          discountAmount: (result as any).discountAmount ?? null,
+        };
+      } else {
+        couponError = result.error ?? 'Error desconocido';
+      }
+    } catch (e) {
+      couponError = e instanceof Error ? e.message : String(e);
+    } finally {
+      couponSaving = false;
     }
   }
 
@@ -310,6 +357,68 @@
             </button>
           </div>
           {#if blockedError}<div class="mt-1 text-[10px] text-[var(--color-danger)]">⚠ {blockedError}</div>{/if}
+
+          {#if editingCoupon}
+            <div class="mt-4 rounded-[4px] border border-[var(--color-accent)] bg-[var(--color-surface-1)] p-3">
+              <div class="text-display mb-2 text-[9.5px] text-[var(--color-accent)]">Generar cupón</div>
+              <div class="space-y-2 text-[10.5px]">
+                <div class="flex gap-2">
+                  <select bind:value={couponType} class="flex-1 rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-1 py-0.5 text-[10px]">
+                    <option value="percent">% percent</option>
+                    <option value="amount">Q amount</option>
+                  </select>
+                  <input
+                    type="number"
+                    bind:value={couponValue}
+                    min="1"
+                    class="text-mono w-16 rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-0.5 text-[10px]"
+                  />
+                </div>
+                <div class="flex justify-between items-center gap-2">
+                  <span class="text-[var(--color-text-tertiary)]">Vence en (días)</span>
+                  <input
+                    type="number"
+                    bind:value={couponDays}
+                    min="1"
+                    max="365"
+                    class="text-mono w-16 rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-0.5 text-[10px]"
+                  />
+                </div>
+                {#if couponResult}
+                  <div class="rounded-[3px] bg-[var(--color-surface-0)] p-2">
+                    <div class="text-mono text-[12px] font-semibold" style="color: var(--color-accent);">✓ {couponResult.code}</div>
+                    <div class="text-[9.5px] text-[var(--color-text-tertiary)] mt-0.5">
+                      {#if couponResult.type === 'percent'}{couponResult.discountPercent}% descuento{:else}Q{couponResult.discountAmount} descuento{/if}
+                    </div>
+                  </div>
+                {/if}
+                {#if couponError}
+                  <div class="text-[9.5px] text-[var(--color-danger)]">⚠ {couponError}</div>
+                {/if}
+                <div class="flex gap-2">
+                  <button
+                    type="button"
+                    onclick={submitCoupon}
+                    disabled={couponSaving || !couponValue || couponValue <= 0}
+                    class="flex-1 flex items-center justify-center gap-1 rounded-[3px] bg-[var(--color-accent)] px-2 py-0.5 text-[10px] font-semibold text-black disabled:opacity-60"
+                  >
+                    {#if couponSaving}
+                      <Loader2 size={10} class="animate-spin" /> Generando…
+                    {:else if couponResult}
+                      Generar otro
+                    {:else}
+                      Generar
+                    {/if}
+                  </button>
+                  <button
+                    type="button"
+                    onclick={() => (editingCoupon = false)}
+                    class="flex-1 rounded-[3px] border border-[var(--color-border)] px-2 py-0.5 text-[10px] text-[var(--color-text-secondary)]"
+                  >Cerrar</button>
+                </div>
+              </div>
+            </div>
+          {/if}
         </div>
       </div>
     {/if}
@@ -324,6 +433,13 @@
           class="flex items-center gap-1.5 rounded-[4px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-3 py-1.5 text-[11.5px] font-medium text-[var(--color-text-secondary)]"
         >
           <ShoppingCart size={12} strokeWidth={1.8} /> + Orden manual
+        </button>
+        <button
+          type="button"
+          onclick={startCoupon}
+          class="flex items-center gap-1.5 rounded-[4px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-3 py-1.5 text-[11.5px] font-medium text-[var(--color-text-secondary)]"
+        >
+          <Ticket size={12} strokeWidth={1.8} /> Cupón
         </button>
         <button
           type="button"
