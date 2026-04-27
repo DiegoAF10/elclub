@@ -1,8 +1,9 @@
 <script lang="ts">
   import { adapter } from '$lib/adapter';
   import type { OrderForModal, SaleAttribution, Campaign } from '$lib/data/comercial';
-  import { Package, MessageCircle, Truck, Phone, Loader2, TrendingUp } from 'lucide-svelte';
+  import { Package, MessageCircle, Truck, Phone, Loader2, TrendingUp, Pencil } from 'lucide-svelte';
   import BaseModal from '../BaseModal.svelte';
+  import SaleFormModal from './SaleFormModal.svelte';
 
   interface Props {
     orderRef: string;
@@ -17,6 +18,9 @@
   let action = $state<'idle' | 'shipping'>('idle');
   let attribution = $state<SaleAttribution | null>(null);
   let attributionError = $state<string | null>(null);
+
+  // Edit modal state
+  let openEdit = $state(false);
 
   // Attribution editor state
   let editingAttribution = $state(false);
@@ -290,12 +294,29 @@
             </button>
           {/if}
         </div>
-        <button
-          type="button"
-          onclick={onClose}
-          class="rounded-[4px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-3 py-1.5 text-[11.5px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-        >Cerrar</button>
+        <div class="flex gap-2">
+          <button
+            type="button"
+            onclick={() => (openEdit = true)}
+            class="flex items-center gap-1.5 rounded-[4px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-3 py-1.5 text-[11.5px] text-[var(--color-text-secondary)]"
+          >
+            <Pencil size={12} strokeWidth={1.8} /> Editar
+          </button>
+          <button
+            type="button"
+            onclick={onClose}
+            class="rounded-[4px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-3 py-1.5 text-[11.5px] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+          >Cerrar</button>
+        </div>
       </div>
     {/if}
   {/snippet}
 </BaseModal>
+
+{#if openEdit && order}
+  <SaleFormModal
+    mode="edit"
+    {order}
+    onClose={() => { openEdit = false; void loadOrder(); }}
+  />
+{/if}
