@@ -15,15 +15,18 @@
   let selectedLead = $state<Lead | null>(null);
   let leadConvs = $state<ConversationMeta[]>([]);
   let loadingConvs = $state(false);
+  let convLoadError = $state<string | null>(null);
   let showConvModal = $state(false);
 
   async function selectLead(lead: Lead) {
     selectedLead = lead;
     mode = 'detail';
     loadingConvs = true;
+    convLoadError = null;
     try {
       leadConvs = await adapter.listConversations({ leadId: lead.leadId });
     } catch (e) {
+      convLoadError = e instanceof Error ? e.message : String(e);
       console.warn('[lead-profile] load convs failed', e);
       leadConvs = [];
     } finally {
@@ -105,6 +108,8 @@
           <div class="text-display mb-3 text-[9.5px] text-[var(--color-text-tertiary)]">Conversations · {leadConvs.length}</div>
           {#if loadingConvs}
             <div class="text-[11px] text-[var(--color-text-tertiary)]">Cargando…</div>
+          {:else if convLoadError}
+            <div class="text-[9.5px] text-[var(--color-danger)]">⚠ {convLoadError}</div>
           {:else if leadConvs.length === 0}
             <div class="text-mono text-[11.5px] text-[var(--color-text-tertiary)]">> sin conversations</div>
           {:else}

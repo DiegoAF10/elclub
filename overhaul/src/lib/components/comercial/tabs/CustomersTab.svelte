@@ -11,8 +11,6 @@
   let filterVip = $state(false);
   let filterSource = $state<string>('all');
   let filterLastOrder = $state<'all' | '<30d' | '30-60d' | '60-90d' | '+90d' | 'never'>('all');
-  let showBlocked = $state(false);
-
   type SortKey = 'ltv' | 'lastOrder' | 'totalOrders' | 'firstOrder' | 'source';
   let sortBy = $state<SortKey>('ltv');
 

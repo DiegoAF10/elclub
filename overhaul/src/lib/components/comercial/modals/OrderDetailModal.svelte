@@ -16,6 +16,7 @@
   let error = $state<string | null>(null);
   let action = $state<'idle' | 'shipping'>('idle');
   let attribution = $state<SaleAttribution | null>(null);
+  let attributionError = $state<string | null>(null);
 
   $effect(() => {
     loadOrder();
@@ -24,9 +25,11 @@
   $effect(() => {
     if (order) {
       void (async () => {
+        attributionError = null;
         try {
           attribution = await adapter.getSaleAttribution(order.saleId);
         } catch (e) {
+          attributionError = e instanceof Error ? e.message : String(e);
           console.warn('[order-detail] attribution load failed', e);
         }
       })();
@@ -171,6 +174,7 @@
               </div>
             </div>
           {/if}
+          {#if attributionError}<div class="mt-1 text-[9.5px] text-[var(--color-danger)]">⚠ {attributionError}</div>{/if}
         </div>
       </div>
     {/if}
