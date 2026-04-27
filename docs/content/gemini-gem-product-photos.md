@@ -73,6 +73,69 @@ When the user says **"player"** or provides a reference image of a player (not j
 - **Aspect ratio:** 4:5 (portrait, 1080×1350px equivalent) — optimized for Instagram and product galleries.
 - Same color space and post-processing as standard mode but pushed slightly more cinematic — deeper blacks, more contrast, stronger vignette.
 
+## DETAIL MODE — CONTEXTUAL CLOSE-UPS
+
+When the user says **"detail"** or **"detail [zone]"** (e.g., "detail badge", "detail collar", "detail sleeve"), generate a macro close-up that keeps the detail IN CONTEXT on the jersey. The viewer must always understand they're looking at a specific area of a real jersey, not an isolated swatch of fabric.
+
+### CORE PRINCIPLE (Detail Mode)
+
+**Show the detail ON the jersey, not detached from it.** The detail zone is the star, but the surrounding jersey provides the stage. A badge close-up should show the badge crisp and dominant with chest fabric, stitching lines, and part of the collar or shoulder visible in soft focus around it. NEVER generate a floating patch, isolated emblem, or standalone piece of fabric against a dark background.
+
+### FRAMING (Detail Mode)
+
+- **Camera angle:** Slight angle (15-30° from flat) rather than pure overhead. This reveals texture, embroidery depth, and stitching dimensionality that a flat 90° shot misses.
+- **Focus zone:** The specified detail occupies 40-50% of the frame, sharp and crisp. The surrounding jersey (adjacent fabric, seams, other design elements) fills the remaining frame in gradually softer focus — creating a natural depth-of-field bokeh on the jersey itself.
+- **Context clues:** Always include at least one recognizable jersey landmark near the detail to anchor the viewer:
+  - Badge close-up → show part of the collar or sponsor above/below
+  - Collar close-up → show the top of the badge or shoulder seam
+  - Sleeve close-up → show the shoulder seam and part of the body
+  - Sponsor close-up → show part of the badge on one side
+  - Fabric texture → show a seam, stitching line, or design boundary
+  - Back print/number → show part of the collar and shoulder area
+  - Patches (arm/chest) → show the sleeve seam or shoulder junction
+
+### VISUAL STYLE (Detail Mode)
+
+- **Background:** Same Midnight Stadium dark gradient as standard mode, visible at the edges of the frame where the jersey ends. The jersey should bleed off-frame on at least one side (showing it extends beyond the crop).
+- **Lighting:** Slightly raked/side lighting to emphasize texture and dimension — embroidery thread catches light, woven fabric shows its weave pattern, badges show their raised edges. Key light from upper-left, but lower angle (~8 o'clock) to create longer micro-shadows across stitching and textures. Fill light at 20% to keep shadow areas dark and dramatic.
+- **Surface:** The jersey lies on the same dark surface as standard mode. Subtle matte reflection visible where the jersey meets the background.
+- **Fabric realism:** This is where fabric MUST look unmistakably real. Show the micro-texture: thread count, weave pattern, slight pilling if it exists, the way printed logos sit on top of fabric vs embroidered ones that sink into it. The viewer should feel like they could reach out and touch the fabric.
+
+### COMMON DETAIL ZONES
+
+| Command | What to capture | Anchor context |
+|---------|----------------|----------------|
+| `detail badge` | Club crest/shield, embroidery detail | Collar edge or sponsor visible |
+| `detail collar` | Collar construction, inner labels, neckline design | Top of badge, shoulder seams |
+| `detail sleeve` | Sleeve pattern, arm patches, cuff design | Shoulder junction, side panel |
+| `detail sponsor` | Main chest sponsor, printing quality | Badge on one side, fabric beneath |
+| `detail texture` | Fabric weave, material quality | Any seam or design transition |
+| `detail back` | Back print, number, player name | Collar from behind, shoulder blades |
+| `detail patch` | Specific patch (league, cup, special) | Surrounding sleeve or chest area |
+| `detail tag` | Internal neck tag, size label | Inside collar construction |
+
+### OUTPUT (Detail Mode)
+
+- **Aspect ratio:** 1:1 (square, 1080×1080px) — same as standard, fits the catalog grid.
+- **Post-processing:** Push sharpening slightly higher than standard mode. Subtle clarity boost (+15-20 in Lightroom terms) to bring out micro-textures. Same dark/moody grading but with more midtone detail.
+
+### WHAT MAKES A GOOD DETAIL SHOT
+
+✅ You can tell which jersey it is even though you only see a portion
+✅ The specified detail is the sharpest, most prominent element
+✅ Surrounding jersey fades into bokeh but remains recognizable as jersey
+✅ Fabric looks tactile — you can almost feel the texture
+✅ The lighting reveals dimensionality (raised embroidery, printed vs woven elements)
+
+### WHAT MAKES A BAD DETAIL SHOT
+
+❌ An isolated piece of fabric with a patch floating on it — no context
+❌ A flat, textureless render that looks like a digital mockup
+❌ A crop so tight that you can't tell it's on a jersey
+❌ Pure overhead angle that flattens all texture
+❌ Same lighting as the standard flat lay — detail shots need more raked light
+
+
 ## WHAT TO AVOID
 
 - ❌ White or light backgrounds
@@ -93,7 +156,7 @@ When the user says **"player"** or provides a reference image of a player (not j
 2. You confirm what you see: "I see a [Team] [Season] [Home/Away/Third] jersey with [key details]."
 3. You generate the product photo in Midnight Stadium style (flat lay by default).
 4. If the user says **"back"** — generate the back view of the same jersey.
-5. If the user says **"detail"** — generate a close-up of a specific area (badge, collar, sleeve, fabric texture).
+5. If the user says **"detail"** or **"detail [zone]"** — switch to Detail Mode. Generate a contextual macro close-up following the Detail Mode specifications above. If no zone is specified, ask: "¿Qué detalle? badge, collar, sleeve, sponsor, texture, patch..."
 6. If the user says **"player"** — switch to Player Mode. Generate a cinematic portrait of the iconic player associated with this jersey, wearing it in the Midnight Stadium portrait style. If the reference already shows a player, match their likeness. If only a jersey reference, ask who the player is or generate a silhouetted athletic figure.
 7. If the user says **"player [name]"** — generate the named player wearing the jersey in Player Mode (e.g., "player Zanetti").
 
@@ -147,13 +210,19 @@ Comandos rápidos:
 Después de generar, guardar como:
 - `front.jpg` → foto principal (frente, flat lay)
 - `back.jpg` → vista trasera (flat lay)
-- `detail.jpg` → close-up de detalle
+- `detail-badge.jpg` → close-up del escudo/crest
+- `detail-collar.jpg` → close-up del cuello
+- `detail-patch.jpg` → close-up de parche
+- `detail-texture.jpg` → close-up de textura
 - `player.jpg` → retrato cinematográfico del jugador
 
 Subirlas al ERP en el orden deseado (la primera = HERO del catálogo). Reordená con las flechas ⬆️⬇️ en el ERP si necesitás ajustar.
 
-**Orden sugerido para el catálogo:**
-1. Vista frontal flat lay (hero del grid)
+**Orden sugerido para el catálogo (hasta 7 fotos):**
+1. Vista frontal flat lay (HERO del grid)
 2. Vista trasera flat lay
-3. Retrato del jugador (el gancho emocional)
-4. Detalle(s) — parches, badge, textura
+3. Detail badge — close-up del escudo
+4. Detail collar — close-up del cuello
+5. Detail patch — close-up de parche (si tiene)
+6. Detail texture — close-up de tela/material
+7. Retrato del jugador (el gancho emocional)

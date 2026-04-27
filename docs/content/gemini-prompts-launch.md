@@ -227,9 +227,7 @@ and see something. No text. 9:16 vertical.
 **Prompt Gemini (1:1):**
 ```
 Dark dramatic square image of a geometric shield emblem centered on
-a pure black background. The shield is white, angular, modern, with
-clean lines — like a football club crest reimagined as streetwear
-brand logo. Dramatic spotlight from above illuminating just the
+a pure black background. The shield is the one in [imagereference1] Dramatic spotlight from above illuminating just the
 shield. Subtle smoke or haze in the background. Small geometric
 fragments breaking away from the bottom-right corner of the shield.
 Premium, cinematic, minimal. No text. 1:1 square format.

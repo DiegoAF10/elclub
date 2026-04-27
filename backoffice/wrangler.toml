@@ -29,3 +29,6 @@ crons = [
 # ADMIN_KEY              - Admin key for coupon management endpoints
 # DASHBOARD_KEY          - Auth para endpoints admin de vault (Bearer + ?key= en confirm-cod manual)
 # BOT_CONFIRM_KEY        - Auth para confirmaciones desde el bot ManyChat (header X-Bot-Confirm-Key)
+# BREVO_API_KEY          - Brevo (ex Sendinblue) API key para customer-facing emails (nudge T+12h, etc.)
+#                          Resend free solo permite 1 domain (Ventus); usamos Brevo para El Club.
+# VAULT_CUSTOMER_EMAIL_FROM - Sender email para customer-facing emails (default vault@elclub.click)
