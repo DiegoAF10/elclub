@@ -279,7 +279,27 @@ export const browserAdapter: Adapter = {
 	},
 	async getConversationMessages() {
 		throw new NotAvailableInBrowser('getConversationMessages');
-	}
+	},
+
+	// ─── Comercial R4 ──────────────────────────────────────────
+	async getCustomerProfile() {
+		return null;
+	},
+	async createCustomer() {
+		throw new NotAvailableInBrowser('createCustomer');
+	},
+	async updateCustomerTraits() {
+		throw new NotAvailableInBrowser('updateCustomerTraits');
+	},
+	async setCustomerBlocked() {
+		throw new NotAvailableInBrowser('setCustomerBlocked');
+	},
+	async updateCustomerSource() {
+		throw new NotAvailableInBrowser('updateCustomerSource');
+	},
+	async createManualOrder() {
+		throw new NotAvailableInBrowser('createManualOrder');
+	},
 };
 
 // Test helper (también útil si queremos invalidar cache en dev)

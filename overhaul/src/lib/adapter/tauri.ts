@@ -28,7 +28,7 @@ import type {
 	WatermarkArgs,
 	WatermarkResult
 } from './types';
-import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus } from '../data/comercial';
+import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs } from '../data/comercial';
 import type { Family } from '../data/types';
 import { transformFamily } from './transform';
 
@@ -354,5 +354,53 @@ export const tauriAdapter: Adapter = {
 				dashboardKey: args.dashboardKey,
 			},
 		});
-	}
+	},
+
+	// ─── Comercial R4 ──────────────────────────────────────────
+	async getCustomerProfile(customerId: number): Promise<CustomerProfile | null> {
+		const result = await invoke<unknown>('comercial_get_customer_profile', { customerId });
+		return (result as CustomerProfile | null) ?? null;
+	},
+
+	async createCustomer(args: CreateCustomerArgs) {
+		return invoke<{ ok: boolean; customerId?: number; error?: string }>(
+			'comercial_create_customer',
+			{ args: { name: args.name, phone: args.phone, email: args.email, source: args.source } }
+		);
+	},
+
+	async updateCustomerTraits(customerId: number, traitsJson: Record<string, unknown>): Promise<void> {
+		await invoke('comercial_update_customer_traits', {
+			args: { customerId, traitsJson },
+		});
+	},
+
+	async setCustomerBlocked(customerId: number, blocked: boolean): Promise<void> {
+		await invoke('comercial_set_customer_blocked', {
+			args: { customerId, blocked },
+		});
+	},
+
+	async updateCustomerSource(customerId: number, source: string | null): Promise<void> {
+		await invoke('comercial_update_customer_source', {
+			args: { customerId, source },
+		});
+	},
+
+	async createManualOrder(args: CreateOrderArgs) {
+		return invoke<{ ok: boolean; ref?: string; saleId?: number; error?: string }>(
+			'comercial_create_manual_order',
+			{
+				args: {
+					customerId: args.customerId,
+					items: args.items,
+					paymentMethod: args.paymentMethod,
+					fulfillmentStatus: args.fulfillmentStatus,
+					shippingFee: args.shippingFee,
+					discount: args.discount,
+					notes: args.notes,
+				},
+			}
+		);
+	},
 };
