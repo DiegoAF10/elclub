@@ -217,6 +217,12 @@ export interface CreateOrderArgs {
   shippingFee?: number;        // default 0
   discount?: number;           // default 0
   notes?: string;
+  // R10 additions:
+  modality?: 'mystery' | 'stock' | 'ondemand';
+  origin?: string;
+  shippingMethod?: string;
+  shippingAddress?: ShippingAddress | null;
+  occurredAt?: string;
 }
 
 export interface CreateOrderItem {
@@ -360,4 +366,41 @@ export interface SalesListResult {
   sales: SaleRow[];
   total: number;
   totalRevenue: number;
+}
+
+// ─── R10: Manual sale form ────────────────────────────────────
+
+export interface ShippingAddress {
+  name: string;
+  phone: string | null;
+  address: string;
+  department: string;
+  municipality: string;
+  zone: string;
+  reference: string;
+  notes: string;
+}
+
+export interface CustomerSearchResult {
+  customerId: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  source: string | null;
+}
+
+export interface UpdateSaleArgs {
+  saleId: number;
+  occurredAt?: string;
+  modality?: 'mystery' | 'stock' | 'ondemand';
+  origin?: string;
+  paymentMethod?: 'recurrente' | 'transferencia' | 'contra_entrega' | 'efectivo' | 'otro';
+  fulfillmentStatus?: 'pending' | 'sent_to_supplier' | 'in_production' | 'shipped' | 'delivered' | 'cancelled';
+  shippingMethod?: string;
+  trackingCode?: string;
+  shippingFee?: number;
+  discount?: number;
+  notes?: string;
+  shippingAddress?: ShippingAddress | null;
+  customerId?: number;
 }

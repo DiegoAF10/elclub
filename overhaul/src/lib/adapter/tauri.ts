@@ -28,7 +28,7 @@ import type {
 	WatermarkArgs,
 	WatermarkResult
 } from './types';
-import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult } from '../data/comercial';
+import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult, UpdateSaleArgs } from '../data/comercial';
 import type { Family } from '../data/types';
 import { transformFamily } from './transform';
 
@@ -399,6 +399,11 @@ export const tauriAdapter: Adapter = {
 					shippingFee: args.shippingFee,
 					discount: args.discount,
 					notes: args.notes,
+					modality: args.modality,
+					origin: args.origin,
+					shippingMethod: args.shippingMethod,
+					shippingAddress: args.shippingAddress,
+					occurredAt: args.occurredAt,
 				},
 			}
 		);
@@ -467,5 +472,31 @@ export const tauriAdapter: Adapter = {
 			limit: args.limit,
 			offset: args.offset,
 		}});
+	},
+
+	// ─── Comercial R10 ──────────────────────────────────────────
+	async searchCustomers(query: string) {
+		const result = await invoke<unknown>('comercial_search_customers', { args: { query } });
+		return (result as CustomerSearchResult[]) ?? [];
+	},
+
+	async updateSale(args: UpdateSaleArgs) {
+		return invoke<{ ok: boolean; error?: string }>('comercial_update_sale', {
+			args: {
+				saleId: args.saleId,
+				occurredAt: args.occurredAt,
+				modality: args.modality,
+				origin: args.origin,
+				paymentMethod: args.paymentMethod,
+				fulfillmentStatus: args.fulfillmentStatus,
+				shippingMethod: args.shippingMethod,
+				trackingCode: args.trackingCode,
+				shippingFee: args.shippingFee,
+				discount: args.discount,
+				notes: args.notes,
+				shippingAddress: args.shippingAddress,
+				customerId: args.customerId,
+			},
+		});
 	},
 };

@@ -23,7 +23,9 @@ import type {
 	SaleAttribution,
 	BackfillAttributionResult,
 	ImportOrdersResult,
-	SalesListResult
+	SalesListResult,
+	CustomerSearchResult,
+	UpdateSaleArgs
 } from '../data/comercial';
 
 export type AuditStatus =
@@ -315,6 +317,10 @@ export interface Adapter {
 	// ─── Comercial R9 ──────────────────────────────────────────
 	importOrdersFromWorker(): Promise<ImportOrdersResult>;
 	listSales(args?: { search?: string; status?: string; paymentMethod?: string; periodDays?: number; limit?: number; offset?: number }): Promise<SalesListResult>;
+
+	// ─── Comercial R10 ──────────────────────────────────────────
+	searchCustomers(query: string): Promise<CustomerSearchResult[]>;
+	updateSale(args: UpdateSaleArgs): Promise<{ ok: boolean; error?: string }>;
 }
 
 // ─── Error para operaciones no disponibles en dev ────────────────────

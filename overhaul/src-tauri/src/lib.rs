@@ -2078,6 +2078,12 @@ pub struct CreateManualOrderArgs {
     pub shipping_fee: Option<f64>,
     pub discount: Option<f64>,
     pub notes: Option<String>,
+    // R10 new fields:
+    pub modality: Option<String>,
+    pub origin: Option<String>,
+    pub shipping_method: Option<String>,
+    pub shipping_address: Option<Value>,
+    pub occurred_at: Option<String>,
 }
 
 #[tauri::command]
@@ -2091,6 +2097,69 @@ async fn comercial_create_manual_order(args: CreateManualOrderArgs) -> Result<Va
         "shippingFee": args.shipping_fee,
         "discount": args.discount,
         "notes": args.notes,
+        "modality": args.modality,
+        "origin": args.origin,
+        "shippingMethod": args.shipping_method,
+        "shippingAddress": args.shipping_address,
+        "occurredAt": args.occurred_at,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
+// ─── Comercial R10 ─────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchCustomersArgs {
+    pub query: String,
+}
+
+#[tauri::command]
+async fn comercial_search_customers(args: SearchCustomersArgs) -> Result<Value> {
+    let payload = serde_json::json!({ "cmd": "search_customers", "query": args.query });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("customers").cloned().unwrap_or(Value::Array(vec![])))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSaleArgs {
+    pub sale_id: i64,
+    pub occurred_at: Option<String>,
+    pub modality: Option<String>,
+    pub origin: Option<String>,
+    pub payment_method: Option<String>,
+    pub fulfillment_status: Option<String>,
+    pub shipping_method: Option<String>,
+    pub tracking_code: Option<String>,
+    pub shipping_fee: Option<f64>,
+    pub discount: Option<f64>,
+    pub notes: Option<String>,
+    pub shipping_address: Option<Value>,
+    pub customer_id: Option<i64>,
+}
+
+#[tauri::command]
+async fn comercial_update_sale(args: UpdateSaleArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "update_sale",
+        "saleId": args.sale_id,
+        "occurredAt": args.occurred_at,
+        "modality": args.modality,
+        "origin": args.origin,
+        "paymentMethod": args.payment_method,
+        "fulfillmentStatus": args.fulfillment_status,
+        "shippingMethod": args.shipping_method,
+        "trackingCode": args.tracking_code,
+        "shippingFee": args.shipping_fee,
+        "discount": args.discount,
+        "notes": args.notes,
+        "shippingAddress": args.shipping_address,
+        "customerId": args.customer_id,
     });
     tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
         .await
@@ -2361,6 +2430,9 @@ pub fn run() {
             // Comercial R9
             comercial_import_orders_from_worker,
             comercial_list_sales,
+            // Comercial R10
+            comercial_search_customers,
+            comercial_update_sale,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
