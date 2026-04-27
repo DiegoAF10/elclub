@@ -1,18 +1,18 @@
 <script lang="ts">
   import { adapter } from '$lib/adapter';
-  import type { Period, FunnelKPIs, Lead, ConversationMeta, Customer } from '$lib/data/comercial';
+  import type { Period, FunnelKPIs, Lead, ConversationMeta, Customer, ComercialTab } from '$lib/data/comercial';
   import { resolvePeriod } from '$lib/data/kpis';
   import { computeFunnelKPIs } from '$lib/data/funnelKpis';
   import LeadProfileModal from '../modals/LeadProfileModal.svelte';
   import ConversationThreadModal from '../modals/ConversationThreadModal.svelte';
-  import RetentionListModal from '../modals/RetentionListModal.svelte';
   import type { SyncResult } from '$lib/data/manychatSync';
 
   interface Props {
     period: Period;
     lastSyncResult?: SyncResult | null;
+    onSwitchTab?: (tab: ComercialTab) => void;
   }
-  let { period, lastSyncResult = null }: Props = $props();
+  let { period, lastSyncResult = null, onSwitchTab }: Props = $props();
 
   let kpis = $state<FunnelKPIs | null>(null);
   let loading = $state(true);
@@ -24,7 +24,6 @@
   let openInterest = $state(false);
   let openConsideration = $state(false);
   let openSale = $state<string | null>(null);
-  let openRetention = $state(false);
 
   $effect(() => {
     void period;
@@ -150,7 +149,7 @@
         </div>
         <button
           type="button"
-          onclick={() => (openRetention = true)}
+          onclick={() => onSwitchTab?.('customers')}
           class="mt-3 text-[10px] text-[var(--color-accent)] hover:underline"
         >Ver detalle →</button>
       </div>
@@ -191,10 +190,6 @@
 
 {#if openConsideration}
   <ConversationThreadModal conversations={convsList} onClose={() => { openConsideration = false; loadAll(); }} />
-{/if}
-
-{#if openRetention}
-  <RetentionListModal customers={customersList} onClose={() => (openRetention = false)} />
 {/if}
 
 {#if openSale === '__list__'}

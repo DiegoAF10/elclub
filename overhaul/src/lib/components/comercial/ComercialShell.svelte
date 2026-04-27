@@ -50,7 +50,7 @@
   <PulsoBar period={activePeriod} setPeriod={(p) => (activePeriod = p)} />
   <div class="flex-1 overflow-y-auto">
     {#if activeTab === 'funnel'}
-      <FunnelTab period={activePeriod} {lastSyncResult} />
+      <FunnelTab period={activePeriod} {lastSyncResult} onSwitchTab={(t) => selectTab(t)} />
     {:else if activeTab === 'customers'}
       <CustomersTab />
     {:else if activeTab === 'inbox'}
