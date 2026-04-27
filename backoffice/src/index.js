@@ -30,6 +30,8 @@ import {
   handleVaultSupplierMessages,
   handleConfirmCod,
   runVaultPendingConfirmationSweep,
+  sendCodPendingNudge,
+  findLeadByRef,
 } from './vault.js';
 
 const ALLOWED_ORIGINS = [
@@ -1212,6 +1214,36 @@ export default {
         return await handleVaultSupplierMessages(env, vaultSupplierMatch[1], cors);
       }
 
+      // POST /api/vault/admin/run-sweep — invoca el cron sweep manualmente (auth Bearer DASHBOARD_KEY)
+      // Útil para testing y para forzar re-evaluación sin esperar al cron */30
+      if (url.pathname === '/api/vault/admin/run-sweep' && request.method === 'POST') {
+        const unauth = requireDashboardAuth(request, env, cors);
+        if (unauth) return unauth;
+        const result = await runVaultPendingConfirmationSweep(env);
+        return json({ ok: true, ...result }, 200, cors);
+      }
+
+      // POST /api/vault/admin/nudge/:ref — re-send manual del email nudge a un cliente
+      // (auth Bearer DASHBOARD_KEY). NO chequea el flag nudge_12h_sent_at (force-send).
+      // Útil para smoke test y para Diego cuando quiera nudgear manualmente un lead específico.
+      const adminNudgeMatch = url.pathname.match(/^\/api\/vault\/admin\/nudge\/([^/]+)$/);
+      if (adminNudgeMatch && request.method === 'POST') {
+        const unauth = requireDashboardAuth(request, env, cors);
+        if (unauth) return unauth;
+        const ref = adminNudgeMatch[1];
+        const found = await findLeadByRef(env, ref);
+        if (!found) return json({ ok: false, error: 'lead no encontrado' }, 404, cors);
+        if (!found.record.cliente?.email) {
+          return json({ ok: false, error: 'cliente sin email — no se puede nudgear' }, 400, cors);
+        }
+        try {
+          await sendCodPendingNudge(env, found.record);
+          return json({ ok: true, ref, sent_to: found.record.cliente.email }, 200, cors);
+        } catch (err) {
+          return json({ ok: false, error: String(err.message || err) }, 500, cors);
+        }
+      }
+
       // POST /api/vault/lead/:ref/confirm-cod — bot (X-Bot-Confirm-Key)
       // GET  /api/vault/lead/:ref/confirm-cod?key=DASHBOARD_KEY — manual click desde email Diego (HTML response)
       const vaultConfirmCodMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)\/confirm-cod$/);
@@ -1306,7 +1338,7 @@ export default {
     console.log(`[cron] ${event.cron} firing — runVaultPendingConfirmationSweep`);
     try {
       const result = await runVaultPendingConfirmationSweep(env);
-      console.log(`[cron] sweep result: scanned=${result.scanned} cancelled=${result.cancelled} errors=${result.errors}`);
+      console.log(`[cron] sweep result: scanned=${result.scanned} nudged=${result.nudged} cancelled=${result.cancelled} errors=${result.errors}`);
     } catch (err) {
       console.error('[cron] sweep failed:', err);
     }

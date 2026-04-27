@@ -19,6 +19,9 @@ const RESERVATION_AMOUNT = 100;         // Q100 anticipo
 // Path B (sin reserva) requires WhatsApp confirmation within this window before
 // auto-cancellation. Cliente debe escribir "CONFIRMO PEDIDO V-XXXX" al bot WA.
 export const COD_CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1000;  // 24h
+// At T+12h (halfway through TTL), send a single email nudge to the customer
+// reminding them to confirm. Tracked via lead.nudge_12h_sent_at to avoid spam.
+export const COD_NUDGE_AT_MS         = 12 * 60 * 60 * 1000;  // 12h
 
 export const PAYMENT_TRANSITIONS = {
   pending:                   ['paid', 'refunded_credit', 'cancelled'],
@@ -682,7 +685,17 @@ export async function handleVaultPaymentSuccess(env, vaultRef, paymentIntent) {
   // Merge Recurrente enrichment AND transition payment_status → paid in one
   // atomic KV write (via updateLeadStatus extraFields). Avoids a double-write
   // and the KV eventual-consistency window between them.
-  const method = paymentIntent?.payment_method?.type || 'unknown';
+  //
+  // Method extraction: Recurrente puts payment_method.type only on card flows.
+  // For bank_transfer the field is missing — detect by ID prefix instead:
+  //   pi_*  → card (payment intent)
+  //   ba_*  → bank_transfer (bank account / ACH)
+  //   ch_*  → checkout-derived (uncommon, fallback to card)
+  const piId = paymentIntent?.id || '';
+  const method = paymentIntent?.payment_method?.type
+    || (piId.startsWith('ba_')              ? 'bank_transfer'
+       : piId.startsWith('pi_') || piId.startsWith('ch_') ? 'card'
+       : 'unknown');
   const amountCents = paymentIntent?.amount_in_cents || null;
   const amountQ = (amountCents || 0) / 100;
 
@@ -763,27 +776,68 @@ export async function handleConfirmCod(env, ref, source = 'bot') {
 }
 
 /**
- * Cron sweeper: cancel Path B leads in 'cod_pending_confirmation' older than
- * COD_CONFIRMATION_TTL_MS. Notifies Diego (email C) for each cancelled lead.
+ * Merge plain fields into a lead's full record + index entry without touching
+ * state machine or history. Used for tracking flags like nudge_12h_sent_at.
+ */
+async function mergeLeadFields(env, ref, fields) {
+  const found = await findLeadByRef(env, ref);
+  if (!found) throw new Error(`lead ${ref} no existe`);
+  const updated = { ...found.record, ...fields };
+  await env.DATA.put(found.entry.key, JSON.stringify(updated));
+  // Index entry is light — only sync if any of the merged fields exist on the index schema.
+  // Currently nudge tracking lives on the full record only (not on the index).
+  return updated;
+}
+
+/**
+ * Cron sweeper: combina dos passes sobre leads en 'cod_pending_confirmation'.
+ *   - Pass 1 (T+12h): single email nudge al cliente (si tiene email).
+ *     Marca lead.nudge_12h_sent_at para no re-enviar.
+ *   - Pass 2 (T+24h): cancel + email C a Diego.
  *
- * Designed to be idempotent and tolerant of partial failures — one bad lead
- * doesn't stop the sweep.
+ * Idempotent y tolerante a fallos — un lead malo no para el sweep.
  *
- * @returns {Promise<{scanned: number, cancelled: number, errors: number}>}
+ * @returns {Promise<{scanned: number, nudged: number, cancelled: number, errors: number}>}
  */
 export async function runVaultPendingConfirmationSweep(env) {
   const index = (await env.DATA.get(INDEX_KEY, { type: 'json' })) || [];
-  const cutoff = Date.now() - COD_CONFIRMATION_TTL_MS;
+  const now = Date.now();
+  const nudgeCutoff  = now - COD_NUDGE_AT_MS;
+  const cancelCutoff = now - COD_CONFIRMATION_TTL_MS;
 
-  const candidates = index.filter(e => {
+  // All pending Path B leads (filtered later by age + nudge status)
+  const allPending = index.filter(e => {
     if (e.payment_status !== 'cod_pending_confirmation') return false;
     const createdMs = new Date(e.timestamp).getTime();
-    return Number.isFinite(createdMs) && createdMs < cutoff;
+    return Number.isFinite(createdMs);
   });
 
-  let cancelled = 0, errors = 0;
+  let nudged = 0, cancelled = 0, errors = 0;
 
-  for (const entry of candidates) {
+  // ── Pass 1: nudge candidates (T+12h, not yet cancelled, not yet nudged) ──
+  for (const entry of allPending) {
+    const createdMs = new Date(entry.timestamp).getTime();
+    if (createdMs >= nudgeCutoff) continue;       // todavía joven, no nudge
+    if (createdMs < cancelCutoff) continue;       // ya está en zona de cancel — pass 2 se encarga
+    try {
+      const found = await findLeadByRef(env, entry.ref);
+      if (!found || found.record.nudge_12h_sent_at) continue;  // skip si ya nudged
+      if (found.record.cliente?.email) {
+        await sendCodPendingNudge(env, found.record);
+      }
+      // Marcamos siempre (incluso sin email) para no re-evaluar este lead cada 30min
+      await mergeLeadFields(env, entry.ref, { nudge_12h_sent_at: new Date().toISOString() });
+      nudged++;
+    } catch (err) {
+      console.error(`Sweep: nudge failed for ${entry.ref}:`, err);
+      errors++;
+    }
+  }
+
+  // ── Pass 2: cancel candidates (T+24h) ──
+  for (const entry of allPending) {
+    const createdMs = new Date(entry.timestamp).getTime();
+    if (createdMs >= cancelCutoff) continue;
     try {
       await updateLeadStatus(env, entry.ref, 'payment', 'cancelled',
         'Auto-cancel: 24h sin confirmación WA del cliente');
@@ -804,7 +858,103 @@ export async function runVaultPendingConfirmationSweep(env) {
     }
   }
 
-  return { scanned: candidates.length, cancelled, errors };
+  return { scanned: allPending.length, nudged, cancelled, errors };
+}
+
+/**
+ * Send a single email nudge to the CUSTOMER (not Diego) at T+12h reminding
+ * them to confirm their Path B pedido by sending the WhatsApp message.
+ * Pre-rellena el wa.me link con el formato exacto que el bot detecta.
+ *
+ * Silent-fail — sweep continues even if email send errors.
+ *
+ * NOTE customer-facing: respeta la regla "no China" (memory:feedback_elclub_no_china).
+ */
+export async function sendCodPendingNudge(env, lead) {
+  if (!env.RESEND_API_KEY) {
+    console.warn('RESEND_API_KEY not set — skipping customer nudge');
+    return;
+  }
+  if (!lead?.cliente?.email) return;
+
+  const to       = lead.cliente.email;
+  const from     = env.VAULT_EMAIL_FROM || 'El Club Vault <onboarding@resend.dev>';
+  const ref      = lead.ref;
+  const nombre   = lead.cliente.nombre?.split(/\s+/)[0] || 'amigo';
+  const totalCod = lead.total_cod || '?';
+  const waNumber = '13185343283';
+  const confirmText = `CONFIRMO PEDIDO ${ref}`;
+  const waLink   = `https://wa.me/${waNumber}?text=${encodeURIComponent(confirmText)}`;
+
+  const subject = `⏰ Tu pedido del Vault necesita 1 paso más — ${ref}`;
+
+  const html = `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;background:#0a0b0d;color:#e5e7eb;padding:0">
+      <div style="background:#f59e0b;padding:24px;text-align:center;color:#1f2937">
+        <div style="font-size:13px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;opacity:0.85">El Club Vault</div>
+        <h1 style="margin:8px 0 0;font-size:22px;font-weight:700">⏰ Falta 1 paso, ${nombre}</h1>
+      </div>
+
+      <div style="padding:24px;background:#1f2937">
+        <p style="margin:0 0 16px;font-size:15px;line-height:1.5;color:#e5e7eb">
+          Tu pedido <code style="background:#374151;padding:2px 8px;border-radius:4px;font-family:monospace">${ref}</code> está reservado pero <strong>aún no fue confirmado</strong>.
+          Para activarlo, mandanos un mensaje por WhatsApp con este texto exacto:
+        </p>
+
+        <div style="background:#374151;padding:14px 16px;border-radius:6px;margin:16px 0;border-left:3px solid #25D366">
+          <code style="font-family:monospace;font-size:15px;color:#f3f4f6;letter-spacing:0.5px">${confirmText}</code>
+        </div>
+
+        <a href="${waLink}" style="display:block;padding:16px 24px;background:#25D366;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;text-align:center;margin:16px 0">
+          ✓ CONFIRMAR POR WHATSAPP
+        </a>
+
+        <p style="margin:16px 0 0;font-size:13px;color:#9ca3af;text-align:center">
+          El botón abre WhatsApp con el mensaje listo. Solo dale enviar.
+        </p>
+
+        <hr style="border:none;border-top:1px solid #374151;margin:24px 0">
+
+        <div style="font-size:13px;color:#9ca3af;line-height:1.6">
+          <strong style="color:#f3f4f6">Tu pedido:</strong><br>
+          ${(lead.productos || []).slice(0, 3).map(p => {
+            const label = [p.team, p.season, p.variant_label].filter(Boolean).join(' ');
+            return `&bull; ${label || 'Jersey'} · Talla ${p.size || '—'}`;
+          }).join('<br>')}
+          ${(lead.productos || []).length > 3 ? `<br>&bull; +${lead.productos.length - 3} más` : ''}
+          <br><br>
+          <strong style="color:#f3f4f6">Total al recibir:</strong> Q${totalCod}<br>
+          <strong style="color:#f3f4f6">Envío:</strong> Gratis a domicilio
+        </div>
+
+        <p style="margin:20px 0 0;font-size:12px;color:#6b7280;line-height:1.5">
+          Si no confirmás en las próximas ~12 horas, tu pedido se cancelará automáticamente.
+          ¿Cambiaste de idea? Ignorá este correo y se cancela solo.
+        </p>
+      </div>
+
+      <div style="background:#0a0b0d;padding:16px;text-align:center;font-size:12px;color:#6b7280">
+        El Club Vault · vault.elclub.club · La camiseta te elige a vos.
+      </div>
+    </div>
+  `;
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from, to: [to], subject, html }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    console.error(`Resend nudge failed ${res.status} for ${ref}: ${errText}`);
+    throw new Error(`Resend ${res.status}`);
+  }
+
+  console.log(`[nudge] ${ref} → ${to}`);
 }
 
 /**
