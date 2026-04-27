@@ -349,12 +349,14 @@ export async function handleVaultReservation(request, env, cors = {}) {
   }
 
   // total_cod calculation per path:
-  //   F&F:        coupon.value (Q400)
+  //   F&F:         coupon.value * jerseyCount (Q400 por jersey, addons GRATIS bundled)
+  //                e.g. 1 jersey: Q400 / 2 jerseys: Q800 / 3 jerseys: Q1200
   //   reservation: body.total - 100 (Q100 flat upfront universal, resto al COD)
   //                e.g. 1 jersey: Q415 - Q100 = Q315 / 2 jerseys: Q830 - Q100 = Q730
   //   cod:         body.total (Q435+addons por jersey, sin reserva deducida)
+  const jerseyCount = body.productos?.length || 1;
   const totalCod = isFFWaiver
-    ? coupon.value
+    ? coupon.value * jerseyCount
     : paymentChoice === 'cod'
       ? body.total
       : body.total - RESERVATION_AMOUNT;
