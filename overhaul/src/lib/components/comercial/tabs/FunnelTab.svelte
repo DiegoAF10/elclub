@@ -1,10 +1,11 @@
 <script lang="ts">
   import { adapter } from '$lib/adapter';
-  import type { Period, FunnelKPIs, Lead, ConversationMeta, Customer, ComercialTab } from '$lib/data/comercial';
+  import type { Period, FunnelKPIs, Lead, ConversationMeta, Customer, ComercialTab, FunnelAwarenessReal } from '$lib/data/comercial';
   import { resolvePeriod } from '$lib/data/kpis';
   import { computeFunnelKPIs } from '$lib/data/funnelKpis';
   import LeadProfileModal from '../modals/LeadProfileModal.svelte';
   import ConversationThreadModal from '../modals/ConversationThreadModal.svelte';
+  import CampaignDetailModal from '../modals/CampaignDetailModal.svelte';
   import type { SyncResult } from '$lib/data/manychatSync';
 
   interface Props {
@@ -20,6 +21,11 @@
   let convsList = $state<ConversationMeta[]>([]);
   let customersList = $state<Customer[]>([]);
 
+  // Awareness real data
+  let awarenessReal = $state<FunnelAwarenessReal | null>(null);
+  let openCampaignId = $state<string | null>(null);
+  let showCampaignPicker = $state(false);
+
   // Modal triggers
   let openInterest = $state(false);
   let openConsideration = $state(false);
@@ -29,6 +35,16 @@
     void period;
     void lastSyncResult;  // re-load when sync finishes
     loadAll();
+  });
+
+  $effect(() => {
+    void (async () => {
+      try {
+        awarenessReal = await adapter.getFunnelAwarenessReal();
+      } catch (e) {
+        console.warn('[funnel] awareness load failed', e);
+      }
+    })();
   });
 
   async function loadAll() {
@@ -84,12 +100,30 @@
       <div class="rounded-[4px] border border-[var(--color-border)] bg-[var(--color-surface-1)] p-4" style="border-top: 3px solid #60a5fa;">
         <div class="text-display mb-1 text-[9.5px] text-[var(--color-text-tertiary)]">Awareness</div>
         <div class="text-mono mb-2 text-[28px] font-semibold tabular-nums text-[var(--color-text-tertiary)]">—</div>
-        <div class="space-y-1 text-[10.5px] text-[var(--color-text-tertiary)]">
-          <div class="flex justify-between"><span>Impressions</span><span class="text-mono">{kpis.awareness.impressions}</span></div>
-          <div class="flex justify-between"><span>Clicks</span><span class="text-mono">{kpis.awareness.clicks}</span></div>
-          <div class="flex justify-between"><span>Spend</span><span class="text-mono">Q{kpis.awareness.spendGtq.toFixed(0)}</span></div>
-        </div>
-        <div class="mt-3 text-[10px] italic text-[var(--color-text-muted)]">Esperando sync Meta API (R5)</div>
+        {#if awarenessReal && awarenessReal.totalCampaigns > 0}
+          <div class="mt-2 space-y-1 text-[11.5px]">
+            <div class="flex justify-between"><span class="text-[var(--color-text-tertiary)]">Imp</span><span class="text-mono">{awarenessReal.impressions.toLocaleString()}</span></div>
+            <div class="flex justify-between"><span class="text-[var(--color-text-tertiary)]">Clicks</span><span class="text-mono">{awarenessReal.clicks.toLocaleString()}</span></div>
+            <div class="flex justify-between"><span class="text-[var(--color-text-tertiary)]">Spend</span><span class="text-mono" style="color: var(--color-accent);">Q{awarenessReal.spendGtq.toFixed(0)}</span></div>
+            <div class="flex justify-between"><span class="text-[var(--color-text-tertiary)]">CTR</span><span class="text-mono">{awarenessReal.ctr ? `${awarenessReal.ctr.toFixed(2)}%` : '—'}</span></div>
+          </div>
+          <button
+            type="button"
+            onclick={() => {
+              if (awarenessReal!.byCampaign.length === 1) {
+                openCampaignId = awarenessReal!.byCampaign[0].campaignId;
+              } else {
+                showCampaignPicker = true;
+              }
+            }}
+            class="mt-3 text-[10px] text-[var(--color-accent)] hover:underline"
+          >Ver detalle ({awarenessReal.totalCampaigns} camp.) →</button>
+        {:else}
+          <div class="mt-2 text-[11px] text-[var(--color-text-tertiary)]">
+            Sin sync de Meta Ads aún.
+            <button type="button" onclick={() => onSwitchTab?.('settings')} class="text-[var(--color-accent)] hover:underline">Configurar →</button>
+          </div>
+        {/if}
       </div>
 
       <!-- Stage 2: Interest -->
@@ -199,4 +233,40 @@
       <button class="ml-2 text-[var(--color-accent)] underline" onclick={() => (openSale = null)}>OK</button>
     </div>
   </div>
+{/if}
+
+{#if showCampaignPicker && awarenessReal}
+  <div
+    role="dialog"
+    aria-modal="true"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+    onclick={() => (showCampaignPicker = false)}
+    onkeydown={(e) => { if (e.key === 'Escape') showCampaignPicker = false; }}
+    tabindex="-1"
+  >
+    <div
+      role="document"
+      class="rounded-[6px] border border-[var(--color-border)] bg-[var(--color-surface-0)] p-4 max-w-[400px] w-full"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
+      <div class="text-display mb-2 text-[10px] text-[var(--color-text-tertiary)]">Elegí una campaña</div>
+      {#each awarenessReal.byCampaign as bc}
+        <button
+          type="button"
+          onclick={() => { openCampaignId = bc.campaignId; showCampaignPicker = false; }}
+          class="w-full text-left rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] p-2 mb-1 text-[11px] hover:border-[var(--color-accent)]"
+        >
+          <div class="flex items-baseline justify-between">
+            <span>{bc.campaignName ?? bc.campaignId}</span>
+            <span class="text-mono" style="color: var(--color-accent);">Q{bc.spendGtq.toFixed(0)}</span>
+          </div>
+        </button>
+      {/each}
+    </div>
+  </div>
+{/if}
+
+{#if openCampaignId}
+  <CampaignDetailModal campaignId={openCampaignId} onClose={() => (openCampaignId = null)} />
 {/if}
