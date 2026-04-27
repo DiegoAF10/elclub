@@ -12,11 +12,8 @@
   <meta property="og:image" content="https://elclub.club/assets/img/brand/og-image.png">
   <link rel="icon" type="image/png" href="/assets/img/brand/favicon.png">
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-  <link rel="stylesheet" href="/assets/css/elclub.css?v=3">
+  <link rel="stylesheet" href="/assets/css/elclub.css?v=msF1">
 
   <script type="application/ld+json">
   {
@@ -332,6 +329,17 @@
       .wiz-size { width: 64px; height: 64px; font-size: 20px; }
       .price-offer { font-size: 40px; }
     }
+
+    /* Midnight Stadium F1 — D1 sub-brand override
+       theme-mystery foundation inyecta amber radial gradient via ::before/::after
+       sobre .smoke-bg, pero esta página ya tiene 3 smoke layers propios.
+       Cancelamos el doble efecto manteniendo el smoke existente, y agregamos
+       el mobile kill switch del foundation alineado al breakpoint local 640px. */
+    .theme-mystery .smoke-bg::before,
+    .theme-mystery .smoke-bg::after { display: none; }
+    @media (max-width: 768px) {
+      .theme-mystery .particle { display: none; }
+    }
   </style>
   <!-- Meta Pixel -->
   <script>
@@ -348,7 +356,7 @@
   </script>
   <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=979730357737472&ev=PageView&noscript=1"/></noscript>
 </head>
-<body class="bg-midnight text-white">
+<body class="theme-mystery bg-midnight text-white">
 
   <!-- NAV -->
   <header class="fixed top-0 left-0 right-0 z-40 bg-midnight/95 backdrop-blur-sm border-b border-chalk">
@@ -735,8 +743,8 @@
   </div>
 
   <!-- Scripts -->
-  <script src="/assets/js/cart.js?v=3"></script>
-  <script src="/assets/js/app.js?v=3"></script>
+  <script src="/assets/js/cart.js?v=msF1"></script>
+  <script src="/assets/js/app.js?v=msF1"></script>
   <script>
   // ═══════════════════════════════════════
   // TEAMS DATA
