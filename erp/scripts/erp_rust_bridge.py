@@ -2692,9 +2692,11 @@ def cmd_list_sales(args):
     sql = f"""
         SELECT s.sale_id, s.ref, s.occurred_at, s.fulfillment_status, s.payment_method,
                s.total, s.shipping_fee, s.discount, s.notes,
-               s.modality, s.origin, s.shipped_at,
+               s.modality, s.origin, s.shipped_at, s.shipping_address,
                c.customer_id, c.name, c.phone, c.email,
-               (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id) AS items_count
+               (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id) AS items_count,
+               (SELECT (COALESCE(team, '') || ' ' || COALESCE(variant_label, '') || ' ' || COALESCE(size, ''))
+                FROM sale_items si WHERE si.sale_id = s.sale_id LIMIT 1) AS first_item_label
         FROM sales s
         LEFT JOIN customers c ON c.customer_id = s.customer_id
         WHERE {' AND '.join(where)}
@@ -2725,11 +2727,13 @@ def cmd_list_sales(args):
             "modality": r[9],
             "origin": r[10],
             "shippedAt": r[11],
-            "customerId": r[12],
-            "customerName": r[13],
-            "customerPhone": r[14],
-            "customerEmail": r[15],
-            "itemsCount": r[16],
+            "shippingAddress": r[12],
+            "customerId": r[13],
+            "customerName": r[14],
+            "customerPhone": r[15],
+            "customerEmail": r[16],
+            "itemsCount": r[17],
+            "firstItemLabel": (r[18] or "").strip() or None,
         } for r in rows]
 
         # Aggregate KPIs over filter scope (without limit/offset)
@@ -2744,6 +2748,203 @@ def cmd_list_sales(args):
         return {"ok": True, "sales": sales, "total": total_count, "totalRevenue": kpi[1] or 0}
     finally:
         conn.close()
+
+
+def cmd_import_from_backup_db(args):
+    """Import historical data from a pre-wipe backup DB into current ERP.
+    Idempotent: skips refs that already exist in actual sales table.
+    Maps old customer_ids and sale_ids to newly inserted ones (since AUTOINCREMENT).
+
+    Args:
+      backupPath: path to the backup .db file (default: erp/backups/elclub.backup-pre-total-wipe-20260423-232508.db)
+    """
+    import sqlite3
+    from pathlib import Path
+    from db import get_conn, BASE_DIR  # type: ignore
+
+    backup_path = args.get("backupPath") or str(Path(BASE_DIR) / "backups" / "elclub.backup-pre-total-wipe-20260423-232508.db")
+    if not Path(backup_path).exists():
+        return {"ok": False, "error": f"backup DB not found: {backup_path}"}
+
+    src = sqlite3.connect(backup_path)
+    dst = get_conn()
+
+    customers_imported = 0
+    customers_merged = 0
+    sales_imported = 0
+    sales_skipped_existing = 0
+    items_imported = 0
+    imports_imported = 0
+    attributions_imported = 0
+    errors = []
+
+    try:
+        # ── 1. Customers: map old_id → new_id, dedup by phone/email ──
+        customer_map = {}
+        # Inspect actual backup schema — 'blocked' may not exist in older backup
+        src_cust_cols = [c[1] for c in src.execute("PRAGMA table_info(customers)").fetchall()]
+        has_blocked = 'blocked' in src_cust_cols
+        has_tags = 'tags_json' in src_cust_cols
+
+        blocked_expr = "COALESCE(blocked, 0)" if has_blocked else "0"
+        tags_expr = "tags_json" if has_tags else "NULL"
+        src_customers = src.execute(f"""
+            SELECT customer_id, name, phone, email, source, first_order_at,
+                   {tags_expr} AS tags_json, {blocked_expr} AS blocked
+            FROM customers
+        """).fetchall()
+        for old_id, name, phone, email, source, first_order_at, tags_json, blocked in src_customers:
+            try:
+                # Try to dedup: phone first, email second
+                existing = None
+                if phone:
+                    existing = dst.execute(
+                        "SELECT customer_id FROM customers WHERE phone = ?", (phone,)
+                    ).fetchone()
+                if not existing and email:
+                    existing = dst.execute(
+                        "SELECT customer_id FROM customers WHERE email = ?", (email,)
+                    ).fetchone()
+
+                # Fall back to name dedup when no phone/email available
+                if not existing and name:
+                    existing = dst.execute(
+                        "SELECT customer_id FROM customers WHERE name = ? AND phone IS NULL AND email IS NULL",
+                        (name,)
+                    ).fetchone()
+
+                if existing:
+                    customer_map[old_id] = existing[0]
+                    customers_merged += 1
+                else:
+                    cur = dst.execute("""
+                        INSERT INTO customers (name, phone, email, source, first_order_at, tags_json, blocked, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+                    """, (name, phone, email, source, first_order_at, tags_json, blocked))
+                    customer_map[old_id] = cur.lastrowid
+                    customers_imported += 1
+            except Exception as e:
+                errors.append(f"customer {old_id}: {e}")
+
+        # ── 2. Imports: PK is import_id (TEXT), use INSERT OR IGNORE ──
+        # PRAGMA table_info returns (cid, name, type, notnull, dflt, pk) — use index 1 for name
+        src_imports = src.execute("SELECT * FROM imports").fetchall()
+        src_import_cols = [c[1] for c in src.execute("PRAGMA table_info(imports)").fetchall()]
+        for row in src_imports:
+            try:
+                placeholders = ",".join("?" * len(row))
+                cols = ",".join(src_import_cols)
+                dst.execute(f"INSERT OR IGNORE INTO imports ({cols}) VALUES ({placeholders})", row)
+                if dst.total_changes > 0:
+                    imports_imported += 1
+            except Exception as e:
+                errors.append(f"import {row[0]}: {e}")
+
+        # ── 3. Sales: skip if ref exists in actual; otherwise INSERT with mapped customer_id ──
+        sale_map = {}  # old_sale_id → new_sale_id
+        src_sales = src.execute("""
+            SELECT sale_id, ref, occurred_at, modality, origin, customer_id, payment_method,
+                   fulfillment_status, shipping_method, tracking_code, subtotal, shipping_fee,
+                   discount, total, source_vault_ref, notes, created_at
+            FROM sales
+        """).fetchall()
+        for row in src_sales:
+            old_sale_id = row[0]
+            ref = row[1]
+            try:
+                # Skip if ref already exists
+                existing_ref = dst.execute("SELECT sale_id FROM sales WHERE ref = ?", (ref,)).fetchone()
+                if existing_ref:
+                    sales_skipped_existing += 1
+                    sale_map[old_sale_id] = existing_ref[0]  # still map for sale_items lookup
+                    continue
+
+                # Map customer_id
+                old_cust_id = row[5]
+                new_cust_id = customer_map.get(old_cust_id) if old_cust_id else None
+
+                # Insert (skip sale_id, let AUTOINCREMENT)
+                cur = dst.execute("""
+                    INSERT INTO sales
+                      (ref, occurred_at, modality, origin, customer_id, payment_method,
+                       fulfillment_status, shipping_method, tracking_code, subtotal, shipping_fee,
+                       discount, total, source_vault_ref, notes, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (ref, row[2], row[3], row[4], new_cust_id, row[6], row[7], row[8], row[9],
+                      row[10], row[11], row[12], row[13], row[14], row[15], row[16]))
+                sale_map[old_sale_id] = cur.lastrowid
+                sales_imported += 1
+            except Exception as e:
+                errors.append(f"sale {ref}: {e}")
+
+        # ── 4. Sale items: ONLY for newly-imported sales (not skipped existing) ──
+        src_items = src.execute("""
+            SELECT sale_id, family_id, jersey_id, team, season, variant_label, version, size,
+                   personalization_json, unit_price, unit_cost, notes, import_id, item_type
+            FROM sale_items
+        """).fetchall()
+        for row in src_items:
+            try:
+                old_sale_id = row[0]
+                new_sale_id = sale_map.get(old_sale_id)
+                if not new_sale_id:
+                    continue  # orphan — skip
+                # Skip if items already exist for this sale (in case of skipped-existing logic)
+                existing_items = dst.execute(
+                    "SELECT COUNT(*) FROM sale_items WHERE sale_id = ?", (new_sale_id,)
+                ).fetchone()[0]
+                if existing_items > 0:
+                    continue
+                dst.execute("""
+                    INSERT INTO sale_items
+                      (sale_id, family_id, jersey_id, team, season, variant_label, version, size,
+                       personalization_json, unit_price, unit_cost, notes, import_id, item_type)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (new_sale_id, *row[1:]))
+                items_imported += 1
+            except Exception as e:
+                errors.append(f"sale_item for old_sale {old_sale_id}: {e}")
+
+        # ── 5. Sales attribution ──
+        try:
+            src_attrs = src.execute("""
+                SELECT sale_id, ad_campaign_id, ad_campaign_name, source, note, created_at
+                FROM sales_attribution
+            """).fetchall()
+            for row in src_attrs:
+                old_sale_id = row[0]
+                new_sale_id = sale_map.get(old_sale_id)
+                if not new_sale_id:
+                    continue
+                # Skip if already attributed
+                existing = dst.execute(
+                    "SELECT id FROM sales_attribution WHERE sale_id = ?", (new_sale_id,)
+                ).fetchone()
+                if existing:
+                    continue
+                dst.execute("""
+                    INSERT INTO sales_attribution (sale_id, ad_campaign_id, ad_campaign_name, source, note, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (new_sale_id, row[1], row[2], row[3], row[4], row[5]))
+                attributions_imported += 1
+        except sqlite3.OperationalError:
+            pass  # sales_attribution may not exist in older backup
+
+        dst.commit()
+        return {
+            "ok": True,
+            "customersImported": customers_imported,
+            "customersMerged": customers_merged,
+            "salesImported": sales_imported,
+            "salesSkippedExisting": sales_skipped_existing,
+            "saleItemsImported": items_imported,
+            "importsImported": imports_imported,
+            "attributionsImported": attributions_imported,
+            "errors": errors[:10],
+        }
+    finally:
+        src.close()
+        dst.close()
 
 
 def cmd_cleanup_chat_orders(args):
@@ -2929,6 +3130,7 @@ COMMANDS = {
     "attribute_sale": cmd_attribute_sale,
     "import_orders_from_worker": cmd_import_orders_from_worker,
     "list_sales": cmd_list_sales,
+    "import_from_backup_db": cmd_import_from_backup_db,
     "cleanup_chat_orders": cmd_cleanup_chat_orders,
     "search_customers": cmd_search_customers,
     "update_sale": cmd_update_sale,
