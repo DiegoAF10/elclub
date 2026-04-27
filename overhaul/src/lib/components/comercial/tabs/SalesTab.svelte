@@ -228,15 +228,9 @@
 
   <!-- Table header -->
   <div class="text-display flex border-b border-[var(--color-border)] bg-[var(--color-surface-0)] px-6 py-1.5 text-[9px] text-[var(--color-text-tertiary)]">
-    <div class="w-24">REF</div>
-    <div class="w-16">FECHA</div>
-    <div class="w-14">STATUS</div>
-    <div class="w-12">PAGO</div>
-    <div class="w-14">MOD</div>
-    <div class="w-16">CANAL</div>
-    <div class="flex-1 min-w-0">CLIENTE / ITEM</div>
-    <div class="w-12 text-right">ITEMS</div>
-    <div class="w-20 text-right">TOTAL</div>
+    <div class="w-28">REF · FECHA</div>
+    <div class="flex-1 min-w-0">CLIENTE · ITEM</div>
+    <div class="w-52 text-right">STATUS · TOTAL</div>
   </div>
 
   <!-- List -->
@@ -252,38 +246,59 @@
         <button
           type="button"
           onclick={() => (openOrderRef = s.ref)}
-          class="flex w-full items-baseline border-b border-[var(--color-border)] px-6 py-2 text-left transition-colors hover:bg-[var(--color-surface-1)]"
+          class="flex w-full items-start gap-3 border-b border-[var(--color-border)] px-6 py-2 text-left transition-colors hover:bg-[var(--color-surface-1)]"
           style="border-left: 3px solid {statusColor(s.fulfillmentStatus)};"
         >
-          <div class="text-mono w-24 truncate text-[11px] text-[var(--color-text-primary)]" title={s.ref}>{s.ref}</div>
-          <div class="text-mono w-16 text-[10px] text-[var(--color-text-secondary)]">{fmtDate(s.occurredAt)}</div>
-          <div class="w-14">
-            <span class="text-display text-[9px]" style="color: {statusColor(s.fulfillmentStatus)};">
-              ● {statusLabel(s.fulfillmentStatus)}
-            </span>
+          <!-- LEFT: REF + FECHA stacked -->
+          <div class="w-28 flex-shrink-0">
+            <div class="text-mono truncate text-[11px] text-[var(--color-text-primary)]" title={s.ref}>{s.ref}</div>
+            <div class="text-mono text-[9.5px] text-[var(--color-text-muted)]">{fmtDate(s.occurredAt)}</div>
           </div>
-          <div class="text-mono w-12 text-[9.5px] text-[var(--color-text-muted)]">{paymentLabel(s.paymentMethod)}</div>
-          <div class="w-14">
-            {#if s.modality}
-              <span class="text-display rounded-[3px] px-1.5 py-0.5 text-[9px]" style="background: {modalityBg(s.modality)}; color: {modalityFg(s.modality)};">
-                {modalityLabel(s.modality)}
-              </span>
-            {:else}
-              <span class="text-[9px] text-[var(--color-text-muted)]">—</span>
-            {/if}
-          </div>
-          <div class="text-mono w-16 text-[9.5px] text-[var(--color-text-muted)] truncate" title={s.origin ?? ''}>{s.origin ?? '—'}</div>
-          <div class="flex-1 min-w-0 truncate">
-            <div class="text-[11px] text-[var(--color-text-primary)] truncate">
-              {s.customerName ?? '—'}
-              {#if s.customerPhone}<span class="text-mono ml-1.5 text-[9.5px] text-[var(--color-text-muted)]">{s.customerPhone}</span>{/if}
+
+          <!-- CENTER: cliente + item -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-baseline gap-1.5 truncate">
+              <span class="truncate text-[11.5px] font-medium text-[var(--color-text-primary)]">{s.customerName ?? '—'}</span>
+              {#if s.customerPhone}
+                <span class="text-mono flex-shrink-0 text-[9.5px] text-[var(--color-text-muted)]">{s.customerPhone}</span>
+              {/if}
             </div>
             {#if s.firstItemLabel}
-              <div class="text-[9.5px] text-[var(--color-text-tertiary)] truncate">{s.firstItemLabel}{#if s.itemsCount > 1}<span class="text-[var(--color-text-muted)]"> +{s.itemsCount - 1} más</span>{/if}</div>
+              <div class="truncate text-[10.5px] text-[var(--color-text-tertiary)]">
+                {s.firstItemLabel}{#if s.itemsCount > 1}<span class="text-[var(--color-text-muted)]"> · +{s.itemsCount - 1} más</span>{/if}
+              </div>
+            {:else}
+              <div class="text-[10px] text-[var(--color-text-muted)] italic">sin items</div>
             {/if}
           </div>
-          <div class="text-mono w-12 text-right text-[10px] text-[var(--color-text-tertiary)]">{s.itemsCount}×</div>
-          <div class="text-mono w-20 text-right text-[12px] font-semibold" style="color: var(--color-accent);">Q{s.totalGtq.toFixed(0)}</div>
+
+          <!-- RIGHT: pills row + total stacked -->
+          <div class="w-52 flex-shrink-0 text-right">
+            <!-- Pills row -->
+            <div class="flex items-center justify-end gap-1 flex-wrap">
+              <span class="text-display text-[9px]" style="color: {statusColor(s.fulfillmentStatus)};">
+                ● {statusLabel(s.fulfillmentStatus)}
+              </span>
+              {#if s.modality}
+                <span class="text-display rounded-[2px] px-1 py-0.5 text-[8.5px]" style="background: {modalityBg(s.modality)}; color: {modalityFg(s.modality)};">
+                  {modalityLabel(s.modality)}
+                </span>
+              {/if}
+              {#if s.paymentMethod}
+                <span class="text-mono text-[9px] text-[var(--color-text-muted)]">{paymentLabel(s.paymentMethod)}</span>
+              {/if}
+              {#if s.origin}
+                <span class="text-mono text-[9px] text-[var(--color-text-muted)]">· {s.origin}</span>
+              {/if}
+            </div>
+            <!-- Total row -->
+            <div class="mt-1 flex items-baseline justify-end gap-2">
+              <span class="text-mono text-[9.5px] text-[var(--color-text-tertiary)]">{s.itemsCount}×</span>
+              <span class="text-mono text-[13px] font-semibold" style="color: {s.totalGtq > 0 ? 'var(--color-accent)' : 'var(--color-text-muted)'};">
+                Q{s.totalGtq.toFixed(0)}
+              </span>
+            </div>
+          </div>
         </button>
       {/each}
     {/if}
