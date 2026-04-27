@@ -1,7 +1,7 @@
 <script lang="ts">
   import { adapter } from '$lib/adapter';
   import { runSync, type SyncResult } from '$lib/data/manychatSync';
-  import type { MetaSyncStatus, MetaSyncResult, BackfillAttributionResult } from '$lib/data/comercial';
+  import type { MetaSyncStatus, MetaSyncResult, BackfillAttributionResult, ImportOrdersResult } from '$lib/data/comercial';
   import { RefreshCw, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-svelte';
 
   let metaSync = $state<MetaSyncStatus | null>(null);
@@ -15,6 +15,25 @@
   let backfilling = $state(false);
   let backfillResult = $state<BackfillAttributionResult | null>(null);
   let backfillError = $state<string | null>(null);
+
+  let importing = $state(false);
+  let importResult = $state<ImportOrdersResult | null>(null);
+  let importError = $state<string | null>(null);
+
+  async function runImport() {
+    if (importing) return;
+    importing = true;
+    importError = null;
+    try {
+      const result = await adapter.importOrdersFromWorker();
+      importResult = result;
+      if (!result.ok) importError = (result.errors || []).join('; ') || 'Error desconocido';
+    } catch (e) {
+      importError = e instanceof Error ? e.message : String(e);
+    } finally {
+      importing = false;
+    }
+  }
 
   async function runBackfill() {
     if (backfilling) return;
@@ -186,6 +205,37 @@
           class="flex items-center gap-1.5 rounded-[4px] bg-[var(--color-accent)] px-3 py-1.5 text-[11.5px] font-semibold text-black disabled:opacity-60"
         >
           {#if backfilling}<Loader2 size={12} class="animate-spin" /> Backfilling…{:else}<RefreshCw size={12} strokeWidth={2} /> Run{/if}
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section class="settings-section mt-6">
+    <h2 class="text-display mb-2 text-[10px] text-[var(--color-text-tertiary)]">Importar histórico</h2>
+    <div class="rounded-[4px] border border-[var(--color-border)] bg-[var(--color-surface-1)] p-3">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex-1">
+          <div class="text-[12px] font-medium">Importar orders desde worker KV</div>
+          <div class="text-[10px] text-[var(--color-text-tertiary)]">Pull todas las orders (Recurrente + bot) → sales + customers. Idempotente.</div>
+          {#if importResult}
+            <div class="mt-1 text-[10px]" style="color: {importResult.ok ? 'var(--color-accent)' : 'var(--color-danger)'};">
+              ✓ {importResult.ordersImported} importadas · {importResult.customersCreated} customers nuevos · {importResult.skippedExisting} ya existían
+              {#if importResult.errors && importResult.errors.length > 0}
+                <span class="text-[var(--color-warning)]">· {importResult.errors.length} errores</span>
+              {/if}
+            </div>
+          {/if}
+          {#if importError}
+            <div class="mt-1 text-[10px] text-[var(--color-danger)]">⚠ {importError}</div>
+          {/if}
+        </div>
+        <button
+          type="button"
+          onclick={runImport}
+          disabled={importing}
+          class="flex items-center gap-1.5 rounded-[4px] bg-[var(--color-accent)] px-3 py-1.5 text-[11.5px] font-semibold text-black disabled:opacity-60"
+        >
+          {#if importing}<Loader2 size={12} class="animate-spin" /> Importando…{:else}<RefreshCw size={12} strokeWidth={2} /> Run{/if}
         </button>
       </div>
     </div>
