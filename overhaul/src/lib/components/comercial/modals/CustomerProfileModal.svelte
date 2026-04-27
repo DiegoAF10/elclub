@@ -1,7 +1,7 @@
 <script lang="ts">
   import { adapter } from '$lib/adapter';
   import type { CustomerProfile, TimelineEntry } from '$lib/data/comercial';
-  import { Star, Loader2, ShoppingCart, Pencil, Ban, CheckCircle2, ExternalLink } from 'lucide-svelte';
+  import { Star, Loader2, ShoppingCart } from 'lucide-svelte';
   import BaseModal from '../BaseModal.svelte';
   import OrderDetailModal from './OrderDetailModal.svelte';
   import ConversationThreadModal from './ConversationThreadModal.svelte';
@@ -233,8 +233,8 @@
                 {/each}
               </select>
               <div class="flex gap-2">
-                <button onclick={saveSource} class="flex-1 rounded-[3px] bg-[var(--color-accent)] px-2 py-0.5 text-[10px] font-semibold text-black">Guardar</button>
-                <button onclick={() => (editingSource = false)} class="flex-1 rounded-[3px] border border-[var(--color-border)] px-2 py-0.5 text-[10px] text-[var(--color-text-secondary)]">Cancelar</button>
+                <button type="button" onclick={saveSource} class="flex-1 rounded-[3px] bg-[var(--color-accent)] px-2 py-0.5 text-[10px] font-semibold text-black">Guardar</button>
+                <button type="button" onclick={() => (editingSource = false)} class="flex-1 rounded-[3px] border border-[var(--color-border)] px-2 py-0.5 text-[10px] text-[var(--color-text-secondary)]">Cancelar</button>
               </div>
             </div>
           {:else}
@@ -243,7 +243,7 @@
                 <span class="text-[var(--color-text-tertiary)]">Source</span>
                 <span>
                   {profile.attribution.customerSource ?? '—'}
-                  <button onclick={startEditSource} class="ml-1 text-[10px] text-[var(--color-accent)]">[editar]</button>
+                  <button type="button" onclick={startEditSource} class="ml-1 text-[10px] text-[var(--color-accent)]">[editar]</button>
                 </span>
               </div>
               {#if profile.attribution.leadCampaigns.length > 0}
@@ -257,7 +257,7 @@
           <div class="text-display mb-2 text-[9.5px] text-[var(--color-text-tertiary)]">
             Traits
             {#if !editingTraits}
-              <button onclick={startEditTraits} class="ml-1 text-[10px] text-[var(--color-accent)]">[editar]</button>
+              <button type="button" onclick={startEditTraits} class="ml-1 text-[10px] text-[var(--color-accent)]">[editar]</button>
             {/if}
           </div>
           {#if editingTraits}
@@ -269,8 +269,8 @@
               ></textarea>
               {#if traitsError}<div class="text-[10px] text-[var(--color-danger)]">⚠ {traitsError}</div>{/if}
               <div class="flex gap-2">
-                <button onclick={saveTraits} class="flex-1 rounded-[3px] bg-[var(--color-accent)] px-2 py-0.5 text-[10px] font-semibold text-black">Guardar</button>
-                <button onclick={() => (editingTraits = false)} class="flex-1 rounded-[3px] border border-[var(--color-border)] px-2 py-0.5 text-[10px] text-[var(--color-text-secondary)]">Cancelar</button>
+                <button type="button" onclick={saveTraits} class="flex-1 rounded-[3px] bg-[var(--color-accent)] px-2 py-0.5 text-[10px] font-semibold text-black">Guardar</button>
+                <button type="button" onclick={() => (editingTraits = false)} class="flex-1 rounded-[3px] border border-[var(--color-border)] px-2 py-0.5 text-[10px] text-[var(--color-text-secondary)]">Cancelar</button>
               </div>
             </div>
           {:else}
@@ -283,6 +283,7 @@
               {profile.blocked ? '● Bloqueado' : '● Activo'}
             </span>
             <button
+              type="button"
               onclick={toggleBlocked}
               disabled={blockedToggling}
               class="rounded-[3px] border border-[var(--color-border)] px-2 py-0.5 text-[10px] disabled:opacity-50"
@@ -299,12 +300,14 @@
     {#if profile}
       <div class="flex items-center gap-2">
         <button
+          type="button"
           onclick={() => (openManualOrder = true)}
           class="flex items-center gap-1.5 rounded-[4px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-3 py-1.5 text-[11.5px] font-medium text-[var(--color-text-secondary)]"
         >
           <ShoppingCart size={12} strokeWidth={1.8} /> + Orden manual
         </button>
         <button
+          type="button"
           onclick={onClose}
           class="ml-auto rounded-[4px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-3 py-1.5 text-[11.5px] text-[var(--color-text-secondary)]"
         >Cerrar</button>
