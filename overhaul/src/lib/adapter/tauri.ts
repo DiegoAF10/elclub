@@ -28,6 +28,7 @@ import type {
 	WatermarkArgs,
 	WatermarkResult
 } from './types';
+import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult } from '../data/comercial';
 import type { Family } from '../data/types';
 import { transformFamily } from './transform';
 
@@ -246,5 +247,197 @@ export const tauriAdapter: Adapter = {
 
 	async batchCleanFamily(familyId: string, modeloIdx?: number): Promise<BatchCleanResult> {
 		return invoke<BatchCleanResult>('batch_clean_family', { familyId, modeloIdx });
-	}
+	},
+
+	// ─── Comercial R1 ──────────────────────────────────────────
+	async listEvents(filter?: { status?: EventStatus; severity?: string }): Promise<ComercialEvent[]> {
+		return invoke<ComercialEvent[]>('comercial_list_events', { filter: filter ?? {} });
+	},
+
+	async setEventStatus(eventId: number, status: EventStatus): Promise<void> {
+		return invoke<void>('comercial_set_event_status', { eventId, status });
+	},
+
+	async getOrderForModal(ref: string): Promise<OrderForModal | null> {
+		return invoke<OrderForModal | null>('comercial_get_order', { args: { ref } });
+	},
+
+	async markOrderShipped(ref: string, trackingCode?: string): Promise<void> {
+		return invoke<void>('comercial_mark_order_shipped', { args: { ref, trackingCode: trackingCode ?? null } });
+	},
+
+	async insertEvent(detected: DetectedEvent): Promise<number> {
+		return invoke<number>('comercial_insert_event', {
+			args: {
+				type: detected.type,
+				severity: detected.severity,
+				title: detected.title,
+				sub: detected.sub,
+				itemsAffected: detected.itemsAffected
+			}
+		});
+	},
+
+	async listSalesInRange(range: PeriodRange) {
+		return invoke<Array<{ ref: string; totalGtq: number; paidAt: string; status: string }>>(
+			'comercial_list_sales_in_range',
+			{ start: range.start, end: range.end }
+		);
+	},
+
+	async listLeadsInRange(range: PeriodRange) {
+		return invoke<Array<{ leadId: number; firstContactAt: string }>>(
+			'comercial_list_leads_in_range',
+			{ start: range.start, end: range.end }
+		);
+	},
+
+	async listAdSpendInRange(range: PeriodRange) {
+		return invoke<Array<{ campaignId: string; spendGtq: number; capturedAt: string }>>(
+			'comercial_list_ad_spend_in_range',
+			{ start: range.start, end: range.end }
+		);
+	},
+
+	// ─── Comercial R2 ──────────────────────────────────────────
+	async syncManychatData(args) {
+		return invoke<{ ok: boolean; leadsUpserted: number; conversationsUpserted: number; lastSyncAt: string; error?: string }>(
+			'comercial_sync_manychat',
+			{ args: { since: args.since, workerBase: args.workerBase, dashboardKey: args.dashboardKey } }
+		);
+	},
+
+	async listLeads(filter?: { status?: string; range?: PeriodRange }): Promise<Lead[]> {
+		const f = filter ?? {};
+		const result = await invoke<unknown[]>('comercial_list_leads', {
+			filter: {
+				status: f.status,
+				rangeStart: f.range?.start,
+				rangeEnd: f.range?.end,
+			},
+		});
+		return result as Lead[];
+	},
+
+	async listConversations(filter?: { outcome?: string; range?: PeriodRange; leadId?: number }): Promise<ConversationMeta[]> {
+		const f = filter ?? {};
+		const result = await invoke<unknown[]>('comercial_list_conversations', {
+			filter: {
+				outcome: f.outcome,
+				rangeStart: f.range?.start,
+				rangeEnd: f.range?.end,
+				leadId: f.leadId,
+			},
+		});
+		return result as ConversationMeta[];
+	},
+
+	async listCustomers(filter?: { lastOrderBefore?: string; minLtvGtq?: number }): Promise<Customer[]> {
+		const f = filter ?? {};
+		const result = await invoke<unknown[]>('comercial_list_customers', {
+			filter: { lastOrderBefore: f.lastOrderBefore, minLtvGtq: f.minLtvGtq },
+		});
+		return result as Customer[];
+	},
+
+	async getMetaSync(source: string): Promise<MetaSyncStatus> {
+		const result = await invoke<unknown>('comercial_get_meta_sync', { source });
+		if (!result) return { source, lastSyncAt: null, lastStatus: null, lastError: null };
+		return result as MetaSyncStatus;
+	},
+
+	async getConversationMessages(args): Promise<ConversationMessage[]> {
+		return invoke<ConversationMessage[]>('comercial_get_conversation_messages', {
+			args: {
+				convId: args.convId,
+				workerBase: args.workerBase,
+				dashboardKey: args.dashboardKey,
+			},
+		});
+	},
+
+	// ─── Comercial R4 ──────────────────────────────────────────
+	async getCustomerProfile(customerId: number): Promise<CustomerProfile | null> {
+		const result = await invoke<unknown>('comercial_get_customer_profile', { customerId });
+		return (result as CustomerProfile | null) ?? null;
+	},
+
+	async createCustomer(args: CreateCustomerArgs) {
+		return invoke<{ ok: boolean; customerId?: number; error?: string }>(
+			'comercial_create_customer',
+			{ args: { name: args.name, phone: args.phone, email: args.email, source: args.source } }
+		);
+	},
+
+	async updateCustomerTraits(customerId: number, traitsJson: Record<string, unknown>): Promise<void> {
+		await invoke('comercial_update_customer_traits', {
+			args: { customerId, traitsJson },
+		});
+	},
+
+	async setCustomerBlocked(customerId: number, blocked: boolean): Promise<void> {
+		await invoke('comercial_set_customer_blocked', {
+			args: { customerId, blocked },
+		});
+	},
+
+	async updateCustomerSource(customerId: number, source: string | null): Promise<void> {
+		await invoke('comercial_update_customer_source', {
+			args: { customerId, source },
+		});
+	},
+
+	async createManualOrder(args: CreateOrderArgs) {
+		return invoke<{ ok: boolean; ref?: string; saleId?: number; error?: string }>(
+			'comercial_create_manual_order',
+			{
+				args: {
+					customerId: args.customerId,
+					items: args.items,
+					paymentMethod: args.paymentMethod,
+					fulfillmentStatus: args.fulfillmentStatus,
+					shippingFee: args.shippingFee,
+					discount: args.discount,
+					notes: args.notes,
+				},
+			}
+		);
+	},
+
+	// ─── Comercial R5 ──────────────────────────────────────────
+	async syncMetaAds(args = {}) {
+		return invoke<MetaSyncResult>('comercial_sync_meta_ads', { args: { days: args.days, datePreset: args.datePreset } });
+	},
+
+	async listCampaigns(args = {}) {
+		const result = await invoke<unknown>('comercial_list_campaigns', { args: { periodDays: args.periodDays } });
+		return (result as Campaign[]) ?? [];
+	},
+
+	async getCampaignDetail(campaignId: string, periodDays?: number) {
+		const result = await invoke<unknown>('comercial_get_campaign_detail', { args: { campaignId, periodDays } });
+		return (result as CampaignDetail | null) ?? null;
+	},
+
+	async getFunnelAwarenessReal(args = {}) {
+		const result = await invoke<unknown>('comercial_get_funnel_awareness_real', { args: { periodStart: args.periodStart, periodEnd: args.periodEnd } });
+		return (result as FunnelAwarenessReal | null) ?? null;
+	},
+
+	async generateCoupon(args) {
+		return invoke<{ ok: boolean; code?: string; error?: string; pending?: boolean }>(
+			'comercial_generate_coupon',
+			{ args: { customerId: args.customerId, type: args.type, value: args.value, expiresInDays: args.expiresInDays } }
+		);
+	},
+
+	// ─── Comercial R6 ──────────────────────────────────────────
+	async backfillSalesAttribution() {
+		return invoke<BackfillAttributionResult>('comercial_backfill_sales_attribution');
+	},
+
+	async getSaleAttribution(saleId: number) {
+		const result = await invoke<unknown>('comercial_get_sale_attribution', { saleId });
+		return (result as SaleAttribution | null) ?? null;
+	},
 };

@@ -3,7 +3,7 @@
  * Vault lead management — dual-axis state machine + CRUD + coupon gating.
  *
  * State model:
- *   - payment_status: pending | paid | waived_ff | cod_completed | refunded_credit | cancelled
+ *   - payment_status: pending | paid | waived_ff | cod_pending_confirmation | cod_only | cod_completed | refunded_credit | cancelled
  *   - fulfillment_status: awaiting_import | arrived | shipped_cod | delivered | no_show | import_failed
  *
  * See: docs/superpowers/specs/2026-04-24-vault-q100-reservation-flow-design.md §3
@@ -16,14 +16,22 @@ const PRICE_RESERVATION_FLAT = 415;     // Q415 todo incluido si reserva
 const PRICE_BASE_NORESERVATION = 435;   // Q435 base sin reserva (addons separados)
 const RESERVATION_AMOUNT = 100;         // Q100 anticipo
 
+// Path B (sin reserva) requires WhatsApp confirmation within this window before
+// auto-cancellation. Cliente debe escribir "CONFIRMO PEDIDO V-XXXX" al bot WA.
+export const COD_CONFIRMATION_TTL_MS = 24 * 60 * 60 * 1000;  // 24h
+// At T+12h (halfway through TTL), send a single email nudge to the customer
+// reminding them to confirm. Tracked via lead.nudge_12h_sent_at to avoid spam.
+export const COD_NUDGE_AT_MS         = 12 * 60 * 60 * 1000;  // 12h
+
 export const PAYMENT_TRANSITIONS = {
-  pending:         ['paid', 'refunded_credit', 'cancelled'],
-  paid:            ['cod_completed', 'refunded_credit'],
-  waived_ff:       ['cod_completed', 'cancelled'],
-  cod_only:        ['cod_completed', 'cancelled'],   // NEW: customer chose no reservation
-  cod_completed:   [],
-  refunded_credit: [],
-  cancelled:       [],
+  pending:                   ['paid', 'refunded_credit', 'cancelled'],
+  paid:                      ['cod_completed', 'refunded_credit'],
+  waived_ff:                 ['cod_completed', 'cancelled'],
+  cod_pending_confirmation:  ['cod_only', 'cancelled'],   // NEW: gate WA before activar
+  cod_only:                  ['cod_completed', 'cancelled'],
+  cod_completed:             [],
+  refunded_credit:           [],
+  cancelled:                 [],
 };
 
 export const FULFILLMENT_TRANSITIONS = {
@@ -257,18 +265,22 @@ export function validateReservationPayload(body) {
  *
  * @param {number} total
  * @param {'reservation'|'cod'} paymentChoice
+ * @param {number} itemCount  cantidad de jerseys en el cart (min 1)
  * @returns {string|null}  error message or null if valid
  */
-export function validatePricingCoherence(total, paymentChoice) {
+export function validatePricingCoherence(total, paymentChoice, itemCount = 1) {
+  const n = Math.max(1, itemCount);
   if (paymentChoice === 'reservation') {
-    if (total !== PRICE_RESERVATION_FLAT) {
-      return `total invalido para path reserva: esperado Q${PRICE_RESERVATION_FLAT} (todo incluido), recibido Q${total}`;
+    const expected = PRICE_RESERVATION_FLAT * n;
+    if (total !== expected) {
+      return `total invalido para path reserva: esperado Q${expected} (Q${PRICE_RESERVATION_FLAT} × ${n}), recibido Q${total}`;
     }
     return null;
   }
   if (paymentChoice === 'cod') {
-    if (typeof total !== 'number' || total < PRICE_BASE_NORESERVATION) {
-      return `total invalido para path COD: minimo Q${PRICE_BASE_NORESERVATION}, recibido Q${total}`;
+    const minimum = PRICE_BASE_NORESERVATION * n;
+    if (typeof total !== 'number' || total < minimum) {
+      return `total invalido para path COD: minimo Q${minimum} (Q${PRICE_BASE_NORESERVATION} × ${n}), recibido Q${total}`;
     }
     return null;
   }
@@ -330,18 +342,21 @@ export async function handleVaultReservation(request, env, cors = {}) {
 
   // Validate pricing coherence (skip if F&F — coupon.value is ground truth)
   if (!isFFWaiver) {
-    const pricingError = validatePricingCoherence(body.total, paymentChoice);
+    const pricingError = validatePricingCoherence(body.total, paymentChoice, body.productos?.length || 1);
     if (pricingError) {
       return jsonResp({ ok: false, error: pricingError }, 400, cors);
     }
   }
 
   // total_cod calculation per path:
-  //   F&F:        coupon.value (Q400)
-  //   reservation: body.total - 100 = Q315 (since body.total === Q415)
-  //   cod:         body.total (Q435+addons, no reservation deducted)
+  //   F&F:         coupon.value * jerseyCount (Q400 por jersey, addons GRATIS bundled)
+  //                e.g. 1 jersey: Q400 / 2 jerseys: Q800 / 3 jerseys: Q1200
+  //   reservation: body.total - 100 (Q100 flat upfront universal, resto al COD)
+  //                e.g. 1 jersey: Q415 - Q100 = Q315 / 2 jerseys: Q830 - Q100 = Q730
+  //   cod:         body.total (Q435+addons por jersey, sin reserva deducida)
+  const jerseyCount = body.productos?.length || 1;
   const totalCod = isFFWaiver
-    ? coupon.value
+    ? coupon.value * jerseyCount
     : paymentChoice === 'cod'
       ? body.total
       : body.total - RESERVATION_AMOUNT;
@@ -374,7 +389,7 @@ export async function handleVaultReservation(request, env, cors = {}) {
     payment_status: isFFWaiver
       ? 'waived_ff'
       : paymentChoice === 'cod'
-        ? 'cod_only'
+        ? 'cod_pending_confirmation'
         : 'pending',
     fulfillment_status: 'awaiting_import',
     source: 'vault.elclub.club',
@@ -403,13 +418,13 @@ export async function handleVaultReservation(request, env, cors = {}) {
   }
 
   if (paymentChoice === 'cod') {
-    await appendStatusHistory(env, ref, 'init', 'cod_only', 'payment',
-      `Sin reserva — todo COD Q${totalCod}`);
+    await appendStatusHistory(env, ref, 'init', 'cod_pending_confirmation', 'payment',
+      `Sin reserva — esperando confirmación WA del cliente. COD a cobrar: Q${totalCod}`);
 
     try {
-      await notifyDiegoVaultPayment(env, lead, 'cod_only');
+      await notifyDiegoVaultPayment(env, lead, 'cod_pending_confirmation');
     } catch (err) {
-      console.error('Notify Diego cod_only failed (non-fatal):', err);
+      console.error('Notify Diego cod_pending_confirmation failed (non-fatal):', err);
     }
 
     return jsonResp({
@@ -417,7 +432,8 @@ export async function handleVaultReservation(request, env, cors = {}) {
       lead_id: ref,
       skip_payment: true,
       total_cod: totalCod,
-      path: 'cod',
+      path: 'cod_pending',
+      requires_wa_confirmation: true,
     }, 200, cors);
   }
 
@@ -671,7 +687,17 @@ export async function handleVaultPaymentSuccess(env, vaultRef, paymentIntent) {
   // Merge Recurrente enrichment AND transition payment_status → paid in one
   // atomic KV write (via updateLeadStatus extraFields). Avoids a double-write
   // and the KV eventual-consistency window between them.
-  const method = paymentIntent?.payment_method?.type || 'unknown';
+  //
+  // Method extraction: Recurrente puts payment_method.type only on card flows.
+  // For bank_transfer the field is missing — detect by ID prefix instead:
+  //   pi_*  → card (payment intent)
+  //   ba_*  → bank_transfer (bank account / ACH)
+  //   ch_*  → checkout-derived (uncommon, fallback to card)
+  const piId = paymentIntent?.id || '';
+  const method = paymentIntent?.payment_method?.type
+    || (piId.startsWith('ba_')              ? 'bank_transfer'
+       : piId.startsWith('pi_') || piId.startsWith('ch_') ? 'card'
+       : 'unknown');
   const amountCents = paymentIntent?.amount_in_cents || null;
   const amountQ = (amountCents || 0) / 100;
 
@@ -697,16 +723,369 @@ export async function handleVaultPaymentSuccess(env, vaultRef, paymentIntent) {
   return { ok: true, vault_ref: vaultRef };
 }
 
+// ── Path B: WA confirmation gate ─────────────────────────────
+
 /**
- * Send an email to Diego when a vault reservation is created or paid.
- * Uses Resend. Silent-fail on errors (not critical for the webhook flow).
+ * Confirm a Path B (sin reserva) lead via WhatsApp bot or manual admin click.
+ * Idempotent: if already confirmed (cod_only), returns ok=true with action='idempotent'.
+ *
+ * Caller is responsible for auth — this function trusts its callers.
  *
  * @param {object} env
- * @param {object} lead            The full lead record
- * @param {'paid'|'waived_ff'|'cod_only'} [kind='paid']  Which lifecycle event triggered the email.
- *                                            'paid'     → Q100 Recurrente cobró
- *                                            'waived_ff' → cupón F&F saltó el cobro
- *                                            'cod_only' → cliente eligió sin reserva (todo COD)
+ * @param {string} ref       vault lead ref (V-XXXX)
+ * @param {'bot'|'manual'} source  who confirmed (audit trail)
+ * @returns {Promise<{ok: boolean, action: string, ref: string, message?: string}>}
+ *   action: 'confirmed' | 'idempotent' | 'invalid_state' | 'not_found' | 'cancelled'
+ */
+export async function handleConfirmCod(env, ref, source = 'bot') {
+  const found = await findLeadByRef(env, ref);
+  if (!found) {
+    return { ok: false, action: 'not_found', ref, message: 'Lead no existe' };
+  }
+
+  const current = found.record.payment_status;
+
+  // Idempotent: already confirmed
+  if (current === 'cod_only') {
+    return { ok: true, action: 'idempotent', ref, message: 'Ya confirmado previamente' };
+  }
+
+  // Cancelled (timeout o admin cancel) → no se puede revivir desde el bot
+  if (current === 'cancelled') {
+    return { ok: false, action: 'cancelled', ref,
+      message: 'Pedido cancelado. Si querés reactivarlo, escribí "Hola" para asistencia.' };
+  }
+
+  // Solo confirmamos desde cod_pending_confirmation
+  if (current !== 'cod_pending_confirmation') {
+    return { ok: false, action: 'invalid_state', ref,
+      message: `Estado inesperado: ${current}. Contactá soporte.` };
+  }
+
+  await updateLeadStatus(env, ref, 'payment', 'cod_only',
+    `Confirmación recibida (source=${source}). Activando pedido — ordenar a China.`);
+
+  // Best-effort: notify Diego del cambio (email B "ordená a China")
+  const updatedLead = { ...found.record, payment_status: 'cod_only' };
+  try {
+    await notifyDiegoVaultPayment(env, updatedLead, 'cod_confirmed');
+  } catch (err) {
+    console.error('Notify Diego cod_confirmed failed (non-fatal):', err);
+  }
+
+  return { ok: true, action: 'confirmed', ref,
+    message: 'Pedido confirmado. Te avisamos apenas llegue tu pieza al archivo.' };
+}
+
+/**
+ * Merge plain fields into a lead's full record + index entry without touching
+ * state machine or history. Used for tracking flags like nudge_12h_sent_at.
+ */
+async function mergeLeadFields(env, ref, fields) {
+  const found = await findLeadByRef(env, ref);
+  if (!found) throw new Error(`lead ${ref} no existe`);
+  const updated = { ...found.record, ...fields };
+  await env.DATA.put(found.entry.key, JSON.stringify(updated));
+  // Index entry is light — only sync if any of the merged fields exist on the index schema.
+  // Currently nudge tracking lives on the full record only (not on the index).
+  return updated;
+}
+
+/**
+ * Cron sweeper: combina dos passes sobre leads en 'cod_pending_confirmation'.
+ *   - Pass 1 (T+12h): single email nudge al cliente (si tiene email).
+ *     Marca lead.nudge_12h_sent_at para no re-enviar.
+ *   - Pass 2 (T+24h): cancel + email C a Diego.
+ *
+ * Idempotent y tolerante a fallos — un lead malo no para el sweep.
+ *
+ * @returns {Promise<{scanned: number, nudged: number, cancelled: number, errors: number}>}
+ */
+export async function runVaultPendingConfirmationSweep(env) {
+  const index = (await env.DATA.get(INDEX_KEY, { type: 'json' })) || [];
+  const now = Date.now();
+  const nudgeCutoff  = now - COD_NUDGE_AT_MS;
+  const cancelCutoff = now - COD_CONFIRMATION_TTL_MS;
+
+  // All pending Path B leads (filtered later by age + nudge status)
+  const allPending = index.filter(e => {
+    if (e.payment_status !== 'cod_pending_confirmation') return false;
+    const createdMs = new Date(e.timestamp).getTime();
+    return Number.isFinite(createdMs);
+  });
+
+  let nudged = 0, cancelled = 0, errors = 0;
+
+  // ── Pass 1: nudge candidates (T+12h, not yet cancelled, not yet nudged) ──
+  for (const entry of allPending) {
+    const createdMs = new Date(entry.timestamp).getTime();
+    if (createdMs >= nudgeCutoff) continue;       // todavía joven, no nudge
+    if (createdMs < cancelCutoff) continue;       // ya está en zona de cancel — pass 2 se encarga
+    try {
+      const found = await findLeadByRef(env, entry.ref);
+      if (!found || found.record.nudge_12h_sent_at) continue;  // skip si ya nudged
+      if (found.record.cliente?.email) {
+        await sendCodPendingNudge(env, found.record);
+      }
+      // Marcamos siempre (incluso sin email) para no re-evaluar este lead cada 30min
+      await mergeLeadFields(env, entry.ref, { nudge_12h_sent_at: new Date().toISOString() });
+      nudged++;
+    } catch (err) {
+      console.error(`Sweep: nudge failed for ${entry.ref}:`, err);
+      errors++;
+    }
+  }
+
+  // ── Pass 2: cancel candidates (T+24h) ──
+  for (const entry of allPending) {
+    const createdMs = new Date(entry.timestamp).getTime();
+    if (createdMs >= cancelCutoff) continue;
+    try {
+      await updateLeadStatus(env, entry.ref, 'payment', 'cancelled',
+        'Auto-cancel: 24h sin confirmación WA del cliente');
+
+      // Notify Diego (email C) — best-effort, errors don't block sweep
+      const found = await findLeadByRef(env, entry.ref);
+      if (found) {
+        try {
+          await notifyDiegoVaultPayment(env, found.record, 'cod_cancelled_no_confirmation');
+        } catch (notifyErr) {
+          console.error(`Sweep: notify Diego failed for ${entry.ref}:`, notifyErr);
+        }
+      }
+      cancelled++;
+    } catch (err) {
+      console.error(`Sweep: cancel failed for ${entry.ref}:`, err);
+      errors++;
+    }
+  }
+
+  return { scanned: allPending.length, nudged, cancelled, errors };
+}
+
+/**
+ * Send an email to a customer (not Diego) via Brevo. Brevo free tier supports
+ * multi-domain (300/day). Para emails internos a Diego seguimos usando Resend
+ * (notifyDiegoVaultPayment) que ya tiene la cuenta + fallback graceful.
+ *
+ * NOTE: si BREVO_API_KEY no está seteado, falla silently (logging) en vez
+ * de bloquear el sweep. Diego puede ver el log y configurar después.
+ *
+ * @returns {Promise<void>}  throws on Brevo non-2xx for upstream error handling
+ */
+async function sendBrevoEmail(env, { to, toName, subject, html, fromName = 'El Club Vault' }) {
+  if (!env.BREVO_API_KEY) {
+    console.warn('[brevo] BREVO_API_KEY not set — skipping customer email');
+    return;
+  }
+  const fromEmail = env.VAULT_CUSTOMER_EMAIL_FROM || 'vault@elclub.club';
+
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'accept': 'application/json',
+      'api-key': env.BREVO_API_KEY,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { name: fromName, email: fromEmail },
+      to: [{ email: to, name: toName || to.split('@')[0] }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    console.error(`[brevo] send failed ${res.status}: ${errText}`);
+    throw new Error(`Brevo ${res.status}`);
+  }
+  const data = await res.json().catch(() => ({}));
+  console.log(`[brevo] sent to ${to} messageId=${data.messageId || '?'}`);
+}
+
+/**
+ * Send a single email nudge to the CUSTOMER (not Diego) at T+12h reminding
+ * them to confirm their Path B pedido by sending the WhatsApp message.
+ * Pre-rellena el wa.me link con el formato exacto que el bot detecta.
+ *
+ * Silent-fail — sweep continues even if email send errors.
+ *
+ * NOTE customer-facing: respeta la regla "no China" (memory:feedback_elclub_no_china).
+ * NOTE: usa Brevo (no Resend) porque Resend free permite solo 1 domain
+ *       verificado y ese es de VENTUS.
+ */
+export async function sendCodPendingNudge(env, lead) {
+  if (!lead?.cliente?.email) return;
+
+  const to       = lead.cliente.email;
+  const ref      = lead.ref;
+  const nombre   = lead.cliente.nombre?.split(/\s+/)[0] || 'amigo';
+  const totalCod = lead.total_cod || '?';
+  const waNumber = '13185343283';
+  const confirmText = `CONFIRMO PEDIDO ${ref}`;
+  const waLink   = `https://wa.me/${waNumber}?text=${encodeURIComponent(confirmText)}`;
+
+  const subject = `Falta 1 paso para activar tu pedido — ${ref}`;
+
+  // Product cards (max 2 visible — más se ve abrumador). Thumbnail prominent
+  // a la izquierda, info estructurada a la derecha. Tabla porque flexbox no
+  // funciona consistente en Outlook/Gmail iOS.
+  const productosArr = lead.productos || [];
+  const productCards = productosArr.slice(0, 2).map(p => {
+    const team = p.team || 'Jersey';
+    const season = p.season ? ` ${p.season}` : '';
+    const variant = p.variant_label ? ` · ${p.variant_label}` : '';
+    const sleeve = p.sleeve === 'long' ? ' · Manga larga' : '';
+    const size = p.size ? `Talla ${p.size}` : 'Talla a definir';
+    const pers = p.personalization || {};
+    const persLine = (pers.nombre || pers.numero) ? `${pers.nombre || ''} ${pers.numero ? '#' + pers.numero : ''}`.trim() : '';
+    const parche = pers.parche_label && pers.parche_label !== 'ninguno' ? pers.parche_label : '';
+    const thumb = p.thumbnail || 'https://vault.elclub.club/assets/img/placeholder.png';
+    return `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:12px;background:#111827;border-radius:8px;overflow:hidden">
+        <tr>
+          <td width="96" style="vertical-align:top;background:#fff">
+            <img src="${thumb}" alt="${team}${season}" width="96" height="96" style="display:block;width:96px;height:96px;object-fit:cover">
+          </td>
+          <td style="padding:14px 16px;vertical-align:top">
+            <div style="font-size:15px;font-weight:700;color:#f9fafb;line-height:1.3;margin-bottom:4px">${team}${season}${variant}</div>
+            <div style="font-size:13px;color:#9ca3af;line-height:1.4">${size}${sleeve}</div>
+            ${persLine ? `<div style="font-size:12px;color:#fbbf24;font-family:monospace;margin-top:6px;letter-spacing:0.5px">${persLine}</div>` : ''}
+            ${parche ? `<div style="font-size:11px;color:#a78bfa;margin-top:4px">+ ${parche}</div>` : ''}
+          </td>
+        </tr>
+      </table>
+    `;
+  }).join('');
+  const remainder = productosArr.length > 2 ? `<div style="text-align:center;font-size:12px;color:#6b7280;margin-top:-4px;margin-bottom:12px">+ ${productosArr.length - 2} producto${productosArr.length - 2 === 1 ? '' : 's'} más</div>` : '';
+
+  const html = `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${subject}</title></head>
+<body style="margin:0;padding:0;background:#0a0b0d;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#0a0b0d;padding:20px 0">
+  <tr><td align="center">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;background:#0f1115;border-radius:12px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,0.4)">
+
+      <!-- HEADER amber con branding -->
+      <tr><td style="background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);padding:28px 24px;text-align:center;color:#1f2937">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:11px;letter-spacing:4px;text-transform:uppercase;font-weight:700;opacity:0.7;margin-bottom:4px">EL CLUB</div>
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:24px;letter-spacing:6px;text-transform:uppercase;font-weight:900;color:#1f2937;line-height:1">VAULT</div>
+        <div style="height:2px;width:48px;background:#1f2937;margin:14px auto 18px;opacity:0.4"></div>
+        <h1 style="margin:0;font-size:22px;font-weight:700;color:#1f2937;line-height:1.3">Falta 1 paso, ${nombre}</h1>
+        <div style="margin-top:8px;font-size:13px;color:#1f2937;opacity:0.75">Tu pedido espera tu confirmación por WhatsApp</div>
+      </td></tr>
+
+      <!-- BODY -->
+      <tr><td style="padding:28px 24px;background:#0f1115">
+
+        <!-- REF badge -->
+        <div style="text-align:center;margin-bottom:24px">
+          <span style="display:inline-block;padding:6px 14px;background:#1f2937;border-radius:20px;font-family:monospace;font-size:13px;color:#9ca3af;letter-spacing:1px">${ref}</span>
+        </div>
+
+        <!-- PRODUCT CARDS -->
+        <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#6b7280;margin-bottom:10px;font-weight:600">Tu pedido</div>
+        ${productCards}
+        ${remainder}
+
+        <!-- TOTAL pill -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:8px;margin-bottom:28px">
+          <tr>
+            <td style="padding:12px 14px;background:#0a0b0d;border:1px solid #1f2937;border-radius:6px">
+              <table role="presentation" width="100%"><tr>
+                <td style="font-size:13px;color:#9ca3af">Total al recibir</td>
+                <td style="text-align:right;font-size:18px;font-weight:700;color:#f9fafb;font-family:monospace">Q${totalCod}</td>
+              </tr><tr>
+                <td colspan="2" style="font-size:11px;color:#6b7280;padding-top:4px">Envío gratis a domicilio · Pago contra entrega</td>
+              </tr></table>
+            </td>
+          </tr>
+        </table>
+
+        <!-- DIVIDER -->
+        <div style="height:1px;background:#1f2937;margin:0 0 24px"></div>
+
+        <!-- CTA INSTRUCTIONS -->
+        <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#fbbf24;margin-bottom:12px;font-weight:600;text-align:center">⏱ Acción requerida</div>
+        <p style="margin:0 0 18px;font-size:15px;line-height:1.5;color:#e5e7eb;text-align:center">
+          Para activar tu pedido, copiá <strong style="color:#f9fafb">este texto exacto</strong> y mandalo por WhatsApp:
+        </p>
+
+        <!-- COPY-ME box -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px">
+          <tr><td style="padding:18px 16px;background:#1f2937;border:2px dashed #25D366;border-radius:8px;text-align:center">
+            <code style="font-family:'SF Mono',Monaco,Consolas,monospace;font-size:16px;color:#f9fafb;letter-spacing:1px;font-weight:600">${confirmText}</code>
+          </td></tr>
+        </table>
+
+        <!-- CTA BUTTON -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 12px">
+          <tr><td align="center">
+            <a href="${waLink}" target="_blank" style="display:inline-block;width:100%;padding:18px 24px;background:#25D366;color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:17px;text-align:center;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,sans-serif">
+              ✓ CONFIRMAR POR WHATSAPP
+            </a>
+          </td></tr>
+        </table>
+
+        <p style="margin:0 0 24px;font-size:12px;color:#9ca3af;text-align:center;line-height:1.5">
+          El botón abre WhatsApp con el mensaje listo.<br>Solo dale <strong style="color:#e5e7eb">Enviar</strong>.
+        </p>
+
+        <!-- DEADLINE -->
+        <div style="margin:24px 0 0;padding:14px 16px;background:rgba(245,158,11,0.08);border-left:3px solid #f59e0b;border-radius:4px">
+          <div style="font-size:12px;color:#fbbf24;font-weight:600;margin-bottom:4px">⏳ Te quedan ~12 horas</div>
+          <div style="font-size:12px;color:#9ca3af;line-height:1.5">
+            Si no confirmás, el pedido se cancela automáticamente. ¿Cambiaste de idea? Ignorá este correo y se cancela solo.
+          </div>
+        </div>
+
+      </td></tr>
+
+      <!-- FOOTER -->
+      <tr><td style="background:#0a0b0d;padding:24px;text-align:center">
+        <div style="font-family:Georgia,serif;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#6b7280;margin-bottom:6px">El Club</div>
+        <div style="font-size:13px;color:#9ca3af;font-style:italic;margin-bottom:14px">"La camiseta te elige a vos."</div>
+        <div style="font-size:11px;color:#4b5563;line-height:1.6">
+          <a href="https://vault.elclub.club" style="color:#9ca3af;text-decoration:none">vault.elclub.club</a>
+          &nbsp;·&nbsp;
+          <a href="https://instagram.com/club.gt" style="color:#9ca3af;text-decoration:none">@club.gt</a>
+          &nbsp;·&nbsp;
+          <a href="https://tiktok.com/@club.gtm" style="color:#9ca3af;text-decoration:none">@club.gtm</a>
+        </div>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body></html>
+  `;
+
+  await sendBrevoEmail(env, {
+    to,
+    toName: lead.cliente.nombre || nombre,
+    subject,
+    html,
+    fromName: 'El Club Vault',
+  });
+  console.log(`[nudge] ${ref} → ${to}`);
+}
+
+/**
+ * Send an email to Diego for vault lifecycle events. Uses Resend.
+ * Silent-fail on errors (not critical for the webhook flow).
+ *
+ * @param {object} env
+ * @param {object} lead   The full lead record
+ * @param {string} [kind='paid']  Which lifecycle event triggered the email:
+ *   - 'paid'                          → Q100 Recurrente cobró (Path A)
+ *   - 'waived_ff'                     → cupón F&F saltó el cobro (Path C)
+ *   - 'cod_pending_confirmation'      → Path B submit, esperando confirm WA (Email A)
+ *   - 'cod_confirmed'                 → bot/admin confirmó Path B → ordená a China (Email B)
+ *   - 'cod_cancelled_no_confirmation' → 24h timeout sin confirmación (Email C)
+ *   - 'cod_only' (deprecated)         → backward compat alias para 'cod_confirmed'
  */
 export async function notifyDiegoVaultPayment(env, lead, kind = 'paid') {
   if (!env.RESEND_API_KEY) {
@@ -716,65 +1095,182 @@ export async function notifyDiegoVaultPayment(env, lead, kind = 'paid') {
 
   const to   = env.DIEGO_EMAIL || 'diegoarriazaflores@gmail.com';
   const from = env.VAULT_EMAIL_FROM || 'El Club Vault <onboarding@resend.dev>';
+  const workerOrigin = env.WORKER_ORIGIN || 'https://elclub-backoffice.ventusgt.workers.dev';
+
+  // Backward-compat alias (legacy code path)
+  if (kind === 'cod_only') kind = 'cod_confirmed';
 
   const items = Array.isArray(lead.productos) ? lead.productos : [];
   const itemsHtml = items.map(it => {
     const label = [it.team, it.season, it.variant_label].filter(Boolean).join(' ') || 'jersey';
+    const sleeve = it.sleeve === 'long' ? ' · Long Sleeve' : '';
     const p = it.personalization || {};
-    const pers = [
-      p.name && `Name: ${p.name}`,
-      (p.number !== undefined && p.number !== null && p.number !== '') && `#${p.number}`,
-      p.patch && `Patch: ${p.patch}`,
-    ].filter(Boolean).join(' · ');
-    return `<li><strong>${label}</strong> — Talla ${it.size || '—'} · Q${it.total_price || '—'}${pers ? ` <br><span style="color:#666">${pers}</span>` : ''}</li>`;
+    const persParts = [];
+    if (p.nombre || p.name) persParts.push(`Nombre: <strong>${p.nombre || p.name}</strong>`);
+    if (p.numero || p.number) persParts.push(`#${p.numero || p.number}`);
+    if (p.parche_label || p.patch) persParts.push(`Parche: ${p.parche_label || p.patch}`);
+    const pers = persParts.length > 0
+      ? `<div style="margin-top:4px;padding:6px 10px;background:#f8f8f8;border-left:3px solid #0066ff;font-size:13px;color:#333">${persParts.join(' · ')}</div>`
+      : '';
+    return `
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #eee;vertical-align:top">
+          <div style="font-weight:600;color:#111">${label}</div>
+          <div style="font-size:13px;color:#666;margin-top:2px">Talla ${it.size || '—'}${sleeve} · <strong style="color:#111">Q${it.total_price || '—'}</strong></div>
+          ${pers}
+        </td>
+      </tr>
+    `;
   }).join('');
 
   const envio = lead.envio || {};
   const cliente = lead.cliente || {};
 
+  // Per-kind metadata: visual style + subject + payment block + actionable CTA
   const kindMeta = {
-    paid:      { icon: '🏴', title: 'Vault pagado',          subjectFragment: 'pagado — Q100 reserva' },
-    waived_ff: { icon: '🎁', title: 'Vault F&F reservado',   subjectFragment: 'F&F' },
-    cod_only:  { icon: '📦', title: 'Vault sin reserva',     subjectFragment: 'sin reserva (COD)' },
+    paid: {
+      icon: '🏴',
+      title: 'Vault pagado — Q100 reserva',
+      subject: `🏴 Vault ${lead.ref} pagado — ${cliente.nombre || 'cliente'}`,
+      headerBg: '#10b981',
+      paymentBlock: `
+        <div style="padding:12px 16px;background:#f0fdf4;border-radius:6px;margin:16px 0">
+          <div style="color:#065f46;font-weight:600">✅ Q100 reserva recibida via Recurrente</div>
+          <div style="color:#047857;margin-top:4px">COD pendiente al entregar: <strong>Q${lead.total_cod || '?'}</strong></div>
+          ${lead.recurrente_method ? `<div style="color:#6b7280;font-size:13px;margin-top:4px">Método: ${lead.recurrente_method}</div>` : ''}
+        </div>
+      `,
+      actionBlock: `
+        <div style="padding:12px 16px;background:#fef3c7;border-radius:6px;margin:12px 0">
+          <strong>Próximo paso:</strong> ordenar a Bond Soccer Jersey en China.<br>
+          <a href="${workerOrigin}/api/vault/lead/${lead.ref}/supplier-messages?key=${env.DASHBOARD_KEY || ''}" style="color:#0066ff">Ver mensajes pre-formateados →</a>
+        </div>
+      `,
+    },
+    waived_ff: {
+      icon: '🎁',
+      title: 'Vault F&F reservado',
+      subject: `🎁 Vault ${lead.ref} F&F (${lead.coupon_code || '—'}) — ${cliente.nombre || 'cliente'}`,
+      headerBg: '#8b5cf6',
+      paymentBlock: `
+        <div style="padding:12px 16px;background:#faf5ff;border-radius:6px;margin:16px 0">
+          <div style="color:#5b21b6;font-weight:600">🎁 Cupón F&F aplicado: <code>${lead.coupon_code || '—'}</code></div>
+          <div style="color:#6d28d9;margin-top:4px">Sin cobro upfront. COD a cobrar: <strong>Q${lead.total_cod || '?'}</strong></div>
+        </div>
+      `,
+      actionBlock: `
+        <div style="padding:12px 16px;background:#fef3c7;border-radius:6px;margin:12px 0">
+          <strong>Próximo paso:</strong> ordenar a Bond Soccer Jersey en China.<br>
+          <a href="${workerOrigin}/api/vault/lead/${lead.ref}/supplier-messages?key=${env.DASHBOARD_KEY || ''}" style="color:#0066ff">Ver mensajes pre-formateados →</a>
+        </div>
+      `,
+    },
+    cod_pending_confirmation: {
+      icon: '🟡',
+      title: 'Vault sin reserva — esperando confirmación WA',
+      subject: `🟡 Vault ${lead.ref} esperando confirmación — ${cliente.nombre || 'cliente'}`,
+      headerBg: '#f59e0b',
+      paymentBlock: `
+        <div style="padding:12px 16px;background:#fefce8;border:1px solid #fcd34d;border-radius:6px;margin:16px 0">
+          <div style="color:#92400e;font-weight:600">⏳ Cliente eligió sin reserva — gate WA activo</div>
+          <div style="color:#b45309;margin-top:4px">Sin pago hoy. COD esperado: <strong>Q${lead.total_cod || '?'}</strong></div>
+          <div style="color:#78350f;margin-top:8px;font-size:13px">
+            El cliente debe escribir <code>CONFIRMO PEDIDO ${lead.ref}</code> al bot WA en las próximas 24h.<br>
+            Si no lo hace, el pedido se auto-cancela.
+          </div>
+        </div>
+      `,
+      actionBlock: `
+        <div style="padding:16px;background:#1f2937;border-radius:6px;margin:16px 0;text-align:center">
+          <div style="color:#f3f4f6;margin-bottom:12px;font-size:14px">¿Querés activar manualmente sin esperar al bot?</div>
+          <a href="${workerOrigin}/api/vault/lead/${lead.ref}/confirm-cod?key=${env.DASHBOARD_KEY || ''}"
+             style="display:inline-block;padding:12px 24px;background:#10b981;color:white;text-decoration:none;border-radius:6px;font-weight:600">
+            ✅ Confirmar pedido manualmente
+          </a>
+          <div style="color:#9ca3af;margin-top:12px;font-size:12px">Un click activa el lead y dispara la confirmación al cliente.</div>
+        </div>
+      `,
+    },
+    cod_confirmed: {
+      icon: '✅',
+      title: 'Vault sin reserva CONFIRMADO',
+      subject: `✅ Vault ${lead.ref} CONFIRMADO — ordená a China — ${cliente.nombre || 'cliente'}`,
+      headerBg: '#10b981',
+      paymentBlock: `
+        <div style="padding:12px 16px;background:#f0fdf4;border-radius:6px;margin:16px 0">
+          <div style="color:#065f46;font-weight:600">✅ Cliente confirmó el pedido por WhatsApp</div>
+          <div style="color:#047857;margin-top:4px">COD a cobrar al entregar: <strong>Q${lead.total_cod || '?'}</strong></div>
+        </div>
+      `,
+      actionBlock: `
+        <div style="padding:12px 16px;background:#fef3c7;border-radius:6px;margin:12px 0">
+          <strong>Ya podés ordenar a China.</strong><br>
+          <a href="${workerOrigin}/api/vault/lead/${lead.ref}/supplier-messages?key=${env.DASHBOARD_KEY || ''}" style="color:#0066ff">Ver mensajes pre-formateados para Bond Soccer →</a>
+        </div>
+      `,
+    },
+    cod_cancelled_no_confirmation: {
+      icon: '❌',
+      title: 'Vault cancelado — sin confirmación 24h',
+      subject: `❌ Vault ${lead.ref} cancelado por timeout — ${cliente.nombre || 'cliente'}`,
+      headerBg: '#ef4444',
+      paymentBlock: `
+        <div style="padding:12px 16px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;margin:16px 0">
+          <div style="color:#991b1b;font-weight:600">❌ Auto-cancelado: 24h sin confirmación WA</div>
+          <div style="color:#b91c1c;margin-top:4px;font-size:13px">El cliente nunca escribió <code>CONFIRMO PEDIDO ${lead.ref}</code>.</div>
+        </div>
+      `,
+      actionBlock: `
+        <div style="padding:12px 16px;background:#f3f4f6;border-radius:6px;margin:12px 0;font-size:13px;color:#374151">
+          <strong>Lead muerto — no ordenes a China.</strong><br>
+          Si querés reactivarlo, hacé reach-out manual y creale un nuevo pedido.
+        </div>
+      `,
+    },
   };
+
   const meta = kindMeta[kind] || kindMeta.paid;
 
-  const paymentLine = (() => {
-    if (kind === 'waived_ff') {
-      return `<p style="margin:12px 0 4px"><strong>Cupón F&F aplicado (${lead.coupon_code || '—'}).</strong> Sin cobro Q100 upfront. COD a cobrar: <strong>Q${lead.total_cod || '?'}</strong></p>`;
-    }
-    if (kind === 'cod_only') {
-      return `<p style="margin:12px 0 4px"><strong>Cliente eligió sin reserva.</strong> Sin pago hoy. COD a cobrar al entregar: <strong>Q${lead.total_cod || '?'}</strong></p>`;
-    }
-    // 'paid' default
-    return `<p style="margin:12px 0 4px"><strong>Q100 reserva recibida.</strong> COD pendiente: <strong>Q${lead.total_cod || '?'}</strong></p>`;
-  })();
-
-  const subject = `${meta.icon} Vault ${lead.ref} ${meta.subjectFragment} (${lead.cliente?.nombre || 'cliente'})`;
-
   const html = `
-    <div style="font-family:system-ui,sans-serif;max-width:560px;color:#111">
-      <h2 style="margin:0 0 8px">${meta.icon} ${meta.title} — ${lead.ref}</h2>
-      <p style="margin:0 0 4px"><strong>${cliente.nombre || '—'}</strong> · ${cliente.telefono || '—'}</p>
-      ${cliente.email ? `<p style="margin:0 0 12px">Email: ${cliente.email}</p>` : ''}
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;color:#111;background:#fff">
+      <div style="background:${meta.headerBg};padding:20px 24px;color:white">
+        <div style="font-size:13px;opacity:0.9;letter-spacing:1px;text-transform:uppercase">El Club Vault</div>
+        <h1 style="margin:6px 0 0;font-size:22px;font-weight:700">${meta.icon} ${meta.title}</h1>
+        <div style="margin-top:4px;font-family:monospace;font-size:14px;opacity:0.9">${lead.ref}</div>
+      </div>
 
-      ${paymentLine}
+      <div style="padding:20px 24px">
+        <div style="display:flex;justify-content:space-between;align-items:start;gap:16px;margin-bottom:8px">
+          <div>
+            <div style="font-weight:600;font-size:16px;color:#111">${cliente.nombre || '—'}</div>
+            <div style="color:#6b7280;font-size:14px;margin-top:2px">📱 ${cliente.telefono || '—'}${cliente.email ? ` · ✉️ ${cliente.email}` : ''}</div>
+          </div>
+        </div>
 
-      <h3 style="margin:20px 0 8px;font-size:14px;color:#666;text-transform:uppercase">Productos (${items.length})</h3>
-      <ul style="margin:0 0 12px;padding-left:20px">${itemsHtml || '<li>sin items</li>'}</ul>
+        ${meta.paymentBlock}
 
-      <h3 style="margin:20px 0 8px;font-size:14px;color:#666;text-transform:uppercase">Envío</h3>
-      <p style="margin:0 0 4px">${envio.modalidad || '—'} · ${envio.depto || ''} / ${envio.municipio || ''}</p>
-      <p style="margin:0 0 4px;color:#555">${envio.direccion || '—'}</p>
-      ${envio.referencias ? `<p style="margin:0 0 4px;color:#666"><em>Ref: ${envio.referencias}</em></p>` : ''}
+        <h3 style="margin:24px 0 8px;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:1px">Productos · ${items.length}</h3>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+          ${itemsHtml || '<tr><td style="padding:10px 0;color:#999">sin items</td></tr>'}
+        </table>
 
-      ${lead.notas ? `<p style="margin:12px 0;color:#666"><em>Notas: ${lead.notas}</em></p>` : ''}
+        <h3 style="margin:24px 0 8px;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:1px">Envío</h3>
+        <div style="padding:12px;background:#f9fafb;border-radius:6px;font-size:14px">
+          <div style="color:#111"><strong>${envio.modalidad === 'entrega' ? '🚚 Entrega a domicilio' : '🏠 Retiro'}</strong> · ${envio.depto || ''} / ${envio.municipio || ''}</div>
+          <div style="color:#374151;margin-top:4px">${envio.direccion || '—'}</div>
+          ${envio.referencias ? `<div style="color:#6b7280;margin-top:4px;font-style:italic">Ref: ${envio.referencias}</div>` : ''}
+        </div>
 
-      <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
-      <p style="margin:0;font-size:12px;color:#888">
-        Siguiente paso: marcar <code>arrived</code> cuando llegue el container.<br>
-        <code>PATCH /api/vault/lead/${lead.ref}/fulfillment</code> con <code>{"status":"arrived"}</code>
-      </p>
+        ${lead.notas ? `<div style="margin-top:16px;padding:12px;background:#fef3c7;border-radius:6px;font-size:13px;color:#78350f"><strong>Notas del cliente:</strong> ${lead.notas}</div>` : ''}
+
+        ${meta.actionBlock}
+
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0 16px">
+        <div style="font-size:11px;color:#9ca3af;line-height:1.5">
+          Lead ID: <code>${lead.ref}</code> · Source: ${lead.source || 'vault.elclub.club'}<br>
+          Coupon: ${lead.coupon_code || '—'} · Total: Q${lead.total || '—'} · COD: Q${lead.total_cod || '—'}
+        </div>
+      </div>
     </div>
   `;
 
@@ -787,7 +1283,7 @@ export async function notifyDiegoVaultPayment(env, lead, kind = 'paid') {
     body: JSON.stringify({
       from,
       to: [to],
-      subject,
+      subject: meta.subject,
       html,
     }),
   });
@@ -816,9 +1312,9 @@ function normalizeVersion(raw) {
  */
 export function formatSupplierMessage(item) {
   const p = item?.personalization || {};
-  const name    = nonEmpty(p.name)    ? p.name.trim()  : '-';
-  const number  = (p.number === 0 || nonEmpty(String(p.number || ''))) ? String(p.number) : '-';
-  const patch   = nonEmpty(p.patch)   ? p.patch.trim() : '-';
+  const name    = nonEmpty(p.nombre || p.name) ? (p.nombre || p.name).trim() : '-';
+  const number  = nonEmpty(String(p.numero ?? p.number ?? '')) ? String(p.numero ?? p.number) : '-';
+  const patch   = nonEmpty(p.parche_label || p.parche || p.patch) ? (p.parche_label || p.parche || p.patch).trim() : '-';
   const size    = nonEmpty(item?.size) ? item.size.trim() : '-';
   const version = normalizeVersion(item?.version);
 

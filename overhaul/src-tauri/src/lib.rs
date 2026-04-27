@@ -462,8 +462,7 @@ fn set_family_published(
             .ok_or_else(|| ErpError::NotFound(format!("family_id {}", family_id)))?;
         fam.insert("published".to_string(), Value::Bool(published));
     }
-    write_catalog_atomic(&catalog)?;
-    invalidate_catalog(&state);
+    write_catalog_atomic_keep_cache(&catalog, &state)?;
     Ok(())
 }
 
@@ -479,8 +478,7 @@ fn set_family_featured(
             .ok_or_else(|| ErpError::NotFound(format!("family_id {}", family_id)))?;
         fam.insert("featured".to_string(), Value::Bool(featured));
     }
-    write_catalog_atomic(&catalog)?;
-    invalidate_catalog(&state);
+    write_catalog_atomic_keep_cache(&catalog, &state)?;
     Ok(())
 }
 
@@ -544,8 +542,7 @@ fn set_primary_modelo_idx(
             fam.insert("hero_thumbnail".to_string(), h);
         }
     }
-    write_catalog_atomic(&catalog)?;
-    invalidate_catalog(&state);
+    write_catalog_atomic_keep_cache(&catalog, &state)?;
     Ok(())
 }
 
@@ -561,8 +558,7 @@ fn set_family_archived(
             .ok_or_else(|| ErpError::NotFound(format!("family_id {}", family_id)))?;
         fam.insert("archived".to_string(), Value::Bool(archived));
     }
-    write_catalog_atomic(&catalog)?;
-    invalidate_catalog(&state);
+    write_catalog_atomic_keep_cache(&catalog, &state)?;
     Ok(())
 }
 
@@ -679,8 +675,7 @@ fn set_modelo_sold_out(
             .ok_or_else(|| ErpError::Other("modelo is not an object".to_string()))?;
         modelo_map.insert("sold_out".to_string(), Value::Bool(sold_out));
     }
-    write_catalog_atomic(&catalog)?;
-    invalidate_catalog(&state);
+    write_catalog_atomic_keep_cache(&catalog, &state)?;
     Ok(())
 }
 
@@ -777,8 +772,7 @@ async fn remove_modelo_photos(
     }
 
     // 2. Persist catalog (ANTES de borrar R2, por si falla R2 al menos el catalog queda limpio)
-    write_catalog_atomic(&catalog)?;
-    invalidate_catalog(&state);
+    write_catalog_atomic_keep_cache(&catalog, &state)?;
 
     // 3. Opcionalmente borrar de R2
     let (deleted_r2, r2_failed, r2_errors) = if also_delete_r2.unwrap_or(false) && !removed_urls.is_empty() {
@@ -864,8 +858,7 @@ fn update_gallery_order(
             }
         }
     }
-    write_catalog_atomic(&catalog)?;
-    invalidate_catalog(&state);
+    write_catalog_atomic_keep_cache(&catalog, &state)?;
     Ok(())
 }
 
@@ -1719,6 +1712,503 @@ fn erp_health() -> HealthStatus {
     }
 }
 
+// ─── Comercial R1 ──────────────────────────────────────────
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ListEventsFilter {
+    pub status: Option<String>,
+    pub severity: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_list_events(filter: ListEventsFilter) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({
+        "cmd": "list_events",
+        "status": filter.status,
+        "severity": filter.severity,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+
+    Ok(result.get("events").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
+#[tauri::command]
+async fn comercial_set_event_status(event_id: i64, status: String) -> Result<()> {
+    let payload = serde_json::json!({ "cmd": "set_event_status", "eventId": event_id, "status": status });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(())
+}
+
+// IMPORTANT: `ref` is a reserved keyword in Rust. Use a struct with serde rename:
+#[derive(Debug, Deserialize)]
+pub struct GetOrderArgs {
+    #[serde(rename = "ref")]
+    pub reff: String,
+}
+
+#[tauri::command]
+async fn comercial_get_order(args: GetOrderArgs) -> Result<Option<Value>> {
+    let payload = serde_json::json!({ "cmd": "get_order", "ref": args.reff });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("order").cloned().filter(|v| !v.is_null()))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MarkShippedArgs {
+    #[serde(rename = "ref")]
+    pub reff: String,
+    #[serde(rename = "trackingCode")]
+    pub tracking_code: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_mark_order_shipped(args: MarkShippedArgs) -> Result<()> {
+    let payload = serde_json::json!({
+        "cmd": "mark_order_shipped",
+        "ref": args.reff,
+        "trackingCode": args.tracking_code,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(())
+}
+
+#[tauri::command]
+async fn comercial_list_sales_in_range(start: String, end: String) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({ "cmd": "list_sales_in_range", "start": start, "end": end });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("sales").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
+#[tauri::command]
+async fn comercial_list_leads_in_range(start: String, end: String) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({ "cmd": "list_leads_in_range", "start": start, "end": end });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("leads").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
+// IMPORTANT: Python's cmd_list_ad_spend_in_range returns the array under key "adSpend"
+// (camelCase), NOT "ad_spend". This was fixed in Task 10 fix commit 631f8f1.
+// Use "adSpend" in result.get(...) below.
+#[tauri::command]
+async fn comercial_list_ad_spend_in_range(start: String, end: String) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({ "cmd": "list_ad_spend_in_range", "start": start, "end": end });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("adSpend").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InsertEventArgs {
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub severity: String,
+    pub title: String,
+    pub sub: Option<String>,
+    pub items_affected: Vec<Value>,
+}
+
+#[tauri::command]
+async fn comercial_insert_event(args: InsertEventArgs) -> Result<i64> {
+    let payload = serde_json::json!({
+        "cmd": "insert_event",
+        "type": args.type_,
+        "severity": args.severity,
+        "title": args.title,
+        "sub": args.sub,
+        "itemsAffected": args.items_affected,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("eventId").and_then(|v| v.as_i64()).unwrap_or(-1))
+}
+
+// ─── Comercial R2-combo ────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncManychatArgs {
+    pub since: Option<String>,
+    pub worker_base: Option<String>,
+    pub dashboard_key: String,
+}
+
+#[tauri::command]
+async fn comercial_sync_manychat(args: SyncManychatArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "sync_manychat",
+        "since": args.since,
+        "workerBase": args.worker_base,
+        "dashboardKey": args.dashboard_key,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ListLeadsFilter {
+    pub status: Option<String>,
+    pub range_start: Option<String>,
+    pub range_end: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_list_leads(filter: ListLeadsFilter) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({
+        "cmd": "list_leads",
+        "status": filter.status,
+        "rangeStart": filter.range_start,
+        "rangeEnd": filter.range_end,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("leads").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ListConvsFilter {
+    pub outcome: Option<String>,
+    pub range_start: Option<String>,
+    pub range_end: Option<String>,
+    pub lead_id: Option<i64>,
+}
+
+#[tauri::command]
+async fn comercial_list_conversations(filter: ListConvsFilter) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({
+        "cmd": "list_conversations",
+        "outcome": filter.outcome,
+        "rangeStart": filter.range_start,
+        "rangeEnd": filter.range_end,
+        "leadId": filter.lead_id,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("conversations").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ListCustomersFilter {
+    pub last_order_before: Option<String>,
+    pub min_ltv_gtq: Option<f64>,
+}
+
+#[tauri::command]
+async fn comercial_list_customers(filter: ListCustomersFilter) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({
+        "cmd": "list_customers",
+        "lastOrderBefore": filter.last_order_before,
+        "minLtvGtq": filter.min_ltv_gtq,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("customers").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
+#[tauri::command]
+async fn comercial_get_meta_sync(source: String) -> Result<Value> {
+    let payload = serde_json::json!({ "cmd": "get_meta_sync", "source": source });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("metaSync").cloned().unwrap_or(Value::Null))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetConvMessagesArgs {
+    pub conv_id: String,
+    pub worker_base: Option<String>,
+    pub dashboard_key: String,
+}
+
+#[tauri::command]
+async fn comercial_get_conversation_messages(args: GetConvMessagesArgs) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({
+        "cmd": "get_conversation_messages",
+        "convId": args.conv_id,
+        "workerBase": args.worker_base,
+        "dashboardKey": args.dashboard_key,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("messages").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
+// ─── Comercial R4 ──────────────────────────────────────────────────────────
+// NOTE: Commands taking struct args expect TS callers to wrap as `{ args: {...} }`
+// (pattern established by R1 Task 4 fix 1708b12). The primitive-arg command below
+// (`comercial_get_customer_profile`) takes `{ customerId }` directly without wrap.
+// DEFERRED to R5: `comercial_generate_coupon` — pending Task 0 worker endpoint
+// confirmation (current /api/coupons/generate uses COUPON_API_KEY + ig_user_id
+// dedup, incompatible with the planned customer_id + amount/percent contract).
+
+#[tauri::command]
+async fn comercial_get_customer_profile(customer_id: i64) -> Result<Value> {
+    let payload = serde_json::json!({ "cmd": "get_customer_profile", "customerId": customer_id });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("profile").cloned().unwrap_or(Value::Null))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCustomerArgs {
+    pub name: String,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+    pub source: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_create_customer(args: CreateCustomerArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "create_customer",
+        "name": args.name,
+        "phone": args.phone,
+        "email": args.email,
+        "source": args.source,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateTraitsArgs {
+    pub customer_id: i64,
+    pub traits_json: Value,
+}
+
+#[tauri::command]
+async fn comercial_update_customer_traits(args: UpdateTraitsArgs) -> Result<()> {
+    let payload = serde_json::json!({
+        "cmd": "update_customer_traits",
+        "customerId": args.customer_id,
+        "traitsJson": args.traits_json,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetBlockedArgs {
+    pub customer_id: i64,
+    pub blocked: bool,
+}
+
+#[tauri::command]
+async fn comercial_set_customer_blocked(args: SetBlockedArgs) -> Result<()> {
+    let payload = serde_json::json!({
+        "cmd": "set_customer_blocked",
+        "customerId": args.customer_id,
+        "blocked": args.blocked,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSourceArgs {
+    pub customer_id: i64,
+    pub source: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_update_customer_source(args: UpdateSourceArgs) -> Result<()> {
+    let payload = serde_json::json!({
+        "cmd": "update_customer_source",
+        "customerId": args.customer_id,
+        "source": args.source,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateManualOrderArgs {
+    pub customer_id: i64,
+    pub items: Vec<Value>,
+    pub payment_method: String,
+    pub fulfillment_status: String,
+    pub shipping_fee: Option<f64>,
+    pub discount: Option<f64>,
+    pub notes: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_create_manual_order(args: CreateManualOrderArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "create_manual_order",
+        "customerId": args.customer_id,
+        "items": args.items,
+        "paymentMethod": args.payment_method,
+        "fulfillmentStatus": args.fulfillment_status,
+        "shippingFee": args.shipping_fee,
+        "discount": args.discount,
+        "notes": args.notes,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
+// ─── Comercial R5 ──────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncMetaAdsArgs {
+    pub days: Option<i64>,
+    pub date_preset: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_sync_meta_ads(args: SyncMetaAdsArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "sync_meta_ads",
+        "days": args.days,
+        "datePreset": args.date_preset,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListCampaignsArgs {
+    pub period_days: Option<i64>,
+}
+
+#[tauri::command]
+async fn comercial_list_campaigns(args: ListCampaignsArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "list_campaigns",
+        "periodDays": args.period_days,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("campaigns").cloned().unwrap_or(Value::Array(vec![])))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetCampaignDetailArgs {
+    pub campaign_id: String,
+    pub period_days: Option<i64>,
+}
+
+#[tauri::command]
+async fn comercial_get_campaign_detail(args: GetCampaignDetailArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "get_campaign_detail",
+        "campaignId": args.campaign_id,
+        "periodDays": args.period_days,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("detail").cloned().unwrap_or(Value::Null))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetFunnelAwarenessRealArgs {
+    pub period_start: Option<String>,
+    pub period_end: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_get_funnel_awareness_real(args: GetFunnelAwarenessRealArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "get_funnel_awareness_real",
+        "periodStart": args.period_start,
+        "periodEnd": args.period_end,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("awareness").cloned().unwrap_or(Value::Null))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateCouponArgs {
+    pub customer_id: i64,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub value: f64,
+    pub expires_in_days: Option<i64>,
+}
+
+#[tauri::command]
+async fn comercial_generate_coupon(args: GenerateCouponArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "generate_coupon",
+        "customerId": args.customer_id,
+        "type": args.type_,
+        "value": args.value,
+        "expiresInDays": args.expires_in_days,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
+// ─── Comercial R6 ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn comercial_backfill_sales_attribution() -> Result<Value> {
+    let payload = serde_json::json!({ "cmd": "backfill_sales_attribution" });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
+#[tauri::command]
+async fn comercial_get_sale_attribution(sale_id: i64) -> Result<Value> {
+    let payload = serde_json::json!({ "cmd": "get_sale_attribution", "saleId": sale_id });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("attribution").cloned().unwrap_or(Value::Null))
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1756,6 +2246,38 @@ pub fn run() {
             commit_and_push,
             git_status,
             erp_health,
+            // Comercial R1
+            comercial_list_events,
+            comercial_set_event_status,
+            comercial_get_order,
+            comercial_mark_order_shipped,
+            comercial_list_sales_in_range,
+            comercial_list_leads_in_range,
+            comercial_list_ad_spend_in_range,
+            comercial_insert_event,
+            // Comercial R2
+            comercial_sync_manychat,
+            comercial_list_leads,
+            comercial_list_conversations,
+            comercial_list_customers,
+            comercial_get_meta_sync,
+            comercial_get_conversation_messages,
+            // Comercial R4
+            comercial_get_customer_profile,
+            comercial_create_customer,
+            comercial_update_customer_traits,
+            comercial_set_customer_blocked,
+            comercial_update_customer_source,
+            comercial_create_manual_order,
+            // Comercial R5
+            comercial_sync_meta_ads,
+            comercial_list_campaigns,
+            comercial_get_campaign_detail,
+            comercial_get_funnel_awareness_real,
+            comercial_generate_coupon,
+            // Comercial R6
+            comercial_backfill_sales_attribution,
+            comercial_get_sale_attribution,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");

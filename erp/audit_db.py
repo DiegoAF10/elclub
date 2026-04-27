@@ -115,6 +115,79 @@ CREATE TABLE IF NOT EXISTS audit_delete_log (
 
 CREATE INDEX IF NOT EXISTS idx_delete_log_fid ON audit_delete_log(family_id);
 CREATE INDEX IF NOT EXISTS idx_delete_log_ts ON audit_delete_log(timestamp);
+
+-- ─── Comercial schema (R1) ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS leads (
+    lead_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    handle TEXT,                  -- IG handle, FB id, etc
+    phone TEXT,                   -- +502...
+    platform TEXT NOT NULL,       -- 'wa' | 'ig' | 'messenger'
+    sender_id TEXT NOT NULL,      -- ManyChat sender_id
+    source_campaign_id TEXT,      -- Meta campaign id que lo trajo
+    first_contact_at TEXT NOT NULL,
+    last_activity_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'new',   -- 'new'|'qualified'|'converted'|'lost'
+    traits_json TEXT DEFAULT '{}',
+    UNIQUE(platform, sender_id)
+);
+
+CREATE TABLE IF NOT EXISTS conversations (
+    conv_id TEXT PRIMARY KEY,             -- matches Cloudflare KV key
+    brand TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    sender_id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT NOT NULL,
+    outcome TEXT,                         -- 'sale'|'abandoned'|'inquiry'|...
+    order_id TEXT,                        -- FK a sales.ref si aplica
+    messages_total INTEGER DEFAULT 0,
+    messages_json TEXT NOT NULL,          -- transcripción serializada
+    tags_json TEXT DEFAULT '[]',
+    analyzed INTEGER DEFAULT 0,
+    synced_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_platform_sender ON conversations(platform, sender_id);
+CREATE INDEX IF NOT EXISTS idx_conv_outcome ON conversations(outcome);
+
+CREATE TABLE IF NOT EXISTS campaigns_snapshot (
+    snapshot_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id TEXT NOT NULL,
+    captured_at TEXT NOT NULL,
+    impressions INTEGER DEFAULT 0,
+    clicks INTEGER DEFAULT 0,
+    spend_gtq REAL DEFAULT 0,
+    conversions INTEGER DEFAULT 0,
+    revenue_attributed_gtq REAL DEFAULT 0,
+    raw_json TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_camp_id_time ON campaigns_snapshot(campaign_id, captured_at);
+
+CREATE TABLE IF NOT EXISTS comercial_events (
+    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,                   -- 'order_pending_24h'|'campaign_drop'|'lead_unanswered'|...
+    severity TEXT NOT NULL,               -- 'crit'|'warn'|'info'|'strat'
+    title TEXT NOT NULL,
+    sub TEXT,
+    items_affected_json TEXT DEFAULT '[]', -- [{type, id, ...}]
+    detected_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active', -- 'active'|'resolved'|'ignored'
+    resolved_at TEXT,
+    push_sent INTEGER DEFAULT 0           -- 1 si ya se mandó push WA
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_status_severity ON comercial_events(status, severity);
+CREATE INDEX IF NOT EXISTS idx_events_type ON comercial_events(type);
+
+-- ─── Comercial R2 — sync tracking ──────────────────────────────
+CREATE TABLE IF NOT EXISTS meta_sync (
+    source TEXT PRIMARY KEY,
+    last_sync_at TEXT NOT NULL,
+    last_status TEXT,
+    last_error TEXT
+);
 """
 
 
@@ -409,6 +482,25 @@ def init_audit_schema():
     if "qa_priority" not in cols:
         conn.execute("ALTER TABLE audit_decisions ADD COLUMN qa_priority INTEGER DEFAULT 0")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_qa_priority ON audit_decisions(qa_priority)")
+    # Comercial R1: ensure shipped_at column exists on sales (additive migration).
+    # SQLite is permissive: ALTER TABLE ADD COLUMN is non-blocking and reversible.
+    # Wrap in try/except because sqlite3 raises OperationalError if column exists.
+    try:
+        conn.execute("ALTER TABLE sales ADD COLUMN shipped_at TEXT")
+    except sqlite3.OperationalError:
+        pass  # column already exists, safe to ignore
+    # Comercial R4: ensure blocked column exists on customers (additive migration).
+    # Default 0 = not blocked. NOT NULL with default keeps queries simple.
+    try:
+        conn.execute("ALTER TABLE customers ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # column already exists, safe to ignore
+    # Comercial R5: ensure campaign_name column exists on campaigns_snapshot (additive migration).
+    # Captured separately from raw_json for fast SELECT in lists.
+    try:
+        conn.execute("ALTER TABLE campaigns_snapshot ADD COLUMN campaign_name TEXT")
+    except sqlite3.OperationalError:
+        pass  # column already exists, safe to ignore
     conn.commit()
     conn.close()
 

@@ -32,9 +32,10 @@
 		active?: string;
 		onSelect?: (id: string) => void;
 		onPushResult?: (msg: string) => void;
+		criticalEventsCount?: number;
 	}
 
-	let { active = 'audit', onSelect = () => {}, onPushResult = () => {} }: Props = $props();
+	let { active = 'audit', onSelect = () => {}, onPushResult = () => {}, criticalEventsCount = 0 }: Props = $props();
 
 	// Git status polling — reads on mount + refresh post-push
 	let gitStatus = $state<GitStatusInfo | null>(null);
@@ -223,6 +224,14 @@
 				>
 					<Icon size={14} strokeWidth={1.8} />
 					<span class="font-medium">{item.label}</span>
+					{#if item.id === 'comercial' && criticalEventsCount > 0}
+						<span
+							class="ml-auto rounded-[3px] px-1.5 py-0.5 text-[9.5px] font-semibold"
+							style="background: rgba(244, 63, 94, 0.18); color: var(--color-danger);"
+						>
+							{criticalEventsCount}
+						</span>
+					{/if}
 				</button>
 			{/each}
 		</div>

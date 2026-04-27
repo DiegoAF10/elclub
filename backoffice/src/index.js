@@ -28,6 +28,10 @@ import {
   handlePatchFulfillmentStatus,
   handleVaultPaymentSuccess,
   handleVaultSupplierMessages,
+  handleConfirmCod,
+  runVaultPendingConfirmationSweep,
+  sendCodPendingNudge,
+  findLeadByRef,
 } from './vault.js';
 
 const ALLOWED_ORIGINS = [
@@ -53,6 +57,43 @@ function json(data, status, cors) {
     status,
     headers: { ...cors, 'Content-Type': 'application/json' },
   });
+}
+
+/**
+ * Build a self-contained HTML page para el confirm-cod manual click desde email Diego.
+ * Sirve como standalone landing — Diego abre el link en su browser, ve el resultado.
+ */
+function buildConfirmCodHtml({ status, ref, title, message }) {
+  const palette = status === 'confirmed' ? { bg: '#10b981', text: 'white' }
+                : status === 'idempotent' ? { bg: '#f59e0b', text: 'white' }
+                : status === 'error' || status === 'not_found' ? { bg: '#ef4444', text: 'white' }
+                : { bg: '#6b7280', text: 'white' };
+  return `<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title} · El Club Vault</title>
+<style>
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#0a0b0d; color:#e5e7eb; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .card { max-width:480px; width:100%; background:#1f2937; border-radius:12px; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,0.5); }
+  .hero { background:${palette.bg}; color:${palette.text}; padding:32px 24px; text-align:center; }
+  .hero h1 { margin:0; font-size:24px; font-weight:700; }
+  .ref { font-family:monospace; opacity:0.85; margin-top:8px; font-size:14px; }
+  .body { padding:24px; }
+  .msg { font-size:15px; line-height:1.5; color:#d1d5db; }
+  .footer { padding:16px 24px; border-top:1px solid #374151; font-size:12px; color:#9ca3af; text-align:center; }
+</style>
+</head><body>
+<div class="card">
+  <div class="hero">
+    <h1>${title}</h1>
+    <div class="ref">${ref}</div>
+  </div>
+  <div class="body">
+    <p class="msg">${message || 'Sin detalle adicional.'}</p>
+  </div>
+  <div class="footer">El Club Vault · vault.elclub.club</div>
+</div>
+</body></html>`;
 }
 
 // ── Checkout validation ──────────────────────────────────────
@@ -224,15 +265,20 @@ async function handleWebhook(request, env) {
   const eventType = payload.event_type;
   console.log(`Webhook received: ${eventType}`);
 
-  // Only process successful payments
-  if (eventType !== 'payment_intent.succeeded') {
+  // Only process successful payments — both card (payment_intent) and bank transfer
+  // (bank_transfer_intent). Pending/failed events are acknowledged but ignored
+  // (we just track the success transition; failure flow handled separately).
+  const SUCCESS_EVENTS = new Set(['payment_intent.succeeded', 'bank_transfer_intent.succeeded']);
+  if (!SUCCESS_EVENTS.has(eventType)) {
     return new Response(JSON.stringify({ status: 'ignored', event: eventType }), {
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
-  // Recurrente sends the payment intent as the root object
-  const pi = payload.payment_intent || payload;
+  // Extract the intent regardless of event type. Recurrente puts it under
+  // `payment_intent` for card and `bank_transfer_intent` for transferencias,
+  // OR sometimes nests under root. Defensive normalization:
+  const pi = payload.payment_intent || payload.bank_transfer_intent || payload;
   const checkout = pi.checkout || {};
   const checkoutId = checkout.id;
   const amountCents = pi.amount_in_cents;
@@ -1168,6 +1214,84 @@ export default {
         return await handleVaultSupplierMessages(env, vaultSupplierMatch[1], cors);
       }
 
+      // POST /api/vault/admin/run-sweep — invoca el cron sweep manualmente (auth Bearer DASHBOARD_KEY)
+      // Útil para testing y para forzar re-evaluación sin esperar al cron */30
+      if (url.pathname === '/api/vault/admin/run-sweep' && request.method === 'POST') {
+        const unauth = requireDashboardAuth(request, env, cors);
+        if (unauth) return unauth;
+        const result = await runVaultPendingConfirmationSweep(env);
+        return json({ ok: true, ...result }, 200, cors);
+      }
+
+      // POST /api/vault/admin/nudge/:ref — re-send manual del email nudge a un cliente
+      // (auth Bearer DASHBOARD_KEY). NO chequea el flag nudge_12h_sent_at (force-send).
+      // Útil para smoke test y para Diego cuando quiera nudgear manualmente un lead específico.
+      const adminNudgeMatch = url.pathname.match(/^\/api\/vault\/admin\/nudge\/([^/]+)$/);
+      if (adminNudgeMatch && request.method === 'POST') {
+        const unauth = requireDashboardAuth(request, env, cors);
+        if (unauth) return unauth;
+        const ref = adminNudgeMatch[1];
+        const found = await findLeadByRef(env, ref);
+        if (!found) return json({ ok: false, error: 'lead no encontrado' }, 404, cors);
+        if (!found.record.cliente?.email) {
+          return json({ ok: false, error: 'cliente sin email — no se puede nudgear' }, 400, cors);
+        }
+        try {
+          await sendCodPendingNudge(env, found.record);
+          return json({ ok: true, ref, sent_to: found.record.cliente.email }, 200, cors);
+        } catch (err) {
+          return json({ ok: false, error: String(err.message || err) }, 500, cors);
+        }
+      }
+
+      // POST /api/vault/lead/:ref/confirm-cod — bot (X-Bot-Confirm-Key)
+      // GET  /api/vault/lead/:ref/confirm-cod?key=DASHBOARD_KEY — manual click desde email Diego (HTML response)
+      const vaultConfirmCodMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)\/confirm-cod$/);
+      if (vaultConfirmCodMatch) {
+        const ref = vaultConfirmCodMatch[1];
+
+        if (request.method === 'POST') {
+          // Bot path — auth via header X-Bot-Confirm-Key
+          const botKey = request.headers.get('X-Bot-Confirm-Key');
+          if (!env.BOT_CONFIRM_KEY || botKey !== env.BOT_CONFIRM_KEY) {
+            return json({ ok: false, error: 'unauthorized' }, 401, cors);
+          }
+          const result = await handleConfirmCod(env, ref, 'bot');
+          const status = result.action === 'not_found' ? 404
+                       : result.action === 'invalid_state' || result.action === 'cancelled' ? 409
+                       : 200;
+          return json(result, status, cors);
+        }
+
+        if (request.method === 'GET') {
+          // Manual path — Diego clicks button in email A. Auth via ?key=DASHBOARD_KEY.
+          const providedKey = url.searchParams.get('key');
+          if (!env.DASHBOARD_KEY || providedKey !== env.DASHBOARD_KEY) {
+            return new Response(buildConfirmCodHtml({
+              status: 'error',
+              ref,
+              title: 'No autorizado',
+              message: 'El link expiró o el key es inválido.',
+            }), { status: 401, headers: { ...cors, 'Content-Type': 'text/html;charset=utf-8' } });
+          }
+          const result = await handleConfirmCod(env, ref, 'manual');
+          const status = result.action === 'not_found' ? 404
+                       : result.action === 'invalid_state' || result.action === 'cancelled' ? 409
+                       : 200;
+          return new Response(buildConfirmCodHtml({
+            status: result.action,
+            ref,
+            title:
+              result.action === 'confirmed'   ? '✅ Pedido confirmado'
+            : result.action === 'idempotent'  ? '⚠️ Ya estaba confirmado'
+            : result.action === 'cancelled'   ? '❌ Lead cancelado'
+            : result.action === 'not_found'   ? '❌ Lead no existe'
+                                              : '⚠️ Estado inesperado',
+            message: result.message || '',
+          }), { status, headers: { ...cors, 'Content-Type': 'text/html;charset=utf-8' } });
+        }
+      }
+
       // GET /api/vault/lead/:ref/status — PUBLIC, no auth, returns ONLY non-PII fields.
       // Used by gracias.html to poll for payment confirmation post-Recurrente.
       const statusMatch = url.pathname.match(/^\/api\/vault\/lead\/([^/]+)\/status$/);
@@ -1203,6 +1327,20 @@ export default {
     } catch (error) {
       console.error('Worker error:', error);
       return json({ error: error.message }, 500, cors);
+    }
+  },
+
+  /**
+   * Cron-triggered: sweep Path B leads stuck in cod_pending_confirmation > 24h.
+   * Configured via wrangler.toml [triggers] crons.
+   */
+  async scheduled(event, env, ctx) {
+    console.log(`[cron] ${event.cron} firing — runVaultPendingConfirmationSweep`);
+    try {
+      const result = await runVaultPendingConfirmationSweep(env);
+      console.log(`[cron] sweep result: scanned=${result.scanned} nudged=${result.nudged} cancelled=${result.cancelled} errors=${result.errors}`);
+    } catch (err) {
+      console.error('[cron] sweep failed:', err);
     }
   },
 };

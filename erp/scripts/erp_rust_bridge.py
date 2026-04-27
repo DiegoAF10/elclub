@@ -963,6 +963,1323 @@ def cmd_backfill_meta(args):
     })
 
 
+def cmd_insert_event(args):
+    """Inserta un evento nuevo en comercial_events."""
+    import json
+    from db import get_conn
+
+    type_ = args.get("type")
+    severity = args.get("severity")
+    title = args.get("title")
+    sub = args.get("sub")
+    items = args.get("itemsAffected") or []
+
+    if not type_ or not severity or not title:
+        return {"ok": False, "error": "type/severity/title required"}
+
+    conn = get_conn()
+    try:
+        cur = conn.execute("""
+            INSERT INTO comercial_events
+              (type, severity, title, sub, items_affected_json, detected_at, status)
+            VALUES (?, ?, ?, ?, ?, datetime('now'), 'active')
+        """, (type_, severity, title, sub, json.dumps(items)))
+        conn.commit()
+        return {"ok": True, "eventId": cur.lastrowid}
+    finally:
+        conn.close()
+
+
+def cmd_list_events(args):
+    """Lista eventos de comercial_events con filtros opcionales."""
+    import json
+    from db import get_conn
+
+    status = args.get("status")          # 'active'|'resolved'|'ignored'|None
+    severity = args.get("severity")      # 'crit'|'warn'|'info'|'strat'|None
+
+    conn = get_conn()
+    try:
+        sql = "SELECT event_id, type, severity, title, sub, items_affected_json, detected_at, status, resolved_at, push_sent FROM comercial_events"
+        clauses = []
+        params = []
+        if status:
+            clauses.append("status = ?"); params.append(status)
+        if severity:
+            clauses.append("severity = ?"); params.append(severity)
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY CASE severity WHEN 'crit' THEN 1 WHEN 'warn' THEN 2 WHEN 'info' THEN 3 ELSE 4 END, detected_at DESC"
+
+        rows = conn.execute(sql, params).fetchall()
+        events = []
+        for r in rows:
+            events.append({
+                "eventId": r[0],
+                "type": r[1],
+                "severity": r[2],
+                "title": r[3],
+                "sub": r[4],
+                "itemsAffected": json.loads(r[5] or '[]'),
+                "detectedAt": r[6],
+                "status": r[7],
+                "resolvedAt": r[8],
+                "pushSent": bool(r[9]),
+            })
+        return {"ok": True, "events": events}
+    finally:
+        conn.close()
+
+
+def cmd_set_event_status(args):
+    """Cambia status de un evento (active/resolved/ignored)."""
+    from db import get_conn
+
+    event_id = args.get("eventId")
+    status = args.get("status")
+    if not event_id or status not in ("active", "resolved", "ignored"):
+        return {"ok": False, "error": "eventId/status missing or invalid"}
+
+    conn = get_conn()
+    try:
+        if status == "resolved":
+            conn.execute(
+                "UPDATE comercial_events SET status=?, resolved_at=datetime('now') WHERE event_id=?",
+                (status, event_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE comercial_events SET status=? WHERE event_id=?",
+                (status, event_id),
+            )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+def cmd_get_order(args):
+    """Devuelve OrderForModal para una orden por su ref (CE-XXXX)."""
+    from db import get_conn
+
+    ref = args.get("ref")
+    if not ref:
+        return {"ok": False, "error": "ref missing"}
+
+    conn = get_conn()
+    try:
+        # NOTA: customers no tiene handle/platform en esta versión del schema.
+        # Defaults: handle=null, platform="web". Enriquecimiento desde leads en R6+.
+        sale = conn.execute("""
+            SELECT s.sale_id, s.ref, s.fulfillment_status, s.occurred_at, s.shipped_at, s.total,
+                   s.payment_method, s.notes,
+                   c.name, c.phone
+            FROM sales s
+            LEFT JOIN customers c ON c.customer_id = s.customer_id
+            WHERE s.ref = ?
+        """, (ref,)).fetchone()
+
+        if not sale:
+            return {"ok": True, "order": None}
+
+        sale_id = sale[0]
+
+        # Items
+        items = conn.execute("""
+            SELECT family_id, jersey_id, size, unit_price, unit_cost, personalization_json
+            FROM sale_items
+            WHERE sale_id = ?
+        """, (sale_id,)).fetchall()
+
+        order = {
+            "ref": sale[1],
+            "saleId": sale_id,
+            "status": sale[2] or "paid",
+            "paidAt": sale[3],          # occurred_at = momento del pago
+            "shippedAt": sale[4],        # shipped_at = null hasta marcar shipped
+            "totalGtq": sale[5],
+            "paymentMethod": sale[6] or "recurrente",
+            "notes": sale[7],
+            "customer": {
+                "name": sale[8] or "(sin nombre)",
+                "phone": sale[9],
+                "handle": None,           # no existe en customers schema (R1)
+                "platform": "web",        # default; orden originada via vault/web
+            },
+            "items": [
+                {
+                    "familyId": i[0],
+                    "jerseySku": i[1],     # jersey_id en DB; jerseySku en API
+                    "size": i[2],
+                    "unitPriceGtq": i[3],
+                    "unitCostGtq": i[4],
+                    "personalizationJson": i[5],
+                }
+                for i in items
+            ],
+        }
+        return {"ok": True, "order": order}
+    finally:
+        conn.close()
+
+
+def cmd_mark_order_shipped(args):
+    """Marca orden como shipped, opcionalmente con tracking_code."""
+    from db import get_conn
+
+    ref = args.get("ref")
+    tracking = args.get("trackingCode")
+    if not ref:
+        return {"ok": False, "error": "ref missing"}
+
+    conn = get_conn()
+    try:
+        if tracking:
+            conn.execute(
+                "UPDATE sales SET fulfillment_status='shipped', shipped_at=datetime('now'), tracking_code=? WHERE ref=?",
+                (tracking, ref),
+            )
+        else:
+            conn.execute(
+                "UPDATE sales SET fulfillment_status='shipped', shipped_at=datetime('now') WHERE ref=?",
+                (ref,),
+            )
+
+        # También resolver el evento order_pending_24h asociado si existe
+        conn.execute("""
+            UPDATE comercial_events
+            SET status='resolved', resolved_at=datetime('now')
+            WHERE type='order_pending_24h' AND status='active'
+              AND items_affected_json LIKE '%' || ? || '%'
+        """, (ref,))
+        conn.commit()
+        return {"ok": True, "ref": ref}
+    finally:
+        conn.close()
+
+
+def cmd_list_sales_in_range(args):
+    """Lista sales con paid_at entre start y end."""
+    from db import get_conn
+    start = args.get("start")
+    end = args.get("end")
+    if not start or not end:
+        return {"ok": False, "error": "start/end missing"}
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT ref, total, occurred_at, fulfillment_status FROM sales WHERE occurred_at BETWEEN ? AND ?",
+            (start, end),
+        ).fetchall()
+        return {
+            "ok": True,
+            "sales": [{"ref": r[0], "totalGtq": r[1], "paidAt": r[2], "status": r[3]} for r in rows]
+        }
+    finally:
+        conn.close()
+
+
+def cmd_list_leads_in_range(args):
+    """Lista leads con first_contact_at entre start y end."""
+    from db import get_conn
+    start = args.get("start"); end = args.get("end")
+    if not start or not end:
+        return {"ok": False, "error": "start/end missing"}
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT lead_id, first_contact_at FROM leads WHERE first_contact_at BETWEEN ? AND ?",
+            (start, end),
+        ).fetchall()
+        return {
+            "ok": True,
+            "leads": [{"leadId": r[0], "firstContactAt": r[1]} for r in rows]
+        }
+    finally:
+        conn.close()
+
+
+def cmd_list_ad_spend_in_range(args):
+    """Lista ad spend snapshots entre start y end."""
+    from db import get_conn
+    start = args.get("start"); end = args.get("end")
+    if not start or not end:
+        return {"ok": False, "error": "start/end missing"}
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT campaign_id, spend_gtq, captured_at FROM campaigns_snapshot WHERE captured_at BETWEEN ? AND ?",
+            (start, end),
+        ).fetchall()
+        return {
+            "ok": True,
+            "adSpend": [{"campaignId": r[0], "spendGtq": r[1], "capturedAt": r[2]} for r in rows]
+        }
+    finally:
+        conn.close()
+
+
+def cmd_sync_manychat(args):
+    """Pull data desde el worker y upsertea leads + conversations.
+    Args:
+        since: ISO string o null (full backfill)
+        worker_base: URL del worker
+        dashboard_key: bearer token
+    Returns:
+        {ok, leadsUpserted, conversationsUpserted, lastSyncAt}
+    """
+    import json
+    import urllib.request
+    from db import get_conn
+
+    since = args.get("since")
+    worker_base = args.get("workerBase") or "https://ventus-backoffice.ventusgt.workers.dev"
+    dashboard_key = args.get("dashboardKey")
+
+    if not dashboard_key:
+        return {"ok": False, "error": "dashboardKey required"}
+
+    qs = f"?since={since}" if since else ""
+    url = f"{worker_base}/api/comercial/sync-data{qs}"
+
+    try:
+        req = urllib.request.Request(url, headers={
+            "Authorization": f"Bearer {dashboard_key}",
+            "User-Agent": "ElClub-ERP/0.1.29",
+        })
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = resp.read().decode("utf-8")
+            data = json.loads(body)
+    except Exception as e:
+        return {"ok": False, "error": f"worker fetch failed: {e}"}
+
+    leads_data = data.get("leads", [])
+    convs_data = data.get("conversations", [])
+    now_iso = data.get("until") or args.get("now") or ""
+
+    conn = get_conn()
+    leads_upserted = 0
+    convs_upserted = 0
+    try:
+        # Upsert leads (UNIQUE composite (platform, sender_id))
+        for ld in leads_data:
+            try:
+                conn.execute("""
+                    INSERT INTO leads
+                      (name, handle, phone, platform, sender_id, source_campaign_id,
+                       first_contact_at, last_activity_at, status, traits_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(platform, sender_id) DO UPDATE SET
+                      name = COALESCE(excluded.name, leads.name),
+                      handle = COALESCE(excluded.handle, leads.handle),
+                      phone = COALESCE(excluded.phone, leads.phone),
+                      source_campaign_id = COALESCE(excluded.source_campaign_id, leads.source_campaign_id),
+                      first_contact_at = MIN(leads.first_contact_at, excluded.first_contact_at),
+                      last_activity_at = MAX(leads.last_activity_at, excluded.last_activity_at),
+                      status = excluded.status
+                """, (
+                    ld.get("name"), ld.get("handle"), ld.get("phone"),
+                    ld.get("platform"), ld.get("senderId"),
+                    ld.get("sourceCampaignId"),
+                    ld.get("firstContactAt"), ld.get("lastActivityAt"),
+                    ld.get("status") or "new",
+                    json.dumps(ld.get("traitsJson") or {}),
+                ))
+                leads_upserted += 1
+            except Exception as e:
+                print(f"[sync_manychat] lead upsert failed: {e}", flush=True)
+
+        # Build (platform, sender_id) -> lead_id lookup
+        lead_lookup = {}
+        for row in conn.execute("SELECT lead_id, platform, sender_id FROM leads").fetchall():
+            lead_lookup[(row[1], row[2])] = row[0]
+
+        # Upsert conversations (PK conv_id)
+        for cv in convs_data:
+            try:
+                conn.execute("""
+                    INSERT INTO conversations
+                      (conv_id, brand, platform, sender_id, started_at, ended_at,
+                       outcome, order_id, messages_total, messages_json, tags_json,
+                       analyzed, synced_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, datetime('now'))
+                    ON CONFLICT(conv_id) DO UPDATE SET
+                      ended_at = excluded.ended_at,
+                      outcome = excluded.outcome,
+                      order_id = excluded.order_id,
+                      messages_total = excluded.messages_total,
+                      tags_json = excluded.tags_json,
+                      analyzed = excluded.analyzed,
+                      synced_at = datetime('now')
+                """, (
+                    cv.get("convId"), cv.get("brand"), cv.get("platform"),
+                    cv.get("senderId"), cv.get("startedAt"), cv.get("endedAt"),
+                    cv.get("outcome"), cv.get("orderId"), cv.get("messagesTotal", 0),
+                    json.dumps(cv.get("tagsJson") or []),
+                    1 if cv.get("analyzed") else 0,
+                ))
+                convs_upserted += 1
+            except Exception as e:
+                print(f"[sync_manychat] conv upsert failed: {e}", flush=True)
+
+        # Update meta_sync
+        conn.execute("""
+            INSERT INTO meta_sync (source, last_sync_at, last_status, last_error)
+            VALUES ('manychat', datetime('now'), 'ok', NULL)
+            ON CONFLICT(source) DO UPDATE SET
+              last_sync_at = datetime('now'),
+              last_status = 'ok',
+              last_error = NULL
+        """)
+        conn.commit()
+        return {
+            "ok": True,
+            "leadsUpserted": leads_upserted,
+            "conversationsUpserted": convs_upserted,
+            "lastSyncAt": now_iso,
+        }
+    finally:
+        conn.close()
+
+
+def cmd_list_leads(args):
+    """Lista leads con filtros opcionales por status y range."""
+    import json
+    from db import get_conn
+
+    status = args.get("status")
+    range_start = args.get("rangeStart")
+    range_end = args.get("rangeEnd")
+
+    sql = "SELECT lead_id, name, handle, phone, platform, sender_id, source_campaign_id, first_contact_at, last_activity_at, status, traits_json FROM leads"
+    clauses = []
+    params = []
+    if status:
+        clauses.append("status = ?"); params.append(status)
+    if range_start and range_end:
+        clauses.append("first_contact_at BETWEEN ? AND ?")
+        params.extend([range_start, range_end])
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+    sql += " ORDER BY last_activity_at DESC LIMIT 500"
+
+    conn = get_conn()
+    try:
+        rows = conn.execute(sql, params).fetchall()
+        leads = []
+        for r in rows:
+            try:
+                traits = json.loads(r[10] or '{}')
+            except Exception:
+                traits = {}
+            leads.append({
+                "leadId": r[0], "name": r[1], "handle": r[2], "phone": r[3],
+                "platform": r[4], "senderId": r[5], "sourceCampaignId": r[6],
+                "firstContactAt": r[7], "lastActivityAt": r[8], "status": r[9],
+                "traitsJson": traits,
+            })
+        return {"ok": True, "leads": leads}
+    finally:
+        conn.close()
+
+
+def cmd_list_conversations(args):
+    """Lista conversations con filtros opcionales."""
+    import json
+    from db import get_conn
+
+    outcome = args.get("outcome")
+    range_start = args.get("rangeStart")
+    range_end = args.get("rangeEnd")
+    lead_id = args.get("leadId")
+
+    sql = """
+        SELECT c.conv_id, l.lead_id, c.brand, c.platform, c.sender_id,
+               c.started_at, c.ended_at, c.outcome, c.order_id, c.messages_total,
+               c.tags_json, c.analyzed, c.synced_at
+        FROM conversations c
+        LEFT JOIN leads l ON l.platform = c.platform AND l.sender_id = c.sender_id
+    """
+    clauses = []
+    params = []
+    if outcome:
+        clauses.append("c.outcome = ?"); params.append(outcome)
+    if range_start and range_end:
+        clauses.append("c.started_at BETWEEN ? AND ?")
+        params.extend([range_start, range_end])
+    if lead_id:
+        clauses.append("l.lead_id = ?"); params.append(lead_id)
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+    sql += " ORDER BY c.ended_at DESC LIMIT 500"
+
+    conn = get_conn()
+    try:
+        rows = conn.execute(sql, params).fetchall()
+        convs = []
+        for r in rows:
+            try:
+                tags = json.loads(r[10] or '[]')
+            except Exception:
+                tags = []
+            convs.append({
+                "convId": r[0], "leadId": r[1], "brand": r[2], "platform": r[3],
+                "senderId": r[4], "startedAt": r[5], "endedAt": r[6],
+                "outcome": r[7], "orderId": r[8], "messagesTotal": r[9],
+                "tagsJson": tags, "analyzed": bool(r[11]), "syncedAt": r[12],
+            })
+        return {"ok": True, "conversations": convs}
+    finally:
+        conn.close()
+
+
+def cmd_list_customers(args):
+    """Lista customers con totals computados (totalOrders, totalRevenueGtq, lastOrderAt)."""
+    from db import get_conn
+
+    last_order_before = args.get("lastOrderBefore")
+    min_ltv_gtq = args.get("minLtvGtq")
+
+    sql = """
+        SELECT c.customer_id, c.name, c.phone, c.email, c.source, c.first_order_at,
+               COUNT(s.sale_id) AS total_orders,
+               COALESCE(SUM(s.total), 0) AS total_revenue,
+               MAX(s.occurred_at) AS last_order_at
+        FROM customers c
+        LEFT JOIN sales s ON s.customer_id = c.customer_id
+        GROUP BY c.customer_id
+    """
+    having = []
+    params = []
+    if last_order_before:
+        having.append("last_order_at < ?"); params.append(last_order_before)
+    if min_ltv_gtq is not None:
+        having.append("total_revenue >= ?"); params.append(min_ltv_gtq)
+    if having:
+        sql += " HAVING " + " AND ".join(having)
+    sql += " ORDER BY total_revenue DESC LIMIT 500"
+
+    conn = get_conn()
+    try:
+        rows = conn.execute(sql, params).fetchall()
+        customers = [{
+            "customerId": r[0], "name": r[1] or "(sin nombre)", "phone": r[2],
+            "email": r[3], "source": r[4], "firstOrderAt": r[5] or "",
+            "totalOrders": r[6], "totalRevenueGtq": r[7], "lastOrderAt": r[8],
+        } for r in rows]
+        return {"ok": True, "customers": customers}
+    finally:
+        conn.close()
+
+
+def cmd_get_meta_sync(args):
+    """Devuelve el último estado de sync para una source."""
+    from db import get_conn
+
+    source = args.get("source") or "manychat"
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT source, last_sync_at, last_status, last_error FROM meta_sync WHERE source = ?",
+            (source,)
+        ).fetchone()
+        if not row:
+            return {"ok": True, "metaSync": {"source": source, "lastSyncAt": None, "lastStatus": None, "lastError": None}}
+        return {"ok": True, "metaSync": {
+            "source": row[0], "lastSyncAt": row[1], "lastStatus": row[2], "lastError": row[3]
+        }}
+    finally:
+        conn.close()
+
+
+def cmd_get_conversation_messages(args):
+    """Lazy fetch de mensajes desde el worker."""
+    import json
+    import urllib.request
+    import urllib.error
+
+    conv_id = args.get("convId")
+    worker_base = args.get("workerBase") or "https://ventus-backoffice.ventusgt.workers.dev"
+    dashboard_key = args.get("dashboardKey")
+
+    if not conv_id:
+        return {"ok": False, "error": "convId required"}
+    if not dashboard_key:
+        return {"ok": False, "error": "dashboardKey required"}
+
+    url = f"{worker_base}/api/comercial/conversation/{conv_id}/messages"
+    try:
+        req = urllib.request.Request(url, headers={
+            "Authorization": f"Bearer {dashboard_key}",
+            "User-Agent": "ElClub-ERP/0.1.29",
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = resp.read().decode("utf-8")
+            data = json.loads(body)
+        return {"ok": True, "messages": data.get("messages", [])}
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return {"ok": True, "messages": [], "note": "purged_or_missing"}
+        return {"ok": False, "error": f"worker http {e.code}"}
+    except Exception as e:
+        return {"ok": False, "error": f"fetch failed: {e}"}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Comercial R4 — Customer CRUD + Manual Order
+# ──────────────────────────────────────────────────────────────────────────────
+
+def cmd_get_customer_profile(args):
+    """Devuelve CustomerProfile completo: customer + computed totals + timeline."""
+    import json
+    from db import get_conn
+
+    customer_id = args.get("customerId")
+    if not customer_id:
+        return {"ok": False, "error": "customerId required"}
+
+    conn = get_conn()
+    try:
+        # Base customer
+        c = conn.execute("""
+            SELECT customer_id, name, phone, email, source, first_order_at, tags_json,
+                   COALESCE(blocked, 0) AS blocked
+            FROM customers WHERE customer_id = ?
+        """, (customer_id,)).fetchone()
+        if not c:
+            return {"ok": True, "profile": None}
+
+        # Computed totals from sales
+        totals = conn.execute("""
+            SELECT COUNT(sale_id), COALESCE(SUM(total), 0), MAX(occurred_at)
+            FROM sales WHERE customer_id = ?
+        """, (customer_id,)).fetchone()
+        total_orders = totals[0]
+        total_revenue = totals[1]
+        last_order_at = totals[2]
+
+        is_vip = total_revenue >= 1500
+        days_inactive = None
+        if last_order_at:
+            from datetime import datetime
+            try:
+                last_dt = datetime.fromisoformat(last_order_at.replace('Z', '+00:00').replace(' ', 'T'))
+                days_inactive = (datetime.now() - last_dt.replace(tzinfo=None)).days
+            except Exception:
+                days_inactive = None
+
+        # Attribution: lookup conversations matching customer's phone
+        lead_campaigns = []
+        if c[2]:  # phone
+            rows = conn.execute("""
+                SELECT DISTINCT source_campaign_id FROM leads
+                WHERE phone = ? AND source_campaign_id IS NOT NULL
+            """, (c[2],)).fetchall()
+            lead_campaigns = [r[0] for r in rows]
+
+        # Timeline: orders + conversations merged by date DESC
+        timeline = []
+        sales_rows = conn.execute("""
+            SELECT s.ref, s.total, s.fulfillment_status, s.occurred_at,
+                   (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id) AS items_count
+            FROM sales s WHERE s.customer_id = ?
+            ORDER BY s.occurred_at DESC
+        """, (customer_id,)).fetchall()
+        for r in sales_rows:
+            timeline.append({
+                "kind": "order",
+                "ref": r[0], "totalGtq": r[1], "status": r[2] or "pending",
+                "occurredAt": r[3], "itemsCount": r[4],
+            })
+
+        # Conversations: join by phone (best-effort)
+        if c[2]:
+            conv_rows = conn.execute("""
+                SELECT DISTINCT c.conv_id, c.platform, c.outcome, c.messages_total, c.ended_at
+                FROM conversations c
+                JOIN leads l ON l.platform = c.platform AND l.sender_id = c.sender_id
+                WHERE l.phone = ?
+                ORDER BY c.ended_at DESC
+            """, (c[2],)).fetchall()
+            for r in conv_rows:
+                timeline.append({
+                    "kind": "conversation",
+                    "convId": r[0], "platform": r[1], "outcome": r[2],
+                    "messagesTotal": r[3], "endedAt": r[4],
+                })
+
+        # Re-sort merged timeline by date DESC
+        def get_ts(entry):
+            return entry.get("occurredAt") or entry.get("endedAt") or ""
+        timeline.sort(key=get_ts, reverse=True)
+
+        try:
+            traits = json.loads(c[6] or '{}')
+            if not isinstance(traits, dict):
+                traits = {}  # normalize legacy '[]' default
+        except Exception:
+            traits = {}
+
+        profile = {
+            "customerId": c[0],
+            "name": c[1] or "(sin nombre)",
+            "phone": c[2],
+            "email": c[3],
+            "source": c[4],
+            "firstOrderAt": c[5],   # NULLABLE — pass through raw value, do NOT mask with or ''
+            "totalOrders": total_orders,
+            "totalRevenueGtq": total_revenue,
+            "lastOrderAt": last_order_at,
+            "isVip": is_vip,
+            "daysInactive": days_inactive,
+            "blocked": bool(c[7]),
+            "traitsJson": traits,
+            "attribution": {
+                "customerSource": c[4],
+                "leadCampaigns": lead_campaigns,
+            },
+            "timeline": timeline,
+        }
+        return {"ok": True, "profile": profile}
+    finally:
+        conn.close()
+
+
+def cmd_create_customer(args):
+    """Crea un customer manual (no asociado a sale automático)."""
+    from db import get_conn
+
+    name = args.get("name")
+    if not name or not name.strip():
+        return {"ok": False, "error": "name required"}
+
+    phone = args.get("phone")
+    email = args.get("email")
+    source = args.get("source") or "manual"
+
+    conn = get_conn()
+    try:
+        cur = conn.execute("""
+            INSERT INTO customers (name, phone, email, source, first_order_at, created_at)
+            VALUES (?, ?, ?, ?, NULL, datetime('now', 'localtime'))
+        """, (name.strip(), phone, email, source))
+        conn.commit()
+        return {"ok": True, "customerId": cur.lastrowid}
+    finally:
+        conn.close()
+
+
+def cmd_update_customer_traits(args):
+    """Actualiza customers.tags_json con un objeto JSON."""
+    import json
+    from db import get_conn
+
+    customer_id = args.get("customerId")
+    traits = args.get("traitsJson")
+    if not customer_id:
+        return {"ok": False, "error": "customerId required"}
+    if traits is None:
+        return {"ok": False, "error": "traitsJson required"}
+
+    if not isinstance(traits, dict):
+        return {"ok": False, "error": "traitsJson must be an object"}
+
+    conn = get_conn()
+    try:
+        cur = conn.execute(
+            "UPDATE customers SET tags_json = ? WHERE customer_id = ?",
+            (json.dumps(traits), customer_id),
+        )
+        if cur.rowcount == 0:
+            return {"ok": False, "error": f"customer {customer_id} not found"}
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+def cmd_set_customer_blocked(args):
+    """Toggle blocked en customers."""
+    from db import get_conn
+
+    customer_id = args.get("customerId")
+    blocked = args.get("blocked")
+    if not customer_id or blocked is None:
+        return {"ok": False, "error": "customerId/blocked required"}
+
+    conn = get_conn()
+    try:
+        cur = conn.execute(
+            "UPDATE customers SET blocked = ? WHERE customer_id = ?",
+            (1 if blocked else 0, customer_id),
+        )
+        if cur.rowcount == 0:
+            return {"ok": False, "error": f"customer {customer_id} not found"}
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+def cmd_update_customer_source(args):
+    """Actualiza customers.source manualmente."""
+    from db import get_conn
+
+    customer_id = args.get("customerId")
+    source = args.get("source")
+    if not customer_id:
+        return {"ok": False, "error": "customerId required"}
+
+    conn = get_conn()
+    try:
+        cur = conn.execute(
+            "UPDATE customers SET source = ? WHERE customer_id = ?",
+            (source, customer_id),
+        )
+        if cur.rowcount == 0:
+            return {"ok": False, "error": f"customer {customer_id} not found"}
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+def cmd_create_manual_order(args):
+    """Crea una venta manual (off-platform). INSERT sale + INSERT sale_items.
+    Genera ref CE-XXXX random con retry en caso de colisión.
+
+    DB constraints (CHECK):
+      modality: 'mystery'|'stock'|'ondemand' — manual orders use 'stock'
+      payment_method: 'recurrente'|'transferencia'|'contra_entrega'|'efectivo'|'otro'
+      fulfillment_status: 'pending'|'sent_to_supplier'|'in_production'|'shipped'|'delivered'|'cancelled'
+    """
+    import json
+    import secrets
+    import string
+    import sqlite3 as sqlite3_mod
+    from db import get_conn
+
+    customer_id = args.get("customerId")
+    items = args.get("items") or []
+    payment_method = args.get("paymentMethod") or "transferencia"
+    fulfillment_status = args.get("fulfillmentStatus") or "pending"
+    shipping_fee = args.get("shippingFee") or 0
+    discount = args.get("discount") or 0
+    notes = args.get("notes")
+
+    if not customer_id:
+        return {"ok": False, "error": "customerId required"}
+    if not items:
+        return {"ok": False, "error": "at least 1 item required"}
+
+    # Validate each item
+    for i, item in enumerate(items):
+        if not item.get("familyId") or not item.get("jerseyId"):
+            return {"ok": False, "error": f"item[{i}] missing familyId/jerseyId"}
+        if not item.get("size"):
+            return {"ok": False, "error": f"item[{i}] missing size"}
+        unit_price = item.get("unitPrice")
+        if unit_price is None or unit_price <= 0:
+            return {"ok": False, "error": f"item[{i}] unitPrice must be > 0"}
+
+    # DB-valid enums (CHECK constraints in sales table)
+    valid_payment = ("recurrente", "transferencia", "contra_entrega", "efectivo", "otro")
+    valid_fulfillment = ("pending", "sent_to_supplier", "in_production", "shipped", "delivered", "cancelled")
+    if payment_method not in valid_payment:
+        return {"ok": False, "error": f"invalid paymentMethod. Valid: {valid_payment}"}
+    if fulfillment_status not in valid_fulfillment:
+        return {"ok": False, "error": f"invalid fulfillmentStatus. Valid: {valid_fulfillment}"}
+
+    subtotal = sum(item["unitPrice"] for item in items)
+    total = subtotal + shipping_fee - discount
+
+    if total <= 0:
+        return {"ok": False, "error": "total must be > 0"}
+
+    conn = get_conn()
+    try:
+        # Validate customer exists
+        c = conn.execute("SELECT customer_id FROM customers WHERE customer_id = ?", (customer_id,)).fetchone()
+        if not c:
+            return {"ok": False, "error": f"customer {customer_id} not found"}
+
+        # Generate ref with retry on UNIQUE collision (extremely rare)
+        ref = None
+        sale_id = None
+        for attempt in range(5):
+            candidate = "CE-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
+            try:
+                cur = conn.execute("""
+                    INSERT INTO sales
+                      (ref, occurred_at, modality, origin, customer_id, payment_method,
+                       fulfillment_status, shipping_method, tracking_code, subtotal, shipping_fee,
+                       discount, total, source_vault_ref, notes, created_at)
+                    VALUES (?, datetime('now', 'localtime'), 'stock', 'manual', ?, ?, ?, NULL, NULL,
+                            ?, ?, ?, ?, NULL, ?, datetime('now', 'localtime'))
+                """, (candidate, customer_id, payment_method, fulfillment_status,
+                      subtotal, shipping_fee, discount, total, notes))
+                ref = candidate
+                sale_id = cur.lastrowid
+                break
+            except sqlite3_mod.IntegrityError:
+                continue
+
+        if ref is None:
+            return {"ok": False, "error": "ref collision after 5 retries"}
+
+        # Insert items
+        for item in items:
+            conn.execute("""
+                INSERT INTO sale_items
+                  (sale_id, family_id, jersey_id, team, season, variant_label, version, size,
+                   personalization_json, unit_price, unit_cost, notes, import_id, item_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
+            """, (
+                sale_id,
+                item.get("familyId"),
+                item.get("jerseyId"),
+                item.get("team"),
+                None,  # season — not in R4 form
+                item.get("variantLabel"),
+                item.get("version"),
+                item.get("size"),
+                item.get("personalizationJson"),
+                item.get("unitPrice"),
+                item.get("unitCost"),
+                item.get("itemType") or "manual",
+            ))
+
+        conn.commit()
+
+        # R6: auto-attribute via phone → lead.source_campaign_id lookup
+        try:
+            cust_phone = conn.execute("SELECT phone FROM customers WHERE customer_id = ?", (customer_id,)).fetchone()
+            if cust_phone and cust_phone[0]:
+                lead = conn.execute("""
+                    SELECT source_campaign_id FROM leads
+                    WHERE phone = ? AND source_campaign_id IS NOT NULL
+                    ORDER BY first_contact_at DESC LIMIT 1
+                """, (cust_phone[0],)).fetchone()
+                if lead:
+                    cn_row = conn.execute("""
+                        SELECT campaign_name FROM campaigns_snapshot
+                        WHERE campaign_id = ? AND campaign_name IS NOT NULL
+                        ORDER BY captured_at DESC LIMIT 1
+                    """, (lead[0],)).fetchone()
+                    campaign_name = cn_row[0] if cn_row else None
+                    conn.execute("""
+                        INSERT INTO sales_attribution (sale_id, ad_campaign_id, ad_campaign_name, source, created_at)
+                        VALUES (?, ?, ?, 'auto_via_lead', datetime('now', 'localtime'))
+                    """, (sale_id, lead[0], campaign_name))
+                    conn.commit()
+        except Exception:
+            # Don't fail sale creation on attribution error — attribution is best-effort
+            pass
+
+        return {"ok": True, "ref": ref, "saleId": sale_id}
+    finally:
+        conn.close()
+
+
+# ─── R6: Sales attribution ────────────────────────────────────────────────────
+
+def cmd_backfill_sales_attribution(args):
+    """Backfill retroactivo: for each sale without attribution, lookup phone → lead.source_campaign_id.
+    Idempotent — skips sales that already have attribution rows.
+    Campaign name fetched from campaigns_snapshot (R5).
+    """
+    from db import get_conn
+
+    conn = get_conn()
+    inserted = 0
+    skipped_no_match = 0
+    errors = []
+
+    try:
+        # Find sales without attribution AND with customer phone
+        sales = conn.execute("""
+            SELECT s.sale_id, c.phone
+            FROM sales s
+            LEFT JOIN customers c ON c.customer_id = s.customer_id
+            WHERE NOT EXISTS (SELECT 1 FROM sales_attribution sa WHERE sa.sale_id = s.sale_id)
+              AND c.phone IS NOT NULL AND c.phone != ''
+        """).fetchall()
+
+        for sale_id, phone in sales:
+            try:
+                # Find most recent lead with source_campaign_id matching this phone
+                lead = conn.execute("""
+                    SELECT source_campaign_id
+                    FROM leads
+                    WHERE phone = ? AND source_campaign_id IS NOT NULL
+                    ORDER BY first_contact_at DESC
+                    LIMIT 1
+                """, (phone,)).fetchone()
+                if not lead:
+                    skipped_no_match += 1
+                    continue
+
+                campaign_id = lead[0]
+
+                # Fetch campaign name from campaigns_snapshot (R5 added campaign_name col)
+                cn_row = conn.execute("""
+                    SELECT campaign_name FROM campaigns_snapshot
+                    WHERE campaign_id = ? AND campaign_name IS NOT NULL
+                    ORDER BY captured_at DESC LIMIT 1
+                """, (campaign_id,)).fetchone()
+                campaign_name = cn_row[0] if cn_row else None
+
+                conn.execute("""
+                    INSERT INTO sales_attribution (sale_id, ad_campaign_id, ad_campaign_name, source, created_at)
+                    VALUES (?, ?, ?, 'auto_via_lead', datetime('now', 'localtime'))
+                """, (sale_id, campaign_id, campaign_name))
+                inserted += 1
+            except Exception as ie:
+                errors.append(f"sale {sale_id}: {ie}")
+
+        skipped_already_attributed = conn.execute("""
+            SELECT COUNT(*) FROM sales s WHERE EXISTS (
+                SELECT 1 FROM sales_attribution sa WHERE sa.sale_id = s.sale_id
+            )
+        """).fetchone()[0]
+
+        conn.commit()
+        return {
+            "ok": True,
+            "inserted": inserted,
+            "skippedNoMatch": skipped_no_match,
+            "skippedAlreadyAttributed": skipped_already_attributed,
+            "errors": errors
+        }
+    finally:
+        conn.close()
+
+
+def cmd_get_sale_attribution(args):
+    """Returns attribution row for a sale, or null."""
+    from db import get_conn
+
+    sale_id = args.get("saleId")
+    if not sale_id:
+        return {"ok": False, "error": "saleId required"}
+
+    conn = get_conn()
+    try:
+        row = conn.execute("""
+            SELECT id, sale_id, ad_campaign_id, ad_campaign_name, source, note, created_at
+            FROM sales_attribution WHERE sale_id = ?
+            ORDER BY created_at DESC LIMIT 1
+        """, (sale_id,)).fetchone()
+        if not row:
+            return {"ok": True, "attribution": None}
+        return {"ok": True, "attribution": {
+            "id": row[0],
+            "saleId": row[1],
+            "adCampaignId": row[2],
+            "adCampaignName": row[3],
+            "source": row[4],
+            "note": row[5],
+            "createdAt": row[6],
+        }}
+    finally:
+        conn.close()
+
+
+# ─── R5: Meta Ads sync + campaigns + funnel awareness + cupón stub ───────────
+
+def cmd_sync_meta_ads(args):
+    """Sync campaigns insights desde Meta Ads API → campaigns_snapshot.
+    Reads token + account_id from /c/Users/Diego/club-coo/ads/.env.
+    Inserts one row per campaign per sync (history-preserving).
+    Account currency is GTQ — no conversion needed.
+    Conversions count: purchase + onsite_conversion.total_messaging_connection + lead.
+    """
+    import json, urllib.request, urllib.parse, urllib.error
+    from pathlib import Path
+    from datetime import datetime
+    from db import get_conn
+
+    env_path = Path(r"C:/Users/Diego/club-coo/ads/.env")
+    if not env_path.exists():
+        return {"ok": False, "campaignsSynced": 0, "errors": [f".env not found at {env_path}"], "syncedAt": datetime.now().isoformat()}
+
+    env = {}
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        if "=" in line and not line.startswith("#"):
+            k, _, v = line.partition("=")
+            env[k.strip()] = v.strip()
+
+    token = env.get("META_ACCESS_TOKEN")
+    account_id = env.get("META_AD_ACCOUNT_ID")
+    if not token or not account_id:
+        return {"ok": False, "campaignsSynced": 0, "errors": ["META_ACCESS_TOKEN or META_AD_ACCOUNT_ID missing"], "syncedAt": datetime.now().isoformat()}
+
+    days = args.get("days") or 30
+    period = args.get("datePreset") or f"last_{days}d"
+
+    url = f"https://graph.facebook.com/v21.0/{account_id}/insights"
+    params = {
+        "fields": "campaign_id,campaign_name,spend,impressions,clicks,actions,action_values",
+        "level": "campaign",
+        "date_preset": period,
+        "access_token": token,
+    }
+    qs = urllib.parse.urlencode(params)
+
+    sync_ts = datetime.now().isoformat()
+    try:
+        req = urllib.request.Request(f"{url}?{qs}", headers={"User-Agent": "ElClub-ERP/0.1.31"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="ignore")[:300]
+        if e.code == 429:
+            return {"ok": False, "campaignsSynced": 0, "errors": [f"Rate limited (HTTP 429): {body}"], "syncedAt": sync_ts}
+        return {"ok": False, "campaignsSynced": 0, "errors": [f"Meta HTTP {e.code}: {body}"], "syncedAt": sync_ts}
+    except Exception as e:
+        return {"ok": False, "campaignsSynced": 0, "errors": [f"Meta fetch failed: {e}"], "syncedAt": sync_ts}
+
+    rows = data.get("data") or []
+    if not rows:
+        return {"ok": True, "campaignsSynced": 0, "errors": [], "syncedAt": sync_ts}
+
+    CONVERSION_TYPES = {"purchase", "onsite_conversion.total_messaging_connection", "lead"}
+    conn = get_conn()
+    synced = 0
+    errors = []
+
+    try:
+        for row in rows:
+            try:
+                campaign_id = row.get("campaign_id")
+                campaign_name = row.get("campaign_name")
+                spend_gtq = float(row.get("spend", 0) or 0)
+                impressions = int(row.get("impressions", 0) or 0)
+                clicks = int(row.get("clicks", 0) or 0)
+
+                conversions = 0
+                revenue_gtq = 0.0
+                for a in row.get("actions", []) or []:
+                    if a.get("action_type") in CONVERSION_TYPES:
+                        conversions += int(a.get("value", 0))
+                for av in row.get("action_values", []) or []:
+                    if av.get("action_type") == "purchase":
+                        revenue_gtq += float(av.get("value", 0))
+
+                conn.execute("""
+                    INSERT INTO campaigns_snapshot
+                      (campaign_id, campaign_name, captured_at, impressions, clicks,
+                       spend_gtq, conversions, revenue_attributed_gtq, raw_json)
+                    VALUES (?, ?, datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?)
+                """, (campaign_id, campaign_name, impressions, clicks,
+                      round(spend_gtq, 2), conversions, round(revenue_gtq, 2), json.dumps(row)))
+                synced += 1
+            except Exception as ie:
+                errors.append(f"row {row.get('campaign_id', '?')}: {ie}")
+        conn.commit()
+        return {"ok": True, "campaignsSynced": synced, "errors": errors, "syncedAt": sync_ts}
+    finally:
+        conn.close()
+
+
+def cmd_list_campaigns(args):
+    """Lista campañas con rollup últimos N días (default 30)."""
+    from db import get_conn
+
+    days = int(args.get("periodDays") or 30)
+    conn = get_conn()
+    try:
+        rows = conn.execute(f"""
+            SELECT
+                campaign_id,
+                MAX(campaign_name) AS campaign_name,
+                MAX(captured_at) AS last_sync_at,
+                COALESCE(SUM(spend_gtq), 0) AS total_spend,
+                COALESCE(SUM(impressions), 0) AS total_impressions,
+                COALESCE(SUM(clicks), 0) AS total_clicks,
+                COALESCE(SUM(conversions), 0) AS total_conversions,
+                COALESCE(SUM(revenue_attributed_gtq), 0) AS total_revenue
+            FROM campaigns_snapshot
+            WHERE captured_at >= datetime('now', 'localtime', '-{days} days')
+            GROUP BY campaign_id
+            ORDER BY total_spend DESC
+        """).fetchall()
+        out = []
+        for r in rows:
+            cpc = round(r[3] / r[6], 2) if r[6] else None
+            out.append({
+                "campaignId": r[0],
+                "campaignName": r[1],
+                "lastSyncAt": r[2],
+                "totalSpendGtq": r[3],
+                "totalImpressions": r[4],
+                "totalClicks": r[5],
+                "totalConversions": r[6],
+                "totalRevenueGtq": r[7],
+                "costPerConversionGtq": cpc,
+                "status": "active",
+            })
+        return {"ok": True, "campaigns": out}
+    finally:
+        conn.close()
+
+
+def cmd_get_campaign_detail(args):
+    """Campaign detail + daily series + attributed sales (joined via sales_attribution)."""
+    from db import get_conn
+
+    campaign_id = args.get("campaignId")
+    days = int(args.get("periodDays") or 30)
+    if not campaign_id:
+        return {"ok": False, "error": "campaignId required"}
+
+    conn = get_conn()
+    try:
+        agg = conn.execute(f"""
+            SELECT
+                MAX(campaign_name),
+                MAX(captured_at),
+                COALESCE(SUM(spend_gtq), 0),
+                COALESCE(SUM(impressions), 0),
+                COALESCE(SUM(clicks), 0),
+                COALESCE(SUM(conversions), 0),
+                COALESCE(SUM(revenue_attributed_gtq), 0)
+            FROM campaigns_snapshot
+            WHERE campaign_id = ?
+              AND captured_at >= datetime('now', 'localtime', '-{days} days')
+        """, (campaign_id,)).fetchone()
+
+        if agg[1] is None:
+            return {"ok": True, "detail": None}
+
+        cpc = round(agg[2] / agg[5], 2) if agg[5] else None
+        campaign = {
+            "campaignId": campaign_id,
+            "campaignName": agg[0],
+            "lastSyncAt": agg[1],
+            "totalSpendGtq": agg[2],
+            "totalImpressions": agg[3],
+            "totalClicks": agg[4],
+            "totalConversions": agg[5],
+            "totalRevenueGtq": agg[6],
+            "costPerConversionGtq": cpc,
+            "status": "active",
+        }
+
+        daily_rows = conn.execute(f"""
+            SELECT
+                date(captured_at) AS day,
+                SUM(spend_gtq), SUM(conversions), SUM(revenue_attributed_gtq),
+                SUM(impressions), SUM(clicks)
+            FROM campaigns_snapshot
+            WHERE campaign_id = ?
+              AND captured_at >= datetime('now', 'localtime', '-{days} days')
+            GROUP BY day
+            ORDER BY day ASC
+        """, (campaign_id,)).fetchall()
+        daily = [
+            {"date": r[0], "spendGtq": r[1], "conversions": r[2], "revenueGtq": r[3],
+             "impressions": r[4], "clicks": r[5]}
+            for r in daily_rows
+        ]
+
+        sales_rows = conn.execute("""
+            SELECT s.sale_id, s.ref, c.name, s.total, s.occurred_at
+            FROM sales_attribution sa
+            JOIN sales s ON s.sale_id = sa.sale_id
+            LEFT JOIN customers c ON c.customer_id = s.customer_id
+            WHERE sa.ad_campaign_id = ?
+            ORDER BY s.occurred_at DESC
+            LIMIT 50
+        """, (campaign_id,)).fetchall()
+        attributed = [
+            {"saleId": r[0], "ref": r[1], "customerName": r[2], "totalGtq": r[3], "occurredAt": r[4]}
+            for r in sales_rows
+        ]
+
+        return {"ok": True, "detail": {"campaign": campaign, "daily": daily, "attributedSales": attributed}}
+    finally:
+        conn.close()
+
+
+def cmd_get_funnel_awareness_real(args):
+    """Funnel Awareness real-data rollup."""
+    from db import get_conn
+    from datetime import datetime, timedelta
+
+    period_start = args.get("periodStart")
+    period_end = args.get("periodEnd")
+    if not period_start or not period_end:
+        end = datetime.now()
+        start = end - timedelta(days=30)
+        period_start = start.isoformat()
+        period_end = end.isoformat()
+
+    conn = get_conn()
+    try:
+        agg = conn.execute("""
+            SELECT
+                COUNT(DISTINCT campaign_id),
+                COALESCE(SUM(impressions), 0),
+                COALESCE(SUM(clicks), 0),
+                COALESCE(SUM(spend_gtq), 0),
+                COALESCE(SUM(conversions), 0),
+                COALESCE(SUM(revenue_attributed_gtq), 0),
+                MAX(captured_at)
+            FROM campaigns_snapshot
+            WHERE captured_at BETWEEN ? AND ?
+        """, (period_start, period_end)).fetchone()
+
+        impressions = agg[1]
+        clicks = agg[2]
+        spend = agg[3]
+        cpm = round(spend / impressions * 1000, 2) if impressions else None
+        cpc = round(spend / clicks, 2) if clicks else None
+        ctr = round(clicks / impressions * 100, 2) if impressions else None
+
+        by_campaign_rows = conn.execute("""
+            SELECT campaign_id, MAX(campaign_name), SUM(spend_gtq), SUM(impressions)
+            FROM campaigns_snapshot
+            WHERE captured_at BETWEEN ? AND ?
+            GROUP BY campaign_id
+            ORDER BY SUM(spend_gtq) DESC
+        """, (period_start, period_end)).fetchall()
+        by_campaign = [
+            {"campaignId": r[0], "campaignName": r[1], "spendGtq": r[2], "impressions": r[3]}
+            for r in by_campaign_rows
+        ]
+
+        return {"ok": True, "awareness": {
+            "periodStart": period_start,
+            "periodEnd": period_end,
+            "totalCampaigns": agg[0],
+            "impressions": impressions,
+            "clicks": clicks,
+            "spendGtq": spend,
+            "conversions": agg[4],
+            "revenueAttributedGtq": agg[5],
+            "cpm": cpm,
+            "cpc": cpc,
+            "ctr": ctr,
+            "byCampaign": by_campaign,
+            "lastSyncAt": agg[6],
+        }}
+    finally:
+        conn.close()
+
+
+def cmd_generate_coupon(args):
+    """STUB R5: worker /api/coupons/generate endpoint contract incompatible with R4 plan.
+    Returns pending status until separate worker task aligns the contract.
+    See spec sec 6 decision 7.
+    """
+    return {
+        "ok": False,
+        "error": "Cupón pendiente — worker endpoint /api/coupons/generate requiere actualización (R5 worker task)",
+        "pending": True,
+    }
+
+
 COMMANDS = {
     "ping": cmd_ping,
     "regen_watermark": cmd_regen_watermark,
@@ -976,6 +2293,33 @@ COMMANDS = {
     "move_modelo": cmd_move_modelo,
     "delete_r2_objects": cmd_delete_r2_objects,
     "backfill_meta": cmd_backfill_meta,
+    "insert_event": cmd_insert_event,
+    "list_events": cmd_list_events,
+    "set_event_status": cmd_set_event_status,
+    "get_order": cmd_get_order,
+    "mark_order_shipped": cmd_mark_order_shipped,
+    "list_sales_in_range": cmd_list_sales_in_range,
+    "list_leads_in_range": cmd_list_leads_in_range,
+    "list_ad_spend_in_range": cmd_list_ad_spend_in_range,
+    "sync_manychat": cmd_sync_manychat,
+    "list_leads": cmd_list_leads,
+    "list_conversations": cmd_list_conversations,
+    "list_customers": cmd_list_customers,
+    "get_meta_sync": cmd_get_meta_sync,
+    "get_conversation_messages": cmd_get_conversation_messages,
+    "get_customer_profile": cmd_get_customer_profile,
+    "create_customer": cmd_create_customer,
+    "update_customer_traits": cmd_update_customer_traits,
+    "set_customer_blocked": cmd_set_customer_blocked,
+    "update_customer_source": cmd_update_customer_source,
+    "create_manual_order": cmd_create_manual_order,
+    "sync_meta_ads": cmd_sync_meta_ads,
+    "list_campaigns": cmd_list_campaigns,
+    "get_campaign_detail": cmd_get_campaign_detail,
+    "get_funnel_awareness_real": cmd_get_funnel_awareness_real,
+    "generate_coupon": cmd_generate_coupon,
+    "backfill_sales_attribution": cmd_backfill_sales_attribution,
+    "get_sale_attribution": cmd_get_sale_attribution,
 }
 
 
@@ -994,7 +2338,9 @@ def main():
         return _err(f"cmd desconocido: {cmd!r}. Usar: {list(COMMANDS.keys())}")
 
     try:
-        COMMANDS[cmd](payload)
+        result = COMMANDS[cmd](payload)
+        if result is not None:
+            _reply(result)
     except SystemExit:
         raise
     except Exception as e:

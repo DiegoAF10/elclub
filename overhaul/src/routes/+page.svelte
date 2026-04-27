@@ -3,6 +3,7 @@
 	import ListPane from '$lib/components/ListPane.svelte';
 	import DetailPane from '$lib/components/DetailPane.svelte';
 	import FamilyPdpPane from '$lib/components/FamilyPdpPane.svelte';
+	import ComercialShell from '$lib/components/comercial/ComercialShell.svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import MundialCoverageModal from '$lib/components/MundialCoverageModal.svelte';
 	import { familiesByGroup, allSkus } from '$lib/data/source';
@@ -212,30 +213,36 @@
 {:else}
 	<div class="fixed inset-0 flex">
 		<Sidebar active={sidebarActive} onSelect={handleSidebarSelect} onPushResult={flash} />
-		<ListPane
-			{groups}
-			{selectedSku}
-			{selectedFamilyId}
-			onSelectSku={selectSku}
-			onSelectFamily={selectFamily}
-			onMoveModelo={handleMoveModelo}
-		/>
-		{#if currentMode === 'family' && selectedFamily}
-			<FamilyPdpPane
-				family={selectedFamily}
-				onSelectSku={selectSku}
-				onFlash={flash}
-				onRefresh={() => void invalidateAll()}
-			/>
+		{#if sidebarActive === 'comercial'}
+			<div class="flex-1 overflow-hidden">
+				<ComercialShell />
+			</div>
 		{:else}
-			<DetailPane
-				family={selectedFamily}
-				modelo={selectedModelo}
-				{families}
+			<ListPane
+				{groups}
+				{selectedSku}
+				{selectedFamilyId}
 				onSelectSku={selectSku}
-				onFlash={flash}
-				onRefresh={() => void invalidateAll()}
+				onSelectFamily={selectFamily}
+				onMoveModelo={handleMoveModelo}
 			/>
+			{#if currentMode === 'family' && selectedFamily}
+				<FamilyPdpPane
+					family={selectedFamily}
+					onSelectSku={selectSku}
+					onFlash={flash}
+					onRefresh={() => void invalidateAll()}
+				/>
+			{:else}
+				<DetailPane
+					family={selectedFamily}
+					modelo={selectedModelo}
+					{families}
+					onSelectSku={selectSku}
+					onFlash={flash}
+					onRefresh={() => void invalidateAll()}
+				/>
+			{/if}
 		{/if}
 	</div>
 

@@ -2,6 +2,27 @@
 // Implementaciones concretas: browser.ts (dev sin Tauri) + tauri.ts (app nativa).
 
 import type { Family, Status } from '../data/types';
+import type {
+	ComercialEvent,
+	DetectedEvent,
+	EventStatus,
+	OrderForModal,
+	PeriodRange,
+	Lead,
+	ConversationMeta,
+	ConversationMessage,
+	Customer,
+	MetaSyncStatus,
+	CustomerProfile,
+	CreateCustomerArgs,
+	CreateOrderArgs,
+	Campaign,
+	CampaignDetail,
+	FunnelAwarenessReal,
+	MetaSyncResult,
+	SaleAttribution,
+	BackfillAttributionResult
+} from '../data/comercial';
 
 export type AuditStatus =
 	| 'pending'
@@ -244,6 +265,46 @@ export interface Adapter {
 	invalidateCache(): Promise<void>;
 	openMsiFolder(): Promise<void>;
 	batchCleanFamily(familyId: string, modeloIdx?: number): Promise<BatchCleanResult>;
+
+	// ─── Comercial R1 ──────────────────────────────────────────
+	listEvents(filter?: { status?: EventStatus; severity?: string }): Promise<ComercialEvent[]>;
+	setEventStatus(eventId: number, status: EventStatus): Promise<void>;
+	getOrderForModal(ref: string): Promise<OrderForModal | null>;
+	markOrderShipped(ref: string, trackingCode?: string): Promise<void>;
+
+	insertEvent(detected: DetectedEvent): Promise<number>;
+
+	// Sales/leads/ads en range — para el pulso
+	listSalesInRange(range: PeriodRange): Promise<Array<{ ref: string; totalGtq: number; paidAt: string; status: string }>>;
+	listLeadsInRange(range: PeriodRange): Promise<Array<{ leadId: number; firstContactAt: string }>>;
+	listAdSpendInRange(range: PeriodRange): Promise<Array<{ campaignId: string; spendGtq: number; capturedAt: string }>>;
+
+	// ─── Comercial R2-combo ────────────────────────────────────────
+	syncManychatData(args: { since: string | null; workerBase?: string; dashboardKey: string }): Promise<{ ok: boolean; leadsUpserted: number; conversationsUpserted: number; lastSyncAt: string; error?: string }>;
+	listLeads(filter?: { status?: string; range?: PeriodRange }): Promise<Lead[]>;
+	listConversations(filter?: { outcome?: string; range?: PeriodRange; leadId?: number }): Promise<ConversationMeta[]>;
+	listCustomers(filter?: { lastOrderBefore?: string; minLtvGtq?: number }): Promise<Customer[]>;
+	getMetaSync(source: string): Promise<MetaSyncStatus>;
+	getConversationMessages(args: { convId: string; workerBase?: string; dashboardKey: string }): Promise<ConversationMessage[]>;
+
+	// ─── Comercial R4 ──────────────────────────────────────────
+	getCustomerProfile(customerId: number): Promise<CustomerProfile | null>;
+	createCustomer(args: CreateCustomerArgs): Promise<{ ok: boolean; customerId?: number; error?: string }>;
+	updateCustomerTraits(customerId: number, traitsJson: Record<string, unknown>): Promise<void>;
+	setCustomerBlocked(customerId: number, blocked: boolean): Promise<void>;
+	updateCustomerSource(customerId: number, source: string | null): Promise<void>;
+	createManualOrder(args: CreateOrderArgs): Promise<{ ok: boolean; ref?: string; saleId?: number; error?: string }>;
+
+	// ─── Comercial R5 ──────────────────────────────────────────
+	syncMetaAds(args?: { days?: number; datePreset?: string }): Promise<MetaSyncResult>;
+	listCampaigns(args?: { periodDays?: number }): Promise<Campaign[]>;
+	getCampaignDetail(campaignId: string, periodDays?: number): Promise<CampaignDetail | null>;
+	getFunnelAwarenessReal(args?: { periodStart?: string; periodEnd?: string }): Promise<FunnelAwarenessReal | null>;
+	generateCoupon(args: { customerId: number; type: 'percent' | 'amount'; value: number; expiresInDays?: number }): Promise<{ ok: boolean; code?: string; error?: string; pending?: boolean }>;
+
+	// ─── Comercial R6 ──────────────────────────────────────────
+	backfillSalesAttribution(): Promise<BackfillAttributionResult>;
+	getSaleAttribution(saleId: number): Promise<SaleAttribution | null>;
 }
 
 // ─── Error para operaciones no disponibles en dev ────────────────────
