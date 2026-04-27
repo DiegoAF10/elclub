@@ -180,6 +180,14 @@ CREATE TABLE IF NOT EXISTS comercial_events (
 
 CREATE INDEX IF NOT EXISTS idx_events_status_severity ON comercial_events(status, severity);
 CREATE INDEX IF NOT EXISTS idx_events_type ON comercial_events(type);
+
+-- ─── Comercial R2 — sync tracking ──────────────────────────────
+CREATE TABLE IF NOT EXISTS meta_sync (
+    source TEXT PRIMARY KEY,
+    last_sync_at TEXT NOT NULL,
+    last_status TEXT,
+    last_error TEXT
+);
 """
 
 
