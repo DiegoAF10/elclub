@@ -1790,6 +1790,9 @@ def cmd_create_manual_order(args):
     if fulfillment_status not in valid_fulfillment:
         return {"ok": False, "error": f"invalid fulfillmentStatus. Valid: {valid_fulfillment}"}
 
+    if shipping_fee < 0 or discount < 0:
+        return {"ok": False, "error": "shippingFee and discount must be >= 0"}
+
     subtotal = sum(item["unitPrice"] for item in items)
     total = subtotal + shipping_fee - discount
 
