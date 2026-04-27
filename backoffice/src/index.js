@@ -1010,6 +1010,41 @@ export default {
         return json({ orders, total: orders.length }, 200, cors);
       }
 
+      // ── List ALL orders (admin) — both Recurrente checkouts + bot custom orders ──
+      // R9: comprehensive orders feed for ERP import
+      if (url.pathname === '/api/orders/all' && request.method === 'GET') {
+        const adminKey = request.headers.get('X-Admin-Key');
+        if (!adminKey || adminKey !== env.ADMIN_KEY) {
+          return json({ error: 'Unauthorized' }, 401, cors);
+        }
+
+        const orders = [];
+        let cursor;
+        let pageCount = 0;
+        const maxPages = 20;  // safety cap (1000 orders per page * 20 = 20k max)
+
+        do {
+          const list = await env.DATA.list({ prefix: 'order:', cursor, limit: 1000 });
+          for (const k of list.keys) {
+            const raw = await env.DATA.get(k.name);
+            if (!raw) continue;
+            try {
+              const order = JSON.parse(raw);
+              orders.push(order);
+            } catch (e) {
+              console.warn(`[orders/all] parse fail ${k.name}: ${e.message}`);
+            }
+          }
+          cursor = list.list_complete ? null : list.cursor;
+          pageCount++;
+        } while (cursor && pageCount < maxPages);
+
+        // Sort newest first
+        orders.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+
+        return json({ orders, total: orders.length, pages: pageCount }, 200, cors);
+      }
+
       // ── Update order status (admin) ──
       if (url.pathname.startsWith('/api/order/') && request.method === 'PATCH') {
         const adminKey = request.headers.get('X-Admin-Key');
