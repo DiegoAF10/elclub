@@ -1852,6 +1852,301 @@ def cmd_create_manual_order(args):
         conn.close()
 
 
+# ─── R5: Meta Ads sync + campaigns + funnel awareness + cupón stub ───────────
+
+def cmd_sync_meta_ads(args):
+    """Sync campaigns insights desde Meta Ads API → campaigns_snapshot.
+    Reads token + account_id from /c/Users/Diego/club-coo/ads/.env.
+    Inserts one row per campaign per sync (history-preserving).
+    Account currency is GTQ — no conversion needed.
+    Conversions count: purchase + onsite_conversion.total_messaging_connection + lead.
+    """
+    import json, urllib.request, urllib.parse, urllib.error
+    from pathlib import Path
+    from datetime import datetime
+    from db import get_conn
+
+    env_path = Path(r"C:/Users/Diego/club-coo/ads/.env")
+    if not env_path.exists():
+        return {"ok": False, "campaignsSynced": 0, "errors": [f".env not found at {env_path}"], "syncedAt": datetime.now().isoformat()}
+
+    env = {}
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        if "=" in line and not line.startswith("#"):
+            k, _, v = line.partition("=")
+            env[k.strip()] = v.strip()
+
+    token = env.get("META_ACCESS_TOKEN")
+    account_id = env.get("META_AD_ACCOUNT_ID")
+    if not token or not account_id:
+        return {"ok": False, "campaignsSynced": 0, "errors": ["META_ACCESS_TOKEN or META_AD_ACCOUNT_ID missing"], "syncedAt": datetime.now().isoformat()}
+
+    days = args.get("days") or 30
+    period = args.get("datePreset") or f"last_{days}d"
+
+    url = f"https://graph.facebook.com/v21.0/{account_id}/insights"
+    params = {
+        "fields": "campaign_id,campaign_name,spend,impressions,clicks,actions,action_values",
+        "level": "campaign",
+        "date_preset": period,
+        "access_token": token,
+    }
+    qs = urllib.parse.urlencode(params)
+
+    sync_ts = datetime.now().isoformat()
+    try:
+        req = urllib.request.Request(f"{url}?{qs}", headers={"User-Agent": "ElClub-ERP/0.1.31"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="ignore")[:300]
+        if e.code == 429:
+            return {"ok": False, "campaignsSynced": 0, "errors": [f"Rate limited (HTTP 429): {body}"], "syncedAt": sync_ts}
+        return {"ok": False, "campaignsSynced": 0, "errors": [f"Meta HTTP {e.code}: {body}"], "syncedAt": sync_ts}
+    except Exception as e:
+        return {"ok": False, "campaignsSynced": 0, "errors": [f"Meta fetch failed: {e}"], "syncedAt": sync_ts}
+
+    rows = data.get("data") or []
+    if not rows:
+        return {"ok": True, "campaignsSynced": 0, "errors": [], "syncedAt": sync_ts}
+
+    CONVERSION_TYPES = {"purchase", "onsite_conversion.total_messaging_connection", "lead"}
+    conn = get_conn()
+    synced = 0
+    errors = []
+
+    try:
+        for row in rows:
+            try:
+                campaign_id = row.get("campaign_id")
+                campaign_name = row.get("campaign_name")
+                spend_gtq = float(row.get("spend", 0) or 0)
+                impressions = int(row.get("impressions", 0) or 0)
+                clicks = int(row.get("clicks", 0) or 0)
+
+                conversions = 0
+                revenue_gtq = 0.0
+                for a in row.get("actions", []) or []:
+                    if a.get("action_type") in CONVERSION_TYPES:
+                        conversions += int(a.get("value", 0))
+                for av in row.get("action_values", []) or []:
+                    if av.get("action_type") == "purchase":
+                        revenue_gtq += float(av.get("value", 0))
+
+                conn.execute("""
+                    INSERT INTO campaigns_snapshot
+                      (campaign_id, campaign_name, captured_at, impressions, clicks,
+                       spend_gtq, conversions, revenue_attributed_gtq, raw_json)
+                    VALUES (?, ?, datetime('now', 'localtime'), ?, ?, ?, ?, ?, ?)
+                """, (campaign_id, campaign_name, impressions, clicks,
+                      round(spend_gtq, 2), conversions, round(revenue_gtq, 2), json.dumps(row)))
+                synced += 1
+            except Exception as ie:
+                errors.append(f"row {row.get('campaign_id', '?')}: {ie}")
+        conn.commit()
+        return {"ok": True, "campaignsSynced": synced, "errors": errors, "syncedAt": sync_ts}
+    finally:
+        conn.close()
+
+
+def cmd_list_campaigns(args):
+    """Lista campañas con rollup últimos N días (default 30)."""
+    from db import get_conn
+
+    days = int(args.get("periodDays") or 30)
+    conn = get_conn()
+    try:
+        rows = conn.execute(f"""
+            SELECT
+                campaign_id,
+                MAX(campaign_name) AS campaign_name,
+                MAX(captured_at) AS last_sync_at,
+                COALESCE(SUM(spend_gtq), 0) AS total_spend,
+                COALESCE(SUM(impressions), 0) AS total_impressions,
+                COALESCE(SUM(clicks), 0) AS total_clicks,
+                COALESCE(SUM(conversions), 0) AS total_conversions,
+                COALESCE(SUM(revenue_attributed_gtq), 0) AS total_revenue
+            FROM campaigns_snapshot
+            WHERE captured_at >= datetime('now', 'localtime', '-{days} days')
+            GROUP BY campaign_id
+            ORDER BY total_spend DESC
+        """).fetchall()
+        out = []
+        for r in rows:
+            cpc = round(r[3] / r[6], 2) if r[6] else None
+            out.append({
+                "campaignId": r[0],
+                "campaignName": r[1],
+                "lastSyncAt": r[2],
+                "totalSpendGtq": r[3],
+                "totalImpressions": r[4],
+                "totalClicks": r[5],
+                "totalConversions": r[6],
+                "totalRevenueGtq": r[7],
+                "costPerConversionGtq": cpc,
+                "status": "active",
+            })
+        return {"ok": True, "campaigns": out}
+    finally:
+        conn.close()
+
+
+def cmd_get_campaign_detail(args):
+    """Campaign detail + daily series + attributed sales (joined via sales_attribution)."""
+    from db import get_conn
+
+    campaign_id = args.get("campaignId")
+    days = int(args.get("periodDays") or 30)
+    if not campaign_id:
+        return {"ok": False, "error": "campaignId required"}
+
+    conn = get_conn()
+    try:
+        agg = conn.execute(f"""
+            SELECT
+                MAX(campaign_name),
+                MAX(captured_at),
+                COALESCE(SUM(spend_gtq), 0),
+                COALESCE(SUM(impressions), 0),
+                COALESCE(SUM(clicks), 0),
+                COALESCE(SUM(conversions), 0),
+                COALESCE(SUM(revenue_attributed_gtq), 0)
+            FROM campaigns_snapshot
+            WHERE campaign_id = ?
+              AND captured_at >= datetime('now', 'localtime', '-{days} days')
+        """, (campaign_id,)).fetchone()
+
+        if agg[1] is None:
+            return {"ok": True, "detail": None}
+
+        cpc = round(agg[2] / agg[5], 2) if agg[5] else None
+        campaign = {
+            "campaignId": campaign_id,
+            "campaignName": agg[0],
+            "lastSyncAt": agg[1],
+            "totalSpendGtq": agg[2],
+            "totalImpressions": agg[3],
+            "totalClicks": agg[4],
+            "totalConversions": agg[5],
+            "totalRevenueGtq": agg[6],
+            "costPerConversionGtq": cpc,
+            "status": "active",
+        }
+
+        daily_rows = conn.execute(f"""
+            SELECT
+                date(captured_at) AS day,
+                SUM(spend_gtq), SUM(conversions), SUM(revenue_attributed_gtq),
+                SUM(impressions), SUM(clicks)
+            FROM campaigns_snapshot
+            WHERE campaign_id = ?
+              AND captured_at >= datetime('now', 'localtime', '-{days} days')
+            GROUP BY day
+            ORDER BY day ASC
+        """, (campaign_id,)).fetchall()
+        daily = [
+            {"date": r[0], "spendGtq": r[1], "conversions": r[2], "revenueGtq": r[3],
+             "impressions": r[4], "clicks": r[5]}
+            for r in daily_rows
+        ]
+
+        sales_rows = conn.execute("""
+            SELECT s.sale_id, s.ref, c.name, s.total, s.occurred_at
+            FROM sales_attribution sa
+            JOIN sales s ON s.sale_id = sa.sale_id
+            LEFT JOIN customers c ON c.customer_id = s.customer_id
+            WHERE sa.ad_campaign_id = ?
+            ORDER BY s.occurred_at DESC
+            LIMIT 50
+        """, (campaign_id,)).fetchall()
+        attributed = [
+            {"saleId": r[0], "ref": r[1], "customerName": r[2], "totalGtq": r[3], "occurredAt": r[4]}
+            for r in sales_rows
+        ]
+
+        return {"ok": True, "detail": {"campaign": campaign, "daily": daily, "attributedSales": attributed}}
+    finally:
+        conn.close()
+
+
+def cmd_get_funnel_awareness_real(args):
+    """Funnel Awareness real-data rollup."""
+    from db import get_conn
+    from datetime import datetime, timedelta
+
+    period_start = args.get("periodStart")
+    period_end = args.get("periodEnd")
+    if not period_start or not period_end:
+        end = datetime.now()
+        start = end - timedelta(days=30)
+        period_start = start.isoformat()
+        period_end = end.isoformat()
+
+    conn = get_conn()
+    try:
+        agg = conn.execute("""
+            SELECT
+                COUNT(DISTINCT campaign_id),
+                COALESCE(SUM(impressions), 0),
+                COALESCE(SUM(clicks), 0),
+                COALESCE(SUM(spend_gtq), 0),
+                COALESCE(SUM(conversions), 0),
+                COALESCE(SUM(revenue_attributed_gtq), 0),
+                MAX(captured_at)
+            FROM campaigns_snapshot
+            WHERE captured_at BETWEEN ? AND ?
+        """, (period_start, period_end)).fetchone()
+
+        impressions = agg[1]
+        clicks = agg[2]
+        spend = agg[3]
+        cpm = round(spend / impressions * 1000, 2) if impressions else None
+        cpc = round(spend / clicks, 2) if clicks else None
+        ctr = round(clicks / impressions * 100, 2) if impressions else None
+
+        by_campaign_rows = conn.execute("""
+            SELECT campaign_id, MAX(campaign_name), SUM(spend_gtq), SUM(impressions)
+            FROM campaigns_snapshot
+            WHERE captured_at BETWEEN ? AND ?
+            GROUP BY campaign_id
+            ORDER BY SUM(spend_gtq) DESC
+        """, (period_start, period_end)).fetchall()
+        by_campaign = [
+            {"campaignId": r[0], "campaignName": r[1], "spendGtq": r[2], "impressions": r[3]}
+            for r in by_campaign_rows
+        ]
+
+        return {"ok": True, "awareness": {
+            "periodStart": period_start,
+            "periodEnd": period_end,
+            "totalCampaigns": agg[0],
+            "impressions": impressions,
+            "clicks": clicks,
+            "spendGtq": spend,
+            "conversions": agg[4],
+            "revenueAttributedGtq": agg[5],
+            "cpm": cpm,
+            "cpc": cpc,
+            "ctr": ctr,
+            "byCampaign": by_campaign,
+            "lastSyncAt": agg[6],
+        }}
+    finally:
+        conn.close()
+
+
+def cmd_generate_coupon(args):
+    """STUB R5: worker /api/coupons/generate endpoint contract incompatible with R4 plan.
+    Returns pending status until separate worker task aligns the contract.
+    See spec sec 6 decision 7.
+    """
+    return {
+        "ok": False,
+        "error": "Cupón pendiente — worker endpoint /api/coupons/generate requiere actualización (R5 worker task)",
+        "pending": True,
+    }
+
+
 COMMANDS = {
     "ping": cmd_ping,
     "regen_watermark": cmd_regen_watermark,
@@ -1885,6 +2180,11 @@ COMMANDS = {
     "set_customer_blocked": cmd_set_customer_blocked,
     "update_customer_source": cmd_update_customer_source,
     "create_manual_order": cmd_create_manual_order,
+    "sync_meta_ads": cmd_sync_meta_ads,
+    "list_campaigns": cmd_list_campaigns,
+    "get_campaign_detail": cmd_get_campaign_detail,
+    "get_funnel_awareness_real": cmd_get_funnel_awareness_real,
+    "generate_coupon": cmd_generate_coupon,
 }
 
 
