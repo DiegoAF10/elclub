@@ -1612,6 +1612,8 @@ def cmd_get_customer_profile(args):
 
         try:
             traits = json.loads(c[6] or '{}')
+            if not isinstance(traits, dict):
+                traits = {}  # normalize legacy '[]' default
         except Exception:
             traits = {}
 
