@@ -1847,7 +1847,137 @@ def cmd_create_manual_order(args):
             ))
 
         conn.commit()
+
+        # R6: auto-attribute via phone → lead.source_campaign_id lookup
+        try:
+            cust_phone = conn.execute("SELECT phone FROM customers WHERE customer_id = ?", (customer_id,)).fetchone()
+            if cust_phone and cust_phone[0]:
+                lead = conn.execute("""
+                    SELECT source_campaign_id FROM leads
+                    WHERE phone = ? AND source_campaign_id IS NOT NULL
+                    ORDER BY first_contact_at DESC LIMIT 1
+                """, (cust_phone[0],)).fetchone()
+                if lead:
+                    cn_row = conn.execute("""
+                        SELECT campaign_name FROM campaigns_snapshot
+                        WHERE campaign_id = ? AND campaign_name IS NOT NULL
+                        ORDER BY captured_at DESC LIMIT 1
+                    """, (lead[0],)).fetchone()
+                    campaign_name = cn_row[0] if cn_row else None
+                    conn.execute("""
+                        INSERT INTO sales_attribution (sale_id, ad_campaign_id, ad_campaign_name, source, created_at)
+                        VALUES (?, ?, ?, 'auto_via_lead', datetime('now', 'localtime'))
+                    """, (sale_id, lead[0], campaign_name))
+                    conn.commit()
+        except Exception:
+            # Don't fail sale creation on attribution error — attribution is best-effort
+            pass
+
         return {"ok": True, "ref": ref, "saleId": sale_id}
+    finally:
+        conn.close()
+
+
+# ─── R6: Sales attribution ────────────────────────────────────────────────────
+
+def cmd_backfill_sales_attribution(args):
+    """Backfill retroactivo: for each sale without attribution, lookup phone → lead.source_campaign_id.
+    Idempotent — skips sales that already have attribution rows.
+    Campaign name fetched from campaigns_snapshot (R5).
+    """
+    from db import get_conn
+
+    conn = get_conn()
+    inserted = 0
+    skipped_no_match = 0
+    errors = []
+
+    try:
+        # Find sales without attribution AND with customer phone
+        sales = conn.execute("""
+            SELECT s.sale_id, c.phone
+            FROM sales s
+            LEFT JOIN customers c ON c.customer_id = s.customer_id
+            WHERE NOT EXISTS (SELECT 1 FROM sales_attribution sa WHERE sa.sale_id = s.sale_id)
+              AND c.phone IS NOT NULL AND c.phone != ''
+        """).fetchall()
+
+        for sale_id, phone in sales:
+            try:
+                # Find most recent lead with source_campaign_id matching this phone
+                lead = conn.execute("""
+                    SELECT source_campaign_id
+                    FROM leads
+                    WHERE phone = ? AND source_campaign_id IS NOT NULL
+                    ORDER BY first_contact_at DESC
+                    LIMIT 1
+                """, (phone,)).fetchone()
+                if not lead:
+                    skipped_no_match += 1
+                    continue
+
+                campaign_id = lead[0]
+
+                # Fetch campaign name from campaigns_snapshot (R5 added campaign_name col)
+                cn_row = conn.execute("""
+                    SELECT campaign_name FROM campaigns_snapshot
+                    WHERE campaign_id = ? AND campaign_name IS NOT NULL
+                    ORDER BY captured_at DESC LIMIT 1
+                """, (campaign_id,)).fetchone()
+                campaign_name = cn_row[0] if cn_row else None
+
+                conn.execute("""
+                    INSERT INTO sales_attribution (sale_id, ad_campaign_id, ad_campaign_name, source, created_at)
+                    VALUES (?, ?, ?, 'auto_via_lead', datetime('now', 'localtime'))
+                """, (sale_id, campaign_id, campaign_name))
+                inserted += 1
+            except Exception as ie:
+                errors.append(f"sale {sale_id}: {ie}")
+
+        skipped_already_attributed = conn.execute("""
+            SELECT COUNT(*) FROM sales s WHERE EXISTS (
+                SELECT 1 FROM sales_attribution sa WHERE sa.sale_id = s.sale_id
+            )
+        """).fetchone()[0]
+
+        conn.commit()
+        return {
+            "ok": True,
+            "inserted": inserted,
+            "skippedNoMatch": skipped_no_match,
+            "skippedAlreadyAttributed": skipped_already_attributed,
+            "errors": errors
+        }
+    finally:
+        conn.close()
+
+
+def cmd_get_sale_attribution(args):
+    """Returns attribution row for a sale, or null."""
+    from db import get_conn
+
+    sale_id = args.get("saleId")
+    if not sale_id:
+        return {"ok": False, "error": "saleId required"}
+
+    conn = get_conn()
+    try:
+        row = conn.execute("""
+            SELECT id, sale_id, ad_campaign_id, ad_campaign_name, source, note, created_at
+            FROM sales_attribution WHERE sale_id = ?
+            ORDER BY created_at DESC LIMIT 1
+        """, (sale_id,)).fetchone()
+        if not row:
+            return {"ok": True, "attribution": None}
+        return {"ok": True, "attribution": {
+            "id": row[0],
+            "saleId": row[1],
+            "adCampaignId": row[2],
+            "adCampaignName": row[3],
+            "source": row[4],
+            "note": row[5],
+            "createdAt": row[6],
+        }}
     finally:
         conn.close()
 
@@ -2185,6 +2315,8 @@ COMMANDS = {
     "get_campaign_detail": cmd_get_campaign_detail,
     "get_funnel_awareness_real": cmd_get_funnel_awareness_real,
     "generate_coupon": cmd_generate_coupon,
+    "backfill_sales_attribution": cmd_backfill_sales_attribution,
+    "get_sale_attribution": cmd_get_sale_attribution,
 }
 
 
