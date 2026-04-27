@@ -2475,6 +2475,11 @@ def cmd_import_orders_from_worker(args):
                     errors.append(f"order missing checkout_id/receipt_number: {json.dumps(order)[:120]}")
                     continue
 
+                # R9.1: skip non-real orders (chat conversation artifacts persisted as orders, etc.)
+                if not ref.startswith("CE-"):
+                    skipped += 1
+                    continue
+
                 # Idempotency: skip if already imported
                 existing = conn.execute("SELECT sale_id FROM sales WHERE ref = ?", (ref,)).fetchone()
                 if existing:
@@ -2685,6 +2690,32 @@ def cmd_list_sales(args):
         conn.close()
 
 
+def cmd_cleanup_chat_orders(args):
+    """Cleanup: deletes sales with refs not starting with 'CE-' (chat-bot test artifacts).
+    Cascades to sale_items via FK. Customers are NOT deleted (may be linked to legitimate sales too).
+    Returns count of deleted rows.
+    """
+    from db import get_conn
+    conn = get_conn()
+    try:
+        # Find sale_ids for chat orders
+        sale_ids = [r[0] for r in conn.execute(
+            "SELECT sale_id FROM sales WHERE ref NOT LIKE 'CE-%'"
+        ).fetchall()]
+        if not sale_ids:
+            return {"ok": True, "deleted": 0}
+
+        # Delete sale_items first (no CASCADE assumed)
+        placeholders = ",".join("?" * len(sale_ids))
+        conn.execute(f"DELETE FROM sale_items WHERE sale_id IN ({placeholders})", sale_ids)
+        conn.execute(f"DELETE FROM sales_attribution WHERE sale_id IN ({placeholders})", sale_ids)
+        conn.execute(f"DELETE FROM sales WHERE sale_id IN ({placeholders})", sale_ids)
+        conn.commit()
+        return {"ok": True, "deleted": len(sale_ids)}
+    finally:
+        conn.close()
+
+
 COMMANDS = {
     "ping": cmd_ping,
     "regen_watermark": cmd_regen_watermark,
@@ -2729,6 +2760,7 @@ COMMANDS = {
     "attribute_sale": cmd_attribute_sale,
     "import_orders_from_worker": cmd_import_orders_from_worker,
     "list_sales": cmd_list_sales,
+    "cleanup_chat_orders": cmd_cleanup_chat_orders,
 }
 
 
