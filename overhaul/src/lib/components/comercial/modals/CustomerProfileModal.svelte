@@ -1,6 +1,6 @@
 <script lang="ts">
   import { adapter } from '$lib/adapter';
-  import type { CustomerProfile, TimelineEntry } from '$lib/data/comercial';
+  import type { CustomerProfile, TimelineEntry, ConversationMeta } from '$lib/data/comercial';
   import { Star, Loader2, ShoppingCart } from 'lucide-svelte';
   import BaseModal from '../BaseModal.svelte';
   import OrderDetailModal from './OrderDetailModal.svelte';
@@ -19,7 +19,8 @@
 
   // Sub-modal triggers
   let openOrderRef = $state<string | null>(null);
-  let openConvId = $state<string | null>(null);
+  let openConvMeta = $state<ConversationMeta | null>(null);
+  let loadingConvMeta = $state(false);
   let openManualOrder = $state(false);
 
   // Inline editor states
@@ -59,9 +60,19 @@
     return new Date(iso).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' });
   }
 
-  function selectTimelineEntry(entry: TimelineEntry) {
-    if (entry.kind === 'order') openOrderRef = entry.ref;
-    else if (entry.kind === 'conversation') openConvId = entry.convId;
+  async function selectTimelineEntry(entry: TimelineEntry) {
+    if (entry.kind === 'order') {
+      openOrderRef = entry.ref;
+    } else if (entry.kind === 'conversation') {
+      loadingConvMeta = true;
+      try {
+        openConvMeta = await adapter.getConversationMeta(entry.convId);
+      } catch (e) {
+        console.warn('[customer-profile] conv meta load failed', e);
+      } finally {
+        loadingConvMeta = false;
+      }
+    }
   }
 
   // === Edit traits ===
@@ -179,7 +190,7 @@
               {#each profile.timeline as entry, i (i)}
                 <button
                   type="button"
-                  onclick={() => selectTimelineEntry(entry)}
+                  onclick={() => { void selectTimelineEntry(entry); }}
                   class="w-full text-left rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] p-3 hover:border-[var(--color-accent)]"
                   style="border-left: 3px solid {entry.kind === 'order' ? 'var(--color-accent)' : 'var(--color-warning)'};"
                 >
@@ -320,15 +331,11 @@
   <OrderDetailModal orderRef={openOrderRef} onClose={() => { openOrderRef = null; loadProfile(); }} />
 {/if}
 
-{#if openConvId && profile}
-  {@const conv = profile.timeline.find((e) => e.kind === 'conversation' && e.convId === openConvId)}
-  {#if conv && conv.kind === 'conversation'}
-    <ConversationThreadModal conversations={[{
-      convId: conv.convId, leadId: null, brand: 'elclub', platform: conv.platform as any,
-      senderId: '', startedAt: '', endedAt: conv.endedAt, outcome: (conv.outcome as any) ?? null,
-      orderId: null, messagesTotal: conv.messagesTotal, tagsJson: [], analyzed: false, syncedAt: ''
-    }]} onClose={() => { openConvId = null; }} />
-  {/if}
+{#if openConvMeta}
+  <ConversationThreadModal
+    conversations={[openConvMeta]}
+    onClose={() => { openConvMeta = null; }}
+  />
 {/if}
 
 {#if openManualOrder && profile}

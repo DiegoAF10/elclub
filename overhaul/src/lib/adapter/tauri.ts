@@ -440,4 +440,17 @@ export const tauriAdapter: Adapter = {
 		const result = await invoke<unknown>('comercial_get_sale_attribution', { saleId });
 		return (result as SaleAttribution | null) ?? null;
 	},
+
+	// ─── Comercial R7 ──────────────────────────────────────────
+	async getConversationMeta(convId: string) {
+		const result = await invoke<unknown>('comercial_get_conversation_meta', { convId });
+		return (result as ConversationMeta | null) ?? null;
+	},
+
+	async attributeSale(args) {
+		return invoke<{ ok: boolean; error?: string }>(
+			'comercial_attribute_sale',
+			{ args: { saleId: args.saleId, campaignId: args.campaignId, note: args.note } }
+		);
+	},
 };

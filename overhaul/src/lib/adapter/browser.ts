@@ -326,6 +326,14 @@ export const browserAdapter: Adapter = {
 	async getSaleAttribution(): Promise<null> {
 		return null;
 	},
+
+	// ─── Comercial R7 ──────────────────────────────────────────
+	async getConversationMeta(): Promise<null> {
+		return null;
+	},
+	async attributeSale(): Promise<{ ok: boolean; error?: string }> {
+		throw new NotAvailableInBrowser('attributeSale');
+	},
 };
 
 // Test helper (también útil si queremos invalidar cache en dev)

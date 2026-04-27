@@ -305,6 +305,10 @@ export interface Adapter {
 	// ─── Comercial R6 ──────────────────────────────────────────
 	backfillSalesAttribution(): Promise<BackfillAttributionResult>;
 	getSaleAttribution(saleId: number): Promise<SaleAttribution | null>;
+
+	// ─── Comercial R7 ──────────────────────────────────────────
+	getConversationMeta(convId: string): Promise<ConversationMeta | null>;
+	attributeSale(args: { saleId: number; campaignId: string | null; note?: string }): Promise<{ ok: boolean; error?: string }>;
 }
 
 // ─── Error para operaciones no disponibles en dev ────────────────────

@@ -1985,6 +1985,82 @@ def cmd_get_sale_attribution(args):
         conn.close()
 
 
+def cmd_get_conversation_meta(args):
+    """Fetch full ConversationMeta from conversations table by convId."""
+    from db import get_conn
+
+    conv_id = args.get("convId")
+    if not conv_id:
+        return {"ok": False, "error": "convId required"}
+
+    conn = get_conn()
+    try:
+        row = conn.execute("""
+            SELECT conv_id, lead_id, brand, platform, sender_id, started_at, ended_at,
+                   outcome, order_id, messages_total, tags_json, analyzed, synced_at
+            FROM conversations WHERE conv_id = ?
+        """, (conv_id,)).fetchone()
+        if not row:
+            return {"ok": True, "conversation": None}
+        import json as _json
+        try:
+            tags = _json.loads(row[10] or '[]')
+        except Exception:
+            tags = []
+        return {"ok": True, "conversation": {
+            "convId": row[0],
+            "leadId": row[1],
+            "brand": row[2],
+            "platform": row[3],
+            "senderId": row[4] or '',
+            "startedAt": row[5] or '',
+            "endedAt": row[6] or '',
+            "outcome": row[7],
+            "orderId": row[8],
+            "messagesTotal": row[9] or 0,
+            "tagsJson": tags,
+            "analyzed": bool(row[11]),
+            "syncedAt": row[12] or '',
+        }}
+    finally:
+        conn.close()
+
+
+def cmd_attribute_sale(args):
+    """Manual attribution: upsert sales_attribution for a sale + campaign."""
+    from db import get_conn
+
+    sale_id = args.get("saleId")
+    campaign_id = args.get("campaignId")
+    note = args.get("note")
+    if not sale_id:
+        return {"ok": False, "error": "saleId required"}
+
+    conn = get_conn()
+    try:
+        # Lookup campaign name from latest snapshot
+        campaign_name = None
+        if campaign_id:
+            cn_row = conn.execute("""
+                SELECT campaign_name FROM campaigns_snapshot
+                WHERE campaign_id = ? AND campaign_name IS NOT NULL
+                ORDER BY captured_at DESC LIMIT 1
+            """, (campaign_id,)).fetchone()
+            campaign_name = cn_row[0] if cn_row else None
+
+        # Replace any existing attribution (1 sale = 1 attribution by convention)
+        conn.execute("DELETE FROM sales_attribution WHERE sale_id = ?", (sale_id,))
+        if campaign_id:
+            conn.execute("""
+                INSERT INTO sales_attribution (sale_id, ad_campaign_id, ad_campaign_name, source, note, created_at)
+                VALUES (?, ?, ?, 'manual', ?, datetime('now', 'localtime'))
+            """, (sale_id, campaign_id, campaign_name, note))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
 # ─── R5: Meta Ads sync + campaigns + funnel awareness + cupón stub ───────────
 
 def cmd_sync_meta_ads(args):
@@ -2320,6 +2396,8 @@ COMMANDS = {
     "generate_coupon": cmd_generate_coupon,
     "backfill_sales_attribution": cmd_backfill_sales_attribution,
     "get_sale_attribution": cmd_get_sale_attribution,
+    "get_conversation_meta": cmd_get_conversation_meta,
+    "attribute_sale": cmd_attribute_sale,
 }
 
 

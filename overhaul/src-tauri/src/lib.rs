@@ -2209,6 +2209,38 @@ async fn comercial_get_sale_attribution(sale_id: i64) -> Result<Value> {
     Ok(result.get("attribution").cloned().unwrap_or(Value::Null))
 }
 
+// ─── Comercial R7 ─────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn comercial_get_conversation_meta(conv_id: String) -> Result<Value> {
+    let payload = serde_json::json!({ "cmd": "get_conversation_meta", "convId": conv_id });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("conversation").cloned().unwrap_or(Value::Null))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttributeSaleArgs {
+    pub sale_id: i64,
+    pub campaign_id: Option<String>,
+    pub note: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_attribute_sale(args: AttributeSaleArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "attribute_sale",
+        "saleId": args.sale_id,
+        "campaignId": args.campaign_id,
+        "note": args.note,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -2278,6 +2310,9 @@ pub fn run() {
             // Comercial R6
             comercial_backfill_sales_attribution,
             comercial_get_sale_attribution,
+            // Comercial R7
+            comercial_get_conversation_meta,
+            comercial_attribute_sale,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
