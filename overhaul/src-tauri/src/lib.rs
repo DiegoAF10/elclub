@@ -2241,6 +2241,14 @@ async fn comercial_attribute_sale(args: AttributeSaleArgs) -> Result<Value> {
         .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
 }
 
+#[tauri::command]
+async fn comercial_import_orders_from_worker() -> Result<Value> {
+    let payload = serde_json::json!({ "cmd": "import_orders_from_worker" });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -2313,6 +2321,8 @@ pub fn run() {
             // Comercial R7
             comercial_get_conversation_meta,
             comercial_attribute_sale,
+            // Comercial R9
+            comercial_import_orders_from_worker,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");

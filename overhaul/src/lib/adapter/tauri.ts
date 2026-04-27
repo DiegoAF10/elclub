@@ -28,7 +28,7 @@ import type {
 	WatermarkArgs,
 	WatermarkResult
 } from './types';
-import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult } from '../data/comercial';
+import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult } from '../data/comercial';
 import type { Family } from '../data/types';
 import { transformFamily } from './transform';
 
@@ -452,5 +452,10 @@ export const tauriAdapter: Adapter = {
 			'comercial_attribute_sale',
 			{ args: { saleId: args.saleId, campaignId: args.campaignId, note: args.note } }
 		);
+	},
+
+	// ─── Comercial R9 ──────────────────────────────────────────
+	async importOrdersFromWorker() {
+		return invoke<ImportOrdersResult>('comercial_import_orders_from_worker');
 	},
 };

@@ -321,3 +321,14 @@ export interface BackfillAttributionResult {
   skippedAlreadyAttributed: number;
   errors: string[];
 }
+
+// ─── R9: Worker orders import ──────────────────────────────────
+
+export interface ImportOrdersResult {
+  ok: boolean;
+  ordersImported: number;
+  customersCreated: number;
+  skippedExisting: number;
+  totalFromWorker: number;
+  errors: string[];
+}

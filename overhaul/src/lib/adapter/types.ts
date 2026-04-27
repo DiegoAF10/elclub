@@ -21,7 +21,8 @@ import type {
 	FunnelAwarenessReal,
 	MetaSyncResult,
 	SaleAttribution,
-	BackfillAttributionResult
+	BackfillAttributionResult,
+	ImportOrdersResult
 } from '../data/comercial';
 
 export type AuditStatus =
@@ -309,6 +310,9 @@ export interface Adapter {
 	// ─── Comercial R7 ──────────────────────────────────────────
 	getConversationMeta(convId: string): Promise<ConversationMeta | null>;
 	attributeSale(args: { saleId: number; campaignId: string | null; note?: string }): Promise<{ ok: boolean; error?: string }>;
+
+	// ─── Comercial R9 ──────────────────────────────────────────
+	importOrdersFromWorker(): Promise<ImportOrdersResult>;
 }
 
 // ─── Error para operaciones no disponibles en dev ────────────────────
