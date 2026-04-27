@@ -4,7 +4,11 @@
   import { computePulsoKPIs, resolvePeriod, resolvePreviousRange } from '$lib/data/kpis';
   import PeriodSelector from './PeriodSelector.svelte';
 
-  let period = $state<Period>('today');
+  interface Props {
+    period?: Period;
+    setPeriod?: (p: Period) => void;
+  }
+  let { period = 'today', setPeriod }: Props = $props();
   let kpis = $state<PulsoKPIs | null>(null);
   let loading = $state(false);
 
@@ -89,6 +93,6 @@
     <span class="text-[var(--color-text-tertiary)]">Sin data</span>
   {/if}
   <div class="ml-auto">
-    <PeriodSelector value={period} onChange={(p) => (period = p)} />
+    <PeriodSelector value={period} onChange={(p) => setPeriod?.(p)} />
   </div>
 </div>
