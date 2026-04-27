@@ -199,6 +199,7 @@
       .map(i => `Item ${i.familyId}: SKU no encontrado en catálogo`);
   });
 
+  let forceStockCheck = $state(false);
   let saving = $state(false);
   let error = $state<string | null>(null);
 
@@ -297,6 +298,15 @@
           error = result.error ?? 'Error desconocido';
           return;
         }
+        // Replace sale_items (idempotent — DELETE + INSERT atomic)
+        const itemsResult = await adapter.replaceSaleItems({
+          saleId: order.saleId,
+          items: items.map(({ localId, ...rest }) => rest),
+        });
+        if (!itemsResult.ok) {
+          error = itemsResult.error ?? 'Items error';
+          return;
+        }
         if (selectedCampaignId) {
           try {
             await adapter.attributeSale({ saleId: order.saleId, campaignId: selectedCampaignId });
@@ -333,7 +343,7 @@
           {mode === 'create' ? 'Nueva venta manual' : `Editar venta ${order?.ref ?? ''}`}
         </div>
         <div class="text-[11.5px] text-[var(--color-text-tertiary)]">
-          {mode === 'create' ? 'Registro completo. Importá cliente existente o llenalo a mano.' : 'Editar campos. Items son read-only en esta versión.'}
+          {mode === 'create' ? 'Registro completo. Importá cliente existente o llenalo a mano.' : 'Editar campos e items. Los cambios en items reemplazan todos los items anteriores.'}
         </div>
       </div>
     </div>
@@ -443,25 +453,17 @@
           <section>
             <div class="mb-2 flex items-baseline justify-between">
               <h3 class="text-display text-[9.5px] text-[var(--color-text-tertiary)]">ITEMS · {items.length}</h3>
-              {#if mode === 'create'}
-                <button type="button" onclick={addItem} class="flex items-center gap-1 text-[10px] text-[var(--color-accent)]">
-                  <Plus size={10} /> Agregar
-                </button>
-              {/if}
+              <button type="button" onclick={addItem} class="flex items-center gap-1 text-[10px] text-[var(--color-accent)]">
+                <Plus size={10} /> Agregar
+              </button>
             </div>
-
-            {#if mode === 'edit'}
-              <div class="mb-2 rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] p-1.5 text-[10px] text-[var(--color-text-muted)]">
-                ⓘ Items son read-only en edit. Para cambiar items, cancelá y creá una venta nueva.
-              </div>
-            {/if}
 
             <div class="space-y-2">
               {#each items as item, idx (item.localId)}
                 <div class="rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] p-2">
                   <div class="mb-1.5 flex items-baseline justify-between">
                     <span class="text-mono text-[9.5px] text-[var(--color-text-muted)]">item #{idx + 1}</span>
-                    {#if mode === 'create' && items.length > 1}
+                    {#if items.length > 1}
                       <button type="button" onclick={() => removeItem(item.localId)} class="text-[var(--color-danger)]"><X size={11} /></button>
                     {/if}
                   </div>
@@ -470,9 +472,8 @@
                       <span class="text-[var(--color-text-tertiary)]">Team</span>
                       <select
                         bind:value={item.team}
-                        disabled={mode === 'edit'}
                         onchange={() => { item.familyId = ''; item.jerseyId = ''; }}
-                        class="rounded-[2px] border border-[var(--color-border)] bg-[var(--color-surface-0)] px-1.5 py-0.5 disabled:opacity-50"
+                        class="rounded-[2px] border border-[var(--color-border)] bg-[var(--color-surface-0)] px-1.5 py-0.5"
                       >
                         <option value="">— elegir —</option>
                         {#each teams as t}<option value={t}>{t}</option>{/each}
@@ -482,7 +483,7 @@
                       <span class="text-[var(--color-text-tertiary)]">Jersey</span>
                       <select
                         bind:value={item.familyId}
-                        disabled={mode === 'edit' || !item.team}
+                        disabled={!item.team}
                         onchange={() => onFamilyChange(item)}
                         class="rounded-[2px] border border-[var(--color-border)] bg-[var(--color-surface-0)] px-1.5 py-0.5 disabled:opacity-50"
                       >
@@ -494,7 +495,7 @@
                     </div>
                     <div class="grid grid-cols-[60px_1fr_60px_1fr] items-baseline gap-1.5">
                       <span class="text-[var(--color-text-tertiary)]">Size</span>
-                      <select bind:value={item.size} disabled={mode === 'edit'} class="rounded-[2px] border border-[var(--color-border)] bg-[var(--color-surface-0)] px-1.5 py-0.5 disabled:opacity-50">
+                      <select bind:value={item.size} class="rounded-[2px] border border-[var(--color-border)] bg-[var(--color-surface-0)] px-1.5 py-0.5">
                         <option value="S">S</option>
                         <option value="M">M</option>
                         <option value="L">L</option>
@@ -505,9 +506,8 @@
                       <input
                         type="text"
                         bind:value={item.personalizationJson}
-                        disabled={mode === 'edit'}
                         placeholder="ej. 10 MESSI"
-                        class="rounded-[2px] border border-[var(--color-border)] bg-[var(--color-surface-0)] px-1.5 py-0.5 disabled:opacity-50"
+                        class="rounded-[2px] border border-[var(--color-border)] bg-[var(--color-surface-0)] px-1.5 py-0.5"
                       />
                     </div>
                     <div class="grid grid-cols-[60px_1fr_60px_1fr] items-baseline gap-1.5">
@@ -516,17 +516,15 @@
                         type="number"
                         bind:value={item.unitPrice}
                         min="0"
-                        disabled={mode === 'edit'}
-                        class="text-mono rounded-[2px] border border-[var(--color-border)] bg-[var(--color-surface-0)] px-1.5 py-0.5 disabled:opacity-50"
+                        class="text-mono rounded-[2px] border border-[var(--color-border)] bg-[var(--color-surface-0)] px-1.5 py-0.5"
                       />
                       <span class="text-[var(--color-text-tertiary)]">Q costo</span>
                       <input
                         type="number"
                         bind:value={item.unitCost}
                         min="0"
-                        disabled={mode === 'edit'}
                         placeholder="opt"
-                        class="text-mono rounded-[2px] border border-[var(--color-border)] bg-[var(--color-surface-0)] px-1.5 py-0.5 disabled:opacity-50"
+                        class="text-mono rounded-[2px] border border-[var(--color-border)] bg-[var(--color-surface-0)] px-1.5 py-0.5"
                       />
                     </div>
                   </div>
@@ -540,6 +538,10 @@
                 <ul class="mt-1 ml-3 list-disc">
                   {#each stockWarnings as w}<li>{w}</li>{/each}
                 </ul>
+                <label class="mt-2 flex items-center gap-1.5 text-[9.5px] cursor-pointer">
+                  <input type="checkbox" bind:checked={forceStockCheck} />
+                  <span>Forzar venta sin stock</span>
+                </label>
               </div>
             {/if}
           </section>
@@ -680,7 +682,7 @@
       <button
         type="button"
         onclick={handleSubmit}
-        disabled={saving || total <= 0}
+        disabled={saving || total <= 0 || (stockWarnings.length > 0 && !forceStockCheck && modality !== 'ondemand')}
         class="ml-auto flex items-center gap-2 rounded-[4px] bg-[var(--color-accent)] px-3 py-1.5 text-[11.5px] font-semibold text-black disabled:opacity-60"
       >
         {#if saving}

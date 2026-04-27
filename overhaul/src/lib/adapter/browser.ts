@@ -350,6 +350,11 @@ export const browserAdapter: Adapter = {
 	async updateSale() {
 		throw new NotAvailableInBrowser('updateSale');
 	},
+
+	// ─── Comercial R11 ──────────────────────────────────────────
+	async replaceSaleItems() {
+		throw new NotAvailableInBrowser('replaceSaleItems');
+	},
 };
 
 // Test helper (también útil si queremos invalidar cache en dev)

@@ -28,7 +28,7 @@ import type {
 	WatermarkArgs,
 	WatermarkResult
 } from './types';
-import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult, UpdateSaleArgs } from '../data/comercial';
+import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, CreateOrderItem, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult, UpdateSaleArgs } from '../data/comercial';
 import type { Family } from '../data/types';
 import { transformFamily } from './transform';
 
@@ -498,5 +498,13 @@ export const tauriAdapter: Adapter = {
 				customerId: args.customerId,
 			},
 		});
+	},
+
+	// ─── Comercial R11 ──────────────────────────────────────────
+	async replaceSaleItems(args: { saleId: number; items: CreateOrderItem[] }) {
+		return invoke<{ ok: boolean; newSubtotal?: number; newTotal?: number; itemCount?: number; error?: string }>(
+			'comercial_replace_sale_items',
+			{ args: { saleId: args.saleId, items: args.items } }
+		);
 	},
 };

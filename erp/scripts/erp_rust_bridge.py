@@ -3086,6 +3086,79 @@ def cmd_update_sale(args):
         conn.close()
 
 
+def cmd_replace_sale_items(args):
+    """Replace ALL sale_items for a given sale_id with the new items array.
+    Recomputes subtotal + total on the parent sale. Atomic (DELETE + INSERT in one transaction).
+    """
+    from db import get_conn
+
+    sale_id = args.get("saleId")
+    items = args.get("items") or []
+    if not sale_id:
+        return {"ok": False, "error": "saleId required"}
+    if not items:
+        return {"ok": False, "error": "at least 1 item required"}
+
+    # Validate items
+    for i, item in enumerate(items):
+        if not item.get("familyId") or not item.get("jerseyId"):
+            return {"ok": False, "error": f"item[{i}] missing familyId/jerseyId"}
+        if not item.get("size"):
+            return {"ok": False, "error": f"item[{i}] missing size"}
+        unit_price = item.get("unitPrice")
+        if unit_price is None or unit_price <= 0:
+            return {"ok": False, "error": f"item[{i}] unitPrice must be > 0"}
+
+    new_subtotal = sum(item["unitPrice"] for item in items)
+
+    conn = get_conn()
+    try:
+        # Verify sale exists
+        sale = conn.execute("SELECT shipping_fee, discount FROM sales WHERE sale_id = ?", (sale_id,)).fetchone()
+        if not sale:
+            return {"ok": False, "error": f"sale {sale_id} not found"}
+        shipping_fee = sale[0] or 0
+        discount = sale[1] or 0
+        new_total = new_subtotal + shipping_fee - discount
+        if new_total <= 0:
+            return {"ok": False, "error": f"new total ({new_total}) must be > 0"}
+
+        # Delete old items
+        conn.execute("DELETE FROM sale_items WHERE sale_id = ?", (sale_id,))
+
+        # Insert new items
+        for item in items:
+            conn.execute("""
+                INSERT INTO sale_items
+                  (sale_id, family_id, jersey_id, team, season, variant_label, version, size,
+                   personalization_json, unit_price, unit_cost, notes, import_id, item_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
+            """, (
+                sale_id,
+                item.get("familyId"),
+                item.get("jerseyId"),
+                item.get("team"),
+                None,
+                item.get("variantLabel"),
+                item.get("version"),
+                item.get("size"),
+                item.get("personalizationJson"),
+                item.get("unitPrice"),
+                item.get("unitCost"),
+                item.get("itemType") or "manual",
+            ))
+
+        # Update sale subtotal + total
+        conn.execute(
+            "UPDATE sales SET subtotal = ?, total = ? WHERE sale_id = ?",
+            (new_subtotal, new_total, sale_id)
+        )
+        conn.commit()
+        return {"ok": True, "newSubtotal": new_subtotal, "newTotal": new_total, "itemCount": len(items)}
+    finally:
+        conn.close()
+
+
 COMMANDS = {
     "ping": cmd_ping,
     "regen_watermark": cmd_regen_watermark,
@@ -3134,6 +3207,7 @@ COMMANDS = {
     "cleanup_chat_orders": cmd_cleanup_chat_orders,
     "search_customers": cmd_search_customers,
     "update_sale": cmd_update_sale,
+    "replace_sale_items": cmd_replace_sale_items,
 }
 
 

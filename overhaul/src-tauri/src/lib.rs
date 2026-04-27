@@ -2355,6 +2355,27 @@ async fn comercial_list_sales(args: ListSalesArgs) -> Result<Value> {
         .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
 }
 
+// ─── Comercial R11 ───────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplaceSaleItemsArgs {
+    pub sale_id: i64,
+    pub items: Vec<Value>,
+}
+
+#[tauri::command]
+async fn comercial_replace_sale_items(args: ReplaceSaleItemsArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "replace_sale_items",
+        "saleId": args.sale_id,
+        "items": args.items,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -2433,6 +2454,8 @@ pub fn run() {
             // Comercial R10
             comercial_search_customers,
             comercial_update_sale,
+            // Comercial R11
+            comercial_replace_sale_items,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");

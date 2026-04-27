@@ -16,6 +16,7 @@ import type {
 	CustomerProfile,
 	CreateCustomerArgs,
 	CreateOrderArgs,
+	CreateOrderItem,
 	Campaign,
 	CampaignDetail,
 	FunnelAwarenessReal,
@@ -321,6 +322,9 @@ export interface Adapter {
 	// ─── Comercial R10 ──────────────────────────────────────────
 	searchCustomers(query: string): Promise<CustomerSearchResult[]>;
 	updateSale(args: UpdateSaleArgs): Promise<{ ok: boolean; error?: string }>;
+
+	// ─── Comercial R11 ──────────────────────────────────────────
+	replaceSaleItems(args: { saleId: number; items: CreateOrderItem[] }): Promise<{ ok: boolean; newSubtotal?: number; newTotal?: number; itemCount?: number; error?: string }>;
 }
 
 // ─── Error para operaciones no disponibles en dev ────────────────────
