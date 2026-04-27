@@ -10,6 +10,7 @@ export type EventType =
   | 'stock_low'              // warn
   | 'leads_daily_summary'    // info
   | 'vip_inactive_60d'       // strat (R4)
+  | 'campaign_perf_drop'     // warn (R5)
   | 'monthly_goal_progress'; // strat
 
 export type EventStatus = 'active' | 'resolved' | 'ignored';

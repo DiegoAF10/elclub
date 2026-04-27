@@ -117,6 +117,68 @@ export async function detectVipInactive60d(): Promise<DetectedEvent | null> {
 }
 
 /**
+ * Detector "Campaign performance drop +30%".
+ * Compares cost-per-conversion last 7d vs prior 7d. Triggers if degradation > 30% AND total spend > Q100.
+ * severity: warn (actionable but not blocking).
+ */
+export async function detectCampaignPerfDrop(): Promise<DetectedEvent | null> {
+  let campaigns;
+  try {
+    campaigns = await adapter.listCampaigns({ periodDays: 14 });
+  } catch (e) {
+    console.warn('[detector] listCampaigns failed', e);
+    return null;
+  }
+
+  const candidates = campaigns.filter((c: any) => c.totalSpendGtq > 100 && c.totalConversions > 0);
+  if (candidates.length === 0) return null;
+
+  const dropping: { c: any; deg: number }[] = [];
+  for (const c of candidates) {
+    try {
+      const detail = await adapter.getCampaignDetail(c.campaignId, 14);
+      if (!detail || !detail.daily || detail.daily.length < 8) continue;
+
+      const daily = [...detail.daily].sort((a, b) => a.date.localeCompare(b.date));
+      const half = Math.floor(daily.length / 2);
+      const prior = daily.slice(0, half);
+      const recent = daily.slice(half);
+
+      const priorSpend = prior.reduce((s, d) => s + d.spendGtq, 0);
+      const priorConv = prior.reduce((s, d) => s + d.conversions, 0);
+      const recentSpend = recent.reduce((s, d) => s + d.spendGtq, 0);
+      const recentConv = recent.reduce((s, d) => s + d.conversions, 0);
+
+      if (priorConv === 0 || recentConv === 0) continue;
+      const priorCpc = priorSpend / priorConv;
+      const recentCpc = recentSpend / recentConv;
+      const ratio = recentCpc / priorCpc;
+
+      if (ratio > 1.30) {
+        dropping.push({ c, deg: Math.round((ratio - 1) * 100) });
+      }
+    } catch (e) {
+      console.warn(`[detector] detail fetch failed for ${c.campaignId}`, e);
+    }
+  }
+
+  if (dropping.length === 0) return null;
+
+  return {
+    type: 'campaign_perf_drop',
+    severity: 'warn',
+    title: `${dropping.length} campaña${dropping.length === 1 ? '' : 's'} con CPC ↑ +30%`,
+    sub: dropping.slice(0, 3).map(d => `${d.c.campaignName ?? d.c.campaignId} (+${d.deg}%)`).join(' · ')
+      + (dropping.length > 3 ? ` · +${dropping.length - 3}` : ''),
+    itemsAffected: dropping.map(d => ({
+      type: 'campaign',
+      id: String(d.c.campaignId),
+      hint: `+${d.deg}% CPC vs 7d previo`,
+    })),
+  };
+}
+
+/**
  * Inserta el evento en comercial_events vía adapter.
  * Si ya existe un evento activo del mismo type, NO duplica.
  */
@@ -163,6 +225,9 @@ export function startDetectorLoop(): () => void {
 
       const vipInactive = await detectVipInactive60d();
       if (vipInactive) await persistEvent(vipInactive);
+
+      const campaignDrop = await detectCampaignPerfDrop();
+      if (campaignDrop) await persistEvent(campaignDrop);
     } catch (e) {
       console.warn('[detector] run failed', e);
     }
