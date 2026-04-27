@@ -180,7 +180,7 @@ export interface CustomerProfile {
   phone: string | null;
   email: string | null;
   source: string | null;
-  firstOrderAt: string;
+  firstOrderAt: string | null;
   totalOrders: number;
   totalRevenueGtq: number;
   lastOrderAt: string | null;
