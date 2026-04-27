@@ -210,8 +210,8 @@ export interface CreateCustomerArgs {
 export interface CreateOrderArgs {
   customerId: number;
   items: CreateOrderItem[];
-  paymentMethod: 'recurrente' | 'transfer' | 'cod' | 'cash';
-  fulfillmentStatus: 'pending_payment' | 'paid' | 'awaiting_shipment' | 'shipped' | 'delivered';
+  paymentMethod: 'recurrente' | 'transferencia' | 'contra_entrega' | 'efectivo' | 'otro';
+  fulfillmentStatus: 'pending' | 'sent_to_supplier' | 'in_production' | 'shipped' | 'delivered' | 'cancelled';
   shippingFee?: number;        // default 0
   discount?: number;           // default 0
   notes?: string;
