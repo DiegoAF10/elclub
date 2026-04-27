@@ -91,3 +91,82 @@ export interface OrderItem {
   unitCostGtq: number | null;
   personalizationJson: string | null;
 }
+
+// ─── R2-combo: ManyChat sync + Funnel ──────────────────────────────
+
+export interface Lead {
+  leadId: number;
+  name: string | null;
+  handle: string | null;
+  phone: string | null;
+  platform: 'wa' | 'ig' | 'messenger' | 'web';
+  senderId: string;
+  sourceCampaignId: string | null;
+  firstContactAt: string;
+  lastActivityAt: string;
+  status: 'new' | 'qualified' | 'converted' | 'lost';
+  traitsJson: Record<string, unknown>;
+}
+
+export interface ConversationMeta {
+  convId: string;
+  leadId: number | null;
+  brand: string;
+  platform: 'wa' | 'ig' | 'messenger' | 'web';
+  senderId: string;
+  startedAt: string;
+  endedAt: string;
+  outcome: 'sale' | 'no_sale' | 'objection' | 'pending' | null;
+  orderId: string | null;
+  messagesTotal: number;
+  tagsJson: string[];
+  analyzed: boolean;
+  syncedAt: string;
+}
+
+export interface ConversationMessage {
+  role: 'user' | 'assistant' | 'system';
+  text: string;
+  timestamp: string;       // ISO, may be approximate
+}
+
+export interface Customer {
+  customerId: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  source: string | null;
+  firstOrderAt: string;
+  totalOrders: number;
+  totalRevenueGtq: number;   // computed in query, not stored
+  lastOrderAt: string | null;
+}
+
+export interface FunnelKPIs {
+  awareness: { impressions: number; clicks: number; spendGtq: number; ctr: number };
+  interest: {
+    totalLeads: number;
+    byPlatform: { wa: number; ig: number; messenger: number; web: number };
+  };
+  consideration: { activeConversations: number; pending: number; objection: number };
+  sale: { ordersToday: number; awaitingPayment: number; awaitingShipment: number };
+  retention: {
+    totalCustomers: number;
+    repeatRate: number;        // 0-1
+    vipInactive60d: number;    // R4 will populate; R2-combo returns 0
+    ltvAvgGtq: number;
+  };
+  conversion: {
+    awarenessToInterest: number;     // 0-1
+    interestToConsideration: number;
+    considerationToSale: number;
+    saleToRetention: number;
+  };
+}
+
+export interface MetaSyncStatus {
+  source: string;
+  lastSyncAt: string | null;
+  lastStatus: 'ok' | 'error' | null;
+  lastError: string | null;
+}
