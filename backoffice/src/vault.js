@@ -1310,9 +1310,9 @@ function normalizeVersion(raw) {
  */
 export function formatSupplierMessage(item) {
   const p = item?.personalization || {};
-  const name    = nonEmpty(p.name)    ? p.name.trim()  : '-';
-  const number  = (p.number === 0 || nonEmpty(String(p.number || ''))) ? String(p.number) : '-';
-  const patch   = nonEmpty(p.patch)   ? p.patch.trim() : '-';
+  const name    = nonEmpty(p.nombre || p.name) ? (p.nombre || p.name).trim() : '-';
+  const number  = nonEmpty(String(p.numero ?? p.number ?? '')) ? String(p.numero ?? p.number) : '-';
+  const patch   = nonEmpty(p.parche_label || p.parche || p.patch) ? (p.parche_label || p.parche || p.patch).trim() : '-';
   const size    = nonEmpty(item?.size) ? item.size.trim() : '-';
   const version = normalizeVersion(item?.version);
 
