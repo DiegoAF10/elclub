@@ -2350,14 +2350,74 @@ def cmd_get_funnel_awareness_real(args):
 
 
 def cmd_generate_coupon(args):
-    """STUB R5: worker /api/coupons/generate endpoint contract incompatible with R4 plan.
-    Returns pending status until separate worker task aligns the contract.
-    See spec sec 6 decision 7.
+    """Genera cupón vía worker /api/coupons/generate-customer.
+    Args: customerId, type ('percent'|'amount'), value, expiresInDays.
+    Reads COUPON_API_KEY from /c/Users/Diego/club-coo/ads/.env (same as R5 Meta sync pattern).
     """
+    import json, urllib.request, urllib.parse, urllib.error
+    from pathlib import Path
+
+    customer_id = args.get("customerId")
+    coupon_type = args.get("type")
+    value = args.get("value")
+    expires_in_days = args.get("expiresInDays") or 30
+
+    if not customer_id:
+        return {"ok": False, "error": "customerId required"}
+    if coupon_type not in ("percent", "amount"):
+        return {"ok": False, "error": "type must be 'percent' or 'amount'"}
+    if value is None or value <= 0:
+        return {"ok": False, "error": "value must be > 0"}
+
+    # Load COUPON_API_KEY from .env
+    env_path = Path(r"C:/Users/Diego/club-coo/ads/.env")
+    if not env_path.exists():
+        return {"ok": False, "error": f".env not found at {env_path}"}
+    env = {}
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        if "=" in line and not line.startswith("#"):
+            k, _, v = line.partition("=")
+            env[k.strip()] = v.strip()
+    api_key = env.get("COUPON_API_KEY")
+    if not api_key:
+        return {"ok": False, "error": "COUPON_API_KEY missing in .env"}
+
+    worker_base = args.get("workerBase") or "https://ventus-backoffice.ventusgt.workers.dev"
+    url = f"{worker_base}/api/coupons/generate-customer"
+    body = json.dumps({
+        "customer_id": str(customer_id),
+        "type": coupon_type,
+        "value": value,
+        "expires_in_days": expires_in_days,
+        "brand": "elclub",
+    }).encode("utf-8")
+
+    try:
+        req = urllib.request.Request(url, data=body, headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "ElClub-ERP/0.1.34",
+        }, method="POST")
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body_str = e.read().decode("utf-8", errors="ignore")[:300]
+        return {"ok": False, "error": f"worker http {e.code}: {body_str}"}
+    except Exception as e:
+        return {"ok": False, "error": f"fetch failed: {e}"}
+
+    code = data.get("code")
+    if not code:
+        return {"ok": False, "error": f"worker returned unexpected shape: {data}"}
+
     return {
-        "ok": False,
-        "error": "Cupón pendiente — worker endpoint /api/coupons/generate requiere actualización (R5 worker task)",
-        "pending": True,
+        "ok": True,
+        "code": code,
+        "type": data.get("type"),
+        "discountPercent": data.get("discount_percent"),
+        "discountAmount": data.get("discount_amount"),
+        "expiresAt": data.get("expires_at"),
+        "alreadyExisted": data.get("already_existed", False),
     }
 
 
