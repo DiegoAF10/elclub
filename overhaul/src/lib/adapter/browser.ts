@@ -265,6 +265,20 @@ export const browserAdapter: Adapter = {
 
 	async listAdSpendInRange() {
 		return [];
+	},
+
+	// ─── Comercial R2 ──────────────────────────────────────────
+	async syncManychatData() {
+		throw new NotAvailableInBrowser('syncManychatData');
+	},
+	async listLeads() { return []; },
+	async listConversations() { return []; },
+	async listCustomers() { return []; },
+	async getMetaSync(source: string) {
+		return { source, lastSyncAt: null, lastStatus: null, lastError: null };
+	},
+	async getConversationMessages() {
+		throw new NotAvailableInBrowser('getConversationMessages');
 	}
 };
 

@@ -28,7 +28,7 @@ import type {
 	WatermarkArgs,
 	WatermarkResult
 } from './types';
-import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange } from '../data/comercial';
+import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus } from '../data/comercial';
 import type { Family } from '../data/types';
 import { transformFamily } from './transform';
 
@@ -297,5 +297,62 @@ export const tauriAdapter: Adapter = {
 			'comercial_list_ad_spend_in_range',
 			{ start: range.start, end: range.end }
 		);
+	},
+
+	// ─── Comercial R2 ──────────────────────────────────────────
+	async syncManychatData(args) {
+		return invoke<{ ok: boolean; leadsUpserted: number; conversationsUpserted: number; lastSyncAt: string; error?: string }>(
+			'comercial_sync_manychat',
+			{ args: { since: args.since, workerBase: args.workerBase, dashboardKey: args.dashboardKey } }
+		);
+	},
+
+	async listLeads(filter?: { status?: string; range?: PeriodRange }): Promise<Lead[]> {
+		const f = filter ?? {};
+		const result = await invoke<unknown[]>('comercial_list_leads', {
+			filter: {
+				status: f.status,
+				rangeStart: f.range?.start,
+				rangeEnd: f.range?.end,
+			},
+		});
+		return result as Lead[];
+	},
+
+	async listConversations(filter?: { outcome?: string; range?: PeriodRange; leadId?: number }): Promise<ConversationMeta[]> {
+		const f = filter ?? {};
+		const result = await invoke<unknown[]>('comercial_list_conversations', {
+			filter: {
+				outcome: f.outcome,
+				rangeStart: f.range?.start,
+				rangeEnd: f.range?.end,
+				leadId: f.leadId,
+			},
+		});
+		return result as ConversationMeta[];
+	},
+
+	async listCustomers(filter?: { lastOrderBefore?: string; minLtvGtq?: number }): Promise<Customer[]> {
+		const f = filter ?? {};
+		const result = await invoke<unknown[]>('comercial_list_customers', {
+			filter: { lastOrderBefore: f.lastOrderBefore, minLtvGtq: f.minLtvGtq },
+		});
+		return result as Customer[];
+	},
+
+	async getMetaSync(source: string): Promise<MetaSyncStatus> {
+		const result = await invoke<unknown>('comercial_get_meta_sync', { source });
+		if (!result) return { source, lastSyncAt: null, lastStatus: null, lastError: null };
+		return result as MetaSyncStatus;
+	},
+
+	async getConversationMessages(args): Promise<ConversationMessage[]> {
+		return invoke<ConversationMessage[]>('comercial_get_conversation_messages', {
+			args: {
+				convId: args.convId,
+				workerBase: args.workerBase,
+				dashboardKey: args.dashboardKey,
+			},
+		});
 	}
 };
