@@ -2421,6 +2421,183 @@ def cmd_generate_coupon(args):
     }
 
 
+def cmd_import_orders_from_worker(args):
+    """Import orders from el-club worker KV → sales + sale_items + customers (auto-derived).
+    Idempotent: skips orders whose ref already exists in sales table.
+    Reads ADMIN_KEY from /c/Users/Diego/club-coo/ads/.env (ELCLUB_ADMIN_KEY).
+    """
+    import json, urllib.request, urllib.error
+    from pathlib import Path
+    from db import get_conn
+
+    # Load credentials
+    env_path = Path(r"C:/Users/Diego/club-coo/ads/.env")
+    env = {}
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            if "=" in line and not line.startswith("#"):
+                k, _, v = line.partition("=")
+                env[k.strip()] = v.strip()
+    admin_key = env.get("ELCLUB_ADMIN_KEY")
+    worker_base = env.get("ELCLUB_WORKER_BASE") or "https://elclub-backoffice.ventusgt.workers.dev"
+    if not admin_key:
+        return {"ok": False, "error": "ELCLUB_ADMIN_KEY missing in .env"}
+
+    # Fetch all orders
+    try:
+        req = urllib.request.Request(
+            f"{worker_base}/api/orders/all",
+            headers={"X-Admin-Key": admin_key, "User-Agent": "ElClub-ERP/0.1.35"},
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="ignore")[:300]
+        return {"ok": False, "error": f"worker http {e.code}: {body}"}
+    except Exception as e:
+        return {"ok": False, "error": f"fetch failed: {e}"}
+
+    orders_raw = data.get("orders") or []
+    if not orders_raw:
+        return {"ok": True, "ordersImported": 0, "customersCreated": 0, "skippedExisting": 0, "errors": []}
+
+    conn = get_conn()
+    imported = 0
+    customers_created = 0
+    skipped = 0
+    errors = []
+
+    try:
+        for order in orders_raw:
+            try:
+                ref = order.get("checkout_id") or order.get("receipt_number")
+                if not ref:
+                    errors.append(f"order missing checkout_id/receipt_number: {json.dumps(order)[:120]}")
+                    continue
+
+                # Idempotency: skip if already imported
+                existing = conn.execute("SELECT sale_id FROM sales WHERE ref = ?", (ref,)).fetchone()
+                if existing:
+                    skipped += 1
+                    continue
+
+                # Resolve customer (auto-create if needed)
+                customer_data = order.get("customer") or {}
+                cust_name = (customer_data.get("name") or "").strip() or "(sin nombre)"
+                cust_phone = (customer_data.get("phone") or "").strip() or None
+                cust_email = (customer_data.get("email") or "").strip() or None
+
+                customer_id = None
+                if cust_phone:
+                    row = conn.execute("SELECT customer_id FROM customers WHERE phone = ?", (cust_phone,)).fetchone()
+                    if row:
+                        customer_id = row[0]
+                if not customer_id and cust_email:
+                    row = conn.execute("SELECT customer_id FROM customers WHERE email = ?", (cust_email,)).fetchone()
+                    if row:
+                        customer_id = row[0]
+
+                if not customer_id:
+                    cur = conn.execute("""
+                        INSERT INTO customers (name, phone, email, source, first_order_at, created_at)
+                        VALUES (?, ?, ?, 'web', ?, datetime('now', 'localtime'))
+                    """, (cust_name, cust_phone, cust_email, order.get("created_at")))
+                    customer_id = cur.lastrowid
+                    customers_created += 1
+
+                # Map status from worker (custom orders may have status field; Recurrente has paid_at)
+                payment_method = order.get("payment_method")
+                if payment_method == "transfer":
+                    payment_method = "transferencia"  # normalize legacy
+                elif payment_method == "cod":
+                    payment_method = "contra_entrega"
+                elif payment_method == "cash":
+                    payment_method = "efectivo"
+                if payment_method not in ("recurrente", "transferencia", "contra_entrega", "efectivo", "otro"):
+                    payment_method = None
+
+                worker_status = order.get("status")  # 'pending', 'contacted', 'paid', 'shipped', 'delivered', 'cancelled'
+                # Map to ERP fulfillment_status enum
+                fulfillment_map = {
+                    "pending": "pending",
+                    "contacted": "pending",
+                    "paid": "sent_to_supplier",
+                    "shipped": "shipped",
+                    "delivered": "delivered",
+                    "cancelled": "cancelled",
+                }
+                fulfillment_status = fulfillment_map.get(worker_status, "pending")
+                if order.get("paid_at"):
+                    # If paid_at is set but status is pending, treat as sent_to_supplier
+                    if fulfillment_status == "pending":
+                        fulfillment_status = "sent_to_supplier"
+
+                amount_cents = int(order.get("amount_cents") or 0)
+                total_gtq = round(amount_cents / 100, 2)
+                items = order.get("items") or []
+                subtotal = total_gtq  # assume no shipping/discount if not provided
+                shipping_fee = 0
+                discount = 0
+
+                # INSERT sale
+                occurred_at = order.get("created_at") or order.get("paid_at")
+                cur = conn.execute("""
+                    INSERT INTO sales
+                      (ref, occurred_at, modality, origin, customer_id, payment_method,
+                       fulfillment_status, shipping_method, tracking_code, subtotal, shipping_fee,
+                       discount, total, source_vault_ref, notes, created_at)
+                    VALUES (?, COALESCE(?, datetime('now', 'localtime')), 'stock', 'web', ?, ?, ?, NULL, NULL,
+                            ?, 0, 0, ?, NULL, ?, datetime('now', 'localtime'))
+                """, (ref, occurred_at, customer_id, payment_method, fulfillment_status,
+                      subtotal, total_gtq, customer_data.get("notes")))
+                sale_id = cur.lastrowid
+
+                # INSERT sale_items
+                for item in items:
+                    sku = item.get("sku") or ""
+                    name = item.get("name") or sku
+                    qty = int(item.get("quantity") or 1)
+                    unit_price = round((int(item.get("amount_in_cents") or 0) / 100) / max(qty, 1), 2)
+
+                    # Best-effort: extract team from SKU prefix or name
+                    team = None
+                    if sku.startswith("JRS-"):
+                        # JRS-BARCELONA-201415-H → team=barcelona
+                        parts = sku.split("-")
+                        if len(parts) >= 2:
+                            team = parts[1].lower().replace("_", "-")
+
+                    # Insert as a manual-import item (family_id and jersey_id same as SKU for traceability)
+                    conn.execute("""
+                        INSERT INTO sale_items
+                          (sale_id, family_id, jersey_id, team, season, variant_label, version, size,
+                           personalization_json, unit_price, unit_cost, notes, import_id, item_type)
+                        VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL, ?, NULL, ?, 'r9_import', 'web')
+                    """, (sale_id, sku, sku, team, unit_price, name))
+
+                # Update customer first_order_at if blank
+                conn.execute("""
+                    UPDATE customers SET first_order_at = COALESCE(NULLIF(first_order_at, ''), ?)
+                    WHERE customer_id = ?
+                """, (occurred_at, customer_id))
+
+                imported += 1
+            except Exception as ie:
+                errors.append(f"{order.get('checkout_id', '?')}: {ie}")
+
+        conn.commit()
+        return {
+            "ok": True,
+            "ordersImported": imported,
+            "customersCreated": customers_created,
+            "skippedExisting": skipped,
+            "totalFromWorker": len(orders_raw),
+            "errors": errors[:10],  # truncate to 10 to keep response sane
+        }
+    finally:
+        conn.close()
+
+
 COMMANDS = {
     "ping": cmd_ping,
     "regen_watermark": cmd_regen_watermark,
@@ -2463,6 +2640,7 @@ COMMANDS = {
     "get_sale_attribution": cmd_get_sale_attribution,
     "get_conversation_meta": cmd_get_conversation_meta,
     "attribute_sale": cmd_attribute_sale,
+    "import_orders_from_worker": cmd_import_orders_from_worker,
 }
 
 
