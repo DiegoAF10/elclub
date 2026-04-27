@@ -1,57 +1,220 @@
 /*
- * El Club Design System v2.0 — "Midnight Stadium"
- * elclub.club
+ * El Club Design System v3.0 — "Midnight Stadium" (canonical Apr 2026)
+ * elclub.club · vault.elclub.club
  *
  * Full dark mode. Streetwear underground. Monocromatico + ice blue accent.
+ * Sub-brands scoped via .theme-vault (brass), .theme-mystery (amber), .theme-drop (none).
  *
- * Color Tokens:
- *   midnight:  #0D0D0D   — Page background, navbar, footer
- *   pitch:     #1C1C1C   — Cards, elevated surfaces, alternate sections
- *   chalk:     #2A2A2A   — Borders, separators, hover states
- *   slate:     #333333   — Active borders, more visible divisions
- *   white:     #F0F0F0   — Primary text, CTAs, primary elements
- *   smoke:     #999999   — Secondary text, descriptions
- *   ash:       #666666   — Tertiary text, metadata, timestamps
- *   ice:       #4DA8FF   — CTAs, links, badges, hover highlights (accent)
- *   ice-glow:  #4DA8FF33 — Subtle glow (20% opacity) for hover/focus
- *   ice-dim:   #3B82B0   — Hover/active state of ice
- *   whatsapp:  #25D366   — WhatsApp button only
- *   success:   #22C55E   — Order confirmations only
- *
- * Typography:
- *   Headlines: Oswald 700, uppercase, letter-spacing 0.05-0.1em
- *   Body/UI:   Space Grotesk 400/500/600/700
- *   Buttons:   Space Grotesk 600, 14px, uppercase, 0.05em
- *   Nav:       Space Grotesk 600, 14px, uppercase, 0.08em
- *
- * Spacing: 8px base grid
+ * Cascade: Midnight Stadium F1 (?v=msF1) · 2026-04-26
+ * Source-of-truth: elclub-catalogo-priv/docs/DESIGN-SPECS.md §9 + CASCADE-PLAN-2026-04-26.md
  */
 
-/* ── Tailwind v4 Theme ────────────────────────── */
-@theme {
-  /* New Midnight Stadium tokens */
-  --color-midnight: #0D0D0D;
-  --color-pitch: #1C1C1C;
-  --color-chalk: #2A2A2A;
-  --color-slate: #333333;
-  --color-white: #F0F0F0;
-  --color-smoke: #999999;
-  --color-ash: #666666;
-  --color-ice: #4DA8FF;
-  --color-ice-glow: #4DA8FF33;
-  --color-ice-dim: #3B82B0;
-  --color-whatsapp: #25D366;
-  --color-success: #22C55E;
+/* ── Self-hosted fonts (Midnight Stadium F1) ────── */
+@font-face {
+  font-family: 'Oswald';
+  src: url('../fonts/Oswald-VariableFont_wght.ttf') format('truetype-variations'),
+       url('../fonts/Oswald-Regular.ttf') format('truetype');
+  font-weight: 200 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  src: url('../fonts/SpaceGrotesk-VariableFont_wght.ttf') format('truetype-variations'),
+       url('../fonts/SpaceGrotesk-Regular.ttf') format('truetype');
+  font-weight: 300 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'EB Garamond';
+  src: url('../fonts/EBGaramond-VariableFont_wght.ttf') format('truetype-variations'),
+       url('../fonts/EBGaramond-Regular.ttf') format('truetype');
+  font-weight: 400 800; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'EB Garamond';
+  src: url('../fonts/EBGaramond-Italic-VariableFont_wght.ttf') format('truetype-variations'),
+       url('../fonts/EBGaramond-Italic.ttf') format('truetype');
+  font-weight: 400 800; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: 'Bebas Neue';
+  src: url('../fonts/BebasNeue-Regular.ttf') format('truetype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
 
-  /* Backward compat: old token names → new values */
-  --color-carbon: #0D0D0D;
-  --color-carbon-light: #1C1C1C;
-  --color-gold: #4DA8FF;
-  --color-sand: #999999;
-  --color-sand-light: #1C1C1C;
-  --color-cream: #0D0D0D;
-  --color-warm: #666666;
-  --color-urgency: #4DA8FF;
+/* ── Tailwind v4 Theme (core + sub-brand) ────────── */
+@theme {
+  /* Core Midnight Stadium */
+  --color-midnight: #0D0D0D;
+  --color-pitch:    #1C1C1C;
+  --color-chalk:    #2A2A2A;
+  --color-slate:    #333333;
+  --color-white:    #F0F0F0;
+  --color-smoke:    #999999;
+  --color-ash:      #666666;
+
+  /* Ice — universal accent */
+  --color-ice:      #4DA8FF;
+  --color-ice-glow: #4DA8FF33;
+  --color-ice-dim:  #3B82B0;
+
+  /* Status */
+  --color-whatsapp: #25D366;
+  --color-success:  #22C55E;
+  --color-danger:   #DC2626;
+
+  /* Sub-brand accents — scoped via .theme-* */
+  --color-mystery-amber:      #D4A74D;
+  --color-mystery-amber-dim:  rgba(212,167,77,0.40);
+  --color-mystery-amber-glow: rgba(212,167,77,0.15);
+
+  --color-vault-brass:        #C8A765;
+  --color-vault-brass-dim:    rgba(200,167,101,0.40);
+  --color-vault-brass-glow:   rgba(200,167,101,0.10);
+  --color-vault-parchment:    #E8D9B5;
+
+  /* DEPRECATED — backward compat hacks. Delete pass at cascade close. */
+  --color-carbon:       #0D0D0D;  /* → --color-midnight */
+  --color-carbon-light: #1C1C1C;  /* → --color-pitch */
+  --color-gold:         #4DA8FF;  /* → --color-ice */
+  --color-sand:         #999999;  /* → --color-smoke */
+  --color-sand-light:   #1C1C1C;  /* → --color-pitch */
+  --color-cream:        #0D0D0D;  /* → --color-midnight */
+  --color-warm:         #666666;  /* → --color-ash */
+  --color-urgency:      #4DA8FF;  /* → --color-ice */
+}
+
+/* ── Semantic tokens (type, scale, spacing, radius, shadow, motion) ── */
+:root {
+  /* Type families */
+  --font-display: 'Oswald', 'Arial Narrow', sans-serif;
+  --font-body:    'Space Grotesk', -apple-system, sans-serif;
+  --font-serif:   'EB Garamond', 'Cormorant Garamond', Georgia, serif;
+  --font-foil:    'Bebas Neue', 'Oswald', sans-serif;
+
+  /* Fluid type scale */
+  --text-hero: clamp(48px, 10vw, 112px);
+  --text-h1:   clamp(36px, 6vw, 64px);
+  --text-h2:   clamp(28px, 4.5vw, 44px);
+  --text-h3:   clamp(22px, 3vw, 32px);
+  --text-h4:   clamp(18px, 2vw, 22px);
+  --text-lg:   18px;
+  --text-base: 16px;
+  --text-sm:   14px;
+  --text-xs:   12px;
+  --text-2xs:  11px;
+
+  /* Spacing — 4pt grid */
+  --space-1:  4px;   --space-2:  8px;   --space-3:  12px;  --space-4:  16px;
+  --space-5:  20px;  --space-6:  24px;  --space-8:  32px;  --space-10: 40px;
+  --space-12: 48px;  --space-16: 64px;  --space-20: 80px;  --space-24: 96px;
+
+  /* Radius */
+  --radius-none: 0;
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm:  0 2px 8px rgba(0,0,0,0.30);
+  --shadow-md:  0 8px 30px rgba(0,0,0,0.30);
+  --shadow-lg:  0 20px 60px rgba(0,0,0,0.50);
+  --shadow-glow-ice:   0 0 0 1px var(--color-ice-glow), 0 0 30px rgba(77,168,255,0.10);
+  --shadow-glow-amber: 0 0 40px var(--color-mystery-amber-glow);
+  --shadow-glow-brass: 0 0 20px var(--color-vault-brass-glow);
+
+  /* Motion */
+  --duration-instant: 80ms;
+  --duration-fast:    150ms;
+  --duration-normal:  250ms;
+  --duration-slow:    400ms;
+  --duration-glacial: 700ms;
+  --duration-breathe: 3000ms;
+
+  --ease-out:    cubic-bezier(0,0,0.2,1);
+  --ease-in-out: cubic-bezier(0.4,0,0.2,1);
+  --ease-spring: cubic-bezier(0.34,1.56,0.64,1);
+  --ease-drawer: cubic-bezier(0.32,0.72,0,1);
+}
+
+/* ── Sub-brand themes ──────────────────────────── */
+.theme-vault {
+  --accent:             var(--color-vault-brass);
+  --accent-dim:         var(--color-vault-brass-dim);
+  --accent-glow:        var(--color-vault-brass-glow);
+  --shadow-glow-accent: var(--shadow-glow-brass);
+  --font-editorial:     var(--font-serif);
+}
+.theme-vault .archive-number {
+  font-family: var(--font-foil);
+  letter-spacing: 0.25em;
+  color: var(--color-vault-brass);
+  border: 1px solid var(--color-vault-brass-dim);
+  padding: 4px 12px;
+  font-size: var(--text-2xs);
+}
+.theme-vault .editorial-meta {
+  font-family: var(--font-editorial);
+  font-style: italic;
+  color: var(--color-vault-parchment);
+  line-height: 1.5;
+}
+
+.theme-mystery {
+  --accent:             var(--color-mystery-amber);
+  --accent-dim:         var(--color-mystery-amber-dim);
+  --accent-glow:        var(--color-mystery-amber-glow);
+  --shadow-glow-accent: var(--shadow-glow-amber);
+}
+.theme-mystery .smoke-bg { position: relative; overflow: hidden; }
+.theme-mystery .smoke-bg::before,
+.theme-mystery .smoke-bg::after {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(circle at 30% 20%, var(--color-mystery-amber-glow) 0%, transparent 60%);
+  animation: smoke-drift var(--duration-breathe) ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes smoke-drift {
+  from { transform: translate(0, 0); opacity: 0.5; }
+  to   { transform: translate(20px, -20px); opacity: 0.7; }
+}
+.theme-mystery .particle {
+  position: absolute;
+  width: 4px; height: 4px;
+  background: var(--color-mystery-amber);
+  border-radius: var(--radius-full);
+  opacity: 0.4;
+  animation: particle-rise 8s linear infinite;
+}
+@keyframes particle-rise {
+  from { transform: translateY(100vh); opacity: 0; }
+  10%  { opacity: 0.4; }
+  90%  { opacity: 0.4; }
+  to   { transform: translateY(-100px); opacity: 0; }
+}
+.theme-mystery .wax-seal {
+  filter: drop-shadow(0 0 8px var(--color-mystery-amber-glow));
+}
+
+/* Mobile perf — D1 sistema rule: NO smoke/particles below 768px */
+@media (max-width: 768px) {
+  .theme-mystery .smoke-bg::before,
+  .theme-mystery .smoke-bg::after,
+  .theme-mystery .particle { display: none; }
+}
+
+.theme-drop {
+  /* Drop = clarity by restriction. No accent override — falls back to ice. */
+  --accent: var(--color-ice);
+}
+
+/* ── A11y motion universal ──────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* ── Base ─────────────────────────────────────── */
