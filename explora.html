@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Catálogo | El Club — Encontrá tu pieza legendaria</title>
+  <title>DROP — En stock inmediato · El Club</title>
 
   <!-- SEO -->
-  <meta name="description" content="Explorá jerseys de fútbol por filtros, mapa mundial, posición en cancha o busqueda. Coleccion seleccionada por El Club en Guatemala.">
-  <meta name="keywords" content="jerseys fútbol, camisetas guatemala, el club, catálogo jerseys, mystery box guatemala">
+  <meta name="description" content="DROP: jerseys en stock inmediato en Guatemala. Explorá por filtros, mapa mundial, posición en cancha o búsqueda. Colección seleccionada por El Club.">
+  <meta name="keywords" content="drop, jerseys en stock guatemala, jerseys fútbol, camisetas guatemala, el club, catálogo jerseys, mystery box guatemala">
   <meta name="author" content="El Club">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://elclub.club/explora.html">
@@ -15,7 +15,7 @@
   <!-- Open Graph -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://elclub.club/explora.html">
-  <meta property="og:title" content="Catálogo | El Club — Encontrá tu pieza legendaria">
+  <meta property="og:title" content="DROP — En stock inmediato · El Club">
   <meta property="og:description" content="Explorá jerseys de fútbol por filtros, mapa mundial, posición en cancha o busqueda.">
   <meta property="og:image" content="https://elclub.club/assets/img/brand/og-image.png">
   <meta property="og:site_name" content="El Club">
@@ -23,23 +23,18 @@
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Catálogo | El Club — Encontrá tu pieza legendaria">
+  <meta name="twitter:title" content="DROP — En stock inmediato · El Club">
   <meta name="twitter:description" content="Explorá jerseys de fútbol por filtros, mapa mundial, posición en cancha o busqueda.">
   <meta name="twitter:image" content="https://elclub.club/assets/img/brand/og-image.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="/assets/img/brand/favicon.png">
 
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-
   <!-- Tailwind CSS v4 Browser -->
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 
-  <!-- Custom Design System -->
-  <link rel="stylesheet" href="/assets/css/elclub.css?v=2">
+  <!-- Custom Design System (fonts self-hosted, Midnight Stadium F1) -->
+  <link rel="stylesheet" href="/assets/css/elclub.css?v=msF1">
 
   <!-- GA4 -->
   <!-- TODO: Replace G-XXXXXXXXXX with actual GA4 measurement ID -->
@@ -309,7 +304,7 @@
   </script>
   <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=979730357737472&ev=PageView&noscript=1"/></noscript>
 </head>
-<body class="bg-midnight text-white">
+<body class="theme-drop bg-midnight text-white">
 
   <!-- ============================================================ -->
   <!-- NAV (always visible, no auto-hide)                           -->
@@ -320,7 +315,7 @@
         <img src="/assets/img/brand/logo.svg" alt="El Club" class="h-10 w-auto">
       </a>
       <div class="hidden md:flex items-center gap-8">
-        <a href="/explora.html" class="nav-link active">Catálogo</a>
+        <a href="/explora.html" class="nav-link active">DROP <span class="text-ash text-xs">(en stock)</span></a>
         <a href="/mystery-box.html" class="nav-link">Mystery Box</a>
         <a href="/personaliza.html" class="nav-link">Pedí tu Camiseta</a>
         <a href="/nosotros.html" class="nav-link">Nosotros</a>
@@ -354,7 +349,7 @@
         </button>
       </div>
       <nav class="flex flex-col gap-8">
-        <a href="/explora.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-ice hover:text-ice transition-colors">Catálogo</a>
+        <a href="/explora.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-ice hover:text-ice transition-colors">DROP <span class="text-ash text-base normal-case tracking-normal">(en stock inmediato)</span></a>
         <a href="/mystery-box.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Mystery Box</a>
         <a href="/personaliza.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Pedí tu Camiseta</a>
         <a href="/nosotros.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Nosotros</a>
@@ -377,7 +372,7 @@
   <section class="pt-24 pb-4 px-4">
     <div class="max-w-6xl mx-auto">
       <a href="/" class="text-smoke text-sm hover:text-ice transition-colors mb-4 inline-block">&larr; Volver al inicio</a>
-      <h1 class="text-3xl md:text-4xl font-bold uppercase tracking-wider" style="font-family:'Oswald',system-ui,sans-serif;">Catálogo</h1>
+      <h1 class="text-3xl md:text-4xl font-bold uppercase tracking-wider" style="font-family:'Oswald',system-ui,sans-serif;">DROP <span class="text-smoke text-base normal-case tracking-normal font-normal">(en stock inmediato)</span></h1>
       <p class="text-smoke text-sm mt-1" id="explora-count">Cargando...</p>
     </div>
   </section>
@@ -548,7 +543,7 @@
         <div>
           <p class="text-white font-bold text-sm uppercase tracking-wider mb-4">Navegación</p>
           <nav class="flex flex-col gap-3">
-            <a href="/explora.html" class="text-smoke text-sm hover:text-ice transition-colors">Catálogo</a>
+            <a href="/explora.html" class="text-smoke text-sm hover:text-ice transition-colors">DROP</a>
             <a href="/mystery-box.html" class="text-smoke text-sm hover:text-ice transition-colors">Mystery Box</a>
             <a href="/personaliza.html" class="text-smoke text-sm hover:text-ice transition-colors">Pedí tu Camiseta</a>
             <a href="/nosotros.html" class="text-smoke text-sm hover:text-ice transition-colors">Nosotros</a>
@@ -605,7 +600,7 @@
       </svg>
       <p class="text-smoke font-semibold mb-1">Tu carrito está vacío</p>
       <p class="text-ash text-sm mb-6">Agrega algo increíble para empezar.</p>
-      <a href="/explora.html" onclick="closeCartDrawer()" class="btn-primary text-sm">Ver catálogo</a>
+      <a href="/explora.html" onclick="closeCartDrawer()" class="btn-primary text-sm">Ver DROP</a>
     </div>
     <div id="cart-filled" class="hidden flex-1 flex flex-col">
       <div id="cart-items" class="flex-1 overflow-y-auto px-5"></div>
@@ -643,8 +638,8 @@
   <!-- ============================================================ -->
   <!-- SCRIPTS                                                      -->
   <!-- ============================================================ -->
-  <script src="/assets/js/cart.js?v=2"></script>
-  <script src="/assets/js/app.js?v=2"></script>
+  <script src="/assets/js/cart.js?v=msF1"></script>
+  <script src="/assets/js/app.js?v=msF1"></script>
 
   <script>
   (function() {
