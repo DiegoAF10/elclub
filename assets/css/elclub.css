@@ -1336,7 +1336,7 @@ footer .copyright, .footer .copyright {
    Default hover = ice (per .hub-card:hover above).
    Mystery Box hub override → amber accent (D1 sub-brand).
    Drop hub mantiene ice (default — clarity by restriction).
-   Vault hub se agrega cuando #6 follow-up integre el 3er card. */
+   Vault hub override → brass accent (sub-brand archive curado). */
 .hub-card#hub-surprise:hover {
   border-color: var(--color-mystery-amber);
   box-shadow:
@@ -1346,4 +1346,15 @@ footer .copyright, .footer .copyright {
 }
 .hub-card#hub-surprise .hub-card-meta {
   color: var(--color-mystery-amber);
+}
+
+.hub-card#hub-vault:hover {
+  border-color: var(--color-vault-brass);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 0 0 1px var(--color-vault-brass-dim),
+    0 0 40px var(--color-vault-brass-glow);
+}
+.hub-card#hub-vault .hub-card-meta {
+  color: var(--color-vault-brass);
 }
