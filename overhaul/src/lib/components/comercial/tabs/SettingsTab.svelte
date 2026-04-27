@@ -1,7 +1,7 @@
 <script lang="ts">
   import { adapter } from '$lib/adapter';
   import { runSync, type SyncResult } from '$lib/data/manychatSync';
-  import type { MetaSyncStatus, MetaSyncResult } from '$lib/data/comercial';
+  import type { MetaSyncStatus, MetaSyncResult, BackfillAttributionResult } from '$lib/data/comercial';
   import { RefreshCw, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-svelte';
 
   let metaSync = $state<MetaSyncStatus | null>(null);
@@ -11,6 +11,25 @@
   let metaSyncing = $state(false);
   let metaResult = $state<MetaSyncResult | null>(null);
   let metaError = $state<string | null>(null);
+
+  let backfilling = $state(false);
+  let backfillResult = $state<BackfillAttributionResult | null>(null);
+  let backfillError = $state<string | null>(null);
+
+  async function runBackfill() {
+    if (backfilling) return;
+    backfilling = true;
+    backfillError = null;
+    try {
+      const result = await adapter.backfillSalesAttribution();
+      backfillResult = result;
+      if (!result.ok) backfillError = result.errors.join('; ') || 'Error desconocido';
+    } catch (e) {
+      backfillError = e instanceof Error ? e.message : String(e);
+    } finally {
+      backfilling = false;
+    }
+  }
 
   async function syncMetaAds() {
     if (metaSyncing) return;
@@ -140,6 +159,37 @@
       </button>
     </div>
   </div>
+
+  <section class="settings-section mt-6">
+    <h2 class="text-display mb-2 text-[10px] text-[var(--color-text-tertiary)]">Atribución de Sales</h2>
+    <div class="rounded-[4px] border border-[var(--color-border)] bg-[var(--color-surface-1)] p-3">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex-1">
+          <div class="text-[12px] font-medium">Backfill atribución</div>
+          <div class="text-[10px] text-[var(--color-text-tertiary)]">Atribuye sales pasadas a campañas via lead.phone match. Idempotente.</div>
+          {#if backfillResult}
+            <div class="mt-1 text-[10px]" style="color: {backfillResult.ok ? 'var(--color-accent)' : 'var(--color-danger)'};">
+              ✓ {backfillResult.inserted} attribuidas · {backfillResult.skippedNoMatch} sin match · {backfillResult.skippedAlreadyAttributed} ya attribuidas
+              {#if backfillResult.errors.length > 0}
+                <span class="text-[var(--color-warning)]">· {backfillResult.errors.length} errores</span>
+              {/if}
+            </div>
+          {/if}
+          {#if backfillError}
+            <div class="mt-1 text-[10px] text-[var(--color-danger)]">⚠ {backfillError}</div>
+          {/if}
+        </div>
+        <button
+          type="button"
+          onclick={runBackfill}
+          disabled={backfilling}
+          class="flex items-center gap-1.5 rounded-[4px] bg-[var(--color-accent)] px-3 py-1.5 text-[11.5px] font-semibold text-black disabled:opacity-60"
+        >
+          {#if backfilling}<Loader2 size={12} class="animate-spin" /> Backfilling…{:else}<RefreshCw size={12} strokeWidth={2} /> Run{/if}
+        </button>
+      </div>
+    </div>
+  </section>
 
   <div class="mt-4 text-[10.5px] text-[var(--color-text-muted)]">
     Más settings (umbrales, notifications, integrations) en R6.
