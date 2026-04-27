@@ -1522,6 +1522,328 @@ def cmd_get_conversation_messages(args):
         return {"ok": False, "error": f"fetch failed: {e}"}
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Comercial R4 — Customer CRUD + Manual Order
+# ──────────────────────────────────────────────────────────────────────────────
+
+def cmd_get_customer_profile(args):
+    """Devuelve CustomerProfile completo: customer + computed totals + timeline."""
+    import json
+    from db import get_conn
+
+    customer_id = args.get("customerId")
+    if not customer_id:
+        return {"ok": False, "error": "customerId required"}
+
+    conn = get_conn()
+    try:
+        # Base customer
+        c = conn.execute("""
+            SELECT customer_id, name, phone, email, source, first_order_at, tags_json,
+                   COALESCE(blocked, 0) AS blocked
+            FROM customers WHERE customer_id = ?
+        """, (customer_id,)).fetchone()
+        if not c:
+            return {"ok": True, "profile": None}
+
+        # Computed totals from sales
+        totals = conn.execute("""
+            SELECT COUNT(sale_id), COALESCE(SUM(total), 0), MAX(occurred_at)
+            FROM sales WHERE customer_id = ?
+        """, (customer_id,)).fetchone()
+        total_orders = totals[0]
+        total_revenue = totals[1]
+        last_order_at = totals[2]
+
+        is_vip = total_revenue >= 1500
+        days_inactive = None
+        if last_order_at:
+            from datetime import datetime
+            try:
+                last_dt = datetime.fromisoformat(last_order_at.replace('Z', '+00:00').replace(' ', 'T'))
+                days_inactive = (datetime.utcnow() - last_dt.replace(tzinfo=None)).days
+            except Exception:
+                days_inactive = None
+
+        # Attribution: lookup conversations matching customer's phone
+        lead_campaigns = []
+        if c[2]:  # phone
+            rows = conn.execute("""
+                SELECT DISTINCT source_campaign_id FROM leads
+                WHERE phone = ? AND source_campaign_id IS NOT NULL
+            """, (c[2],)).fetchall()
+            lead_campaigns = [r[0] for r in rows]
+
+        # Timeline: orders + conversations merged by date DESC
+        timeline = []
+        sales_rows = conn.execute("""
+            SELECT s.ref, s.total, s.fulfillment_status, s.occurred_at,
+                   (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id) AS items_count
+            FROM sales s WHERE s.customer_id = ?
+            ORDER BY s.occurred_at DESC
+        """, (customer_id,)).fetchall()
+        for r in sales_rows:
+            timeline.append({
+                "kind": "order",
+                "ref": r[0], "totalGtq": r[1], "status": r[2] or "pending",
+                "occurredAt": r[3], "itemsCount": r[4],
+            })
+
+        # Conversations: join by phone (best-effort)
+        if c[2]:
+            conv_rows = conn.execute("""
+                SELECT c.conv_id, c.platform, c.outcome, c.messages_total, c.ended_at
+                FROM conversations c
+                JOIN leads l ON l.platform = c.platform AND l.sender_id = c.sender_id
+                WHERE l.phone = ?
+                ORDER BY c.ended_at DESC
+            """, (c[2],)).fetchall()
+            for r in conv_rows:
+                timeline.append({
+                    "kind": "conversation",
+                    "convId": r[0], "platform": r[1], "outcome": r[2],
+                    "messagesTotal": r[3], "endedAt": r[4],
+                })
+
+        # Re-sort merged timeline by date DESC
+        def get_ts(entry):
+            return entry.get("occurredAt") or entry.get("endedAt") or ""
+        timeline.sort(key=get_ts, reverse=True)
+
+        try:
+            traits = json.loads(c[6] or '{}')
+        except Exception:
+            traits = {}
+
+        profile = {
+            "customerId": c[0],
+            "name": c[1] or "(sin nombre)",
+            "phone": c[2],
+            "email": c[3],
+            "source": c[4],
+            "firstOrderAt": c[5],   # NULLABLE — pass through raw value, do NOT mask with or ''
+            "totalOrders": total_orders,
+            "totalRevenueGtq": total_revenue,
+            "lastOrderAt": last_order_at,
+            "isVip": is_vip,
+            "daysInactive": days_inactive,
+            "blocked": bool(c[7]),
+            "traitsJson": traits,
+            "attribution": {
+                "customerSource": c[4],
+                "leadCampaigns": lead_campaigns,
+            },
+            "timeline": timeline,
+        }
+        return {"ok": True, "profile": profile}
+    finally:
+        conn.close()
+
+
+def cmd_create_customer(args):
+    """Crea un customer manual (no asociado a sale automático)."""
+    from db import get_conn
+
+    name = args.get("name")
+    if not name or not name.strip():
+        return {"ok": False, "error": "name required"}
+
+    phone = args.get("phone")
+    email = args.get("email")
+    source = args.get("source") or "manual"
+
+    conn = get_conn()
+    try:
+        cur = conn.execute("""
+            INSERT INTO customers (name, phone, email, source, first_order_at, created_at)
+            VALUES (?, ?, ?, ?, '', datetime('now'))
+        """, (name.strip(), phone, email, source))
+        conn.commit()
+        return {"ok": True, "customerId": cur.lastrowid}
+    finally:
+        conn.close()
+
+
+def cmd_update_customer_traits(args):
+    """Actualiza customers.tags_json con un objeto JSON."""
+    import json
+    from db import get_conn
+
+    customer_id = args.get("customerId")
+    traits = args.get("traitsJson")
+    if not customer_id:
+        return {"ok": False, "error": "customerId required"}
+    if traits is None:
+        return {"ok": False, "error": "traitsJson required"}
+
+    if not isinstance(traits, dict):
+        return {"ok": False, "error": "traitsJson must be an object"}
+
+    conn = get_conn()
+    try:
+        conn.execute(
+            "UPDATE customers SET tags_json = ? WHERE customer_id = ?",
+            (json.dumps(traits), customer_id),
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+def cmd_set_customer_blocked(args):
+    """Toggle blocked en customers."""
+    from db import get_conn
+
+    customer_id = args.get("customerId")
+    blocked = args.get("blocked")
+    if not customer_id or blocked is None:
+        return {"ok": False, "error": "customerId/blocked required"}
+
+    conn = get_conn()
+    try:
+        conn.execute(
+            "UPDATE customers SET blocked = ? WHERE customer_id = ?",
+            (1 if blocked else 0, customer_id),
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+def cmd_update_customer_source(args):
+    """Actualiza customers.source manualmente."""
+    from db import get_conn
+
+    customer_id = args.get("customerId")
+    source = args.get("source")
+    if not customer_id:
+        return {"ok": False, "error": "customerId required"}
+
+    conn = get_conn()
+    try:
+        conn.execute(
+            "UPDATE customers SET source = ? WHERE customer_id = ?",
+            (source, customer_id),
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+def cmd_create_manual_order(args):
+    """Crea una venta manual (off-platform). INSERT sale + INSERT sale_items.
+    Genera ref CE-XXXX random con retry en caso de colisión.
+
+    DB constraints (CHECK):
+      modality: 'mystery'|'stock'|'ondemand' — manual orders use 'stock'
+      payment_method: 'recurrente'|'transferencia'|'contra_entrega'|'efectivo'|'otro'
+      fulfillment_status: 'pending'|'sent_to_supplier'|'in_production'|'shipped'|'delivered'|'cancelled'
+    """
+    import json
+    import secrets
+    import string
+    import sqlite3 as sqlite3_mod
+    from db import get_conn
+
+    customer_id = args.get("customerId")
+    items = args.get("items") or []
+    payment_method = args.get("paymentMethod") or "transferencia"
+    fulfillment_status = args.get("fulfillmentStatus") or "pending"
+    shipping_fee = args.get("shippingFee") or 0
+    discount = args.get("discount") or 0
+    notes = args.get("notes")
+
+    if not customer_id:
+        return {"ok": False, "error": "customerId required"}
+    if not items:
+        return {"ok": False, "error": "at least 1 item required"}
+
+    # Validate each item
+    for i, item in enumerate(items):
+        if not item.get("familyId") or not item.get("jerseyId"):
+            return {"ok": False, "error": f"item[{i}] missing familyId/jerseyId"}
+        if not item.get("size"):
+            return {"ok": False, "error": f"item[{i}] missing size"}
+        unit_price = item.get("unitPrice")
+        if unit_price is None or unit_price <= 0:
+            return {"ok": False, "error": f"item[{i}] unitPrice must be > 0"}
+
+    # DB-valid enums (CHECK constraints in sales table)
+    valid_payment = ("recurrente", "transferencia", "contra_entrega", "efectivo", "otro")
+    valid_fulfillment = ("pending", "sent_to_supplier", "in_production", "shipped", "delivered", "cancelled")
+    if payment_method not in valid_payment:
+        return {"ok": False, "error": f"invalid paymentMethod. Valid: {valid_payment}"}
+    if fulfillment_status not in valid_fulfillment:
+        return {"ok": False, "error": f"invalid fulfillmentStatus. Valid: {valid_fulfillment}"}
+
+    subtotal = sum(item["unitPrice"] for item in items)
+    total = subtotal + shipping_fee - discount
+
+    if total <= 0:
+        return {"ok": False, "error": "total must be > 0"}
+
+    conn = get_conn()
+    try:
+        # Validate customer exists
+        c = conn.execute("SELECT customer_id FROM customers WHERE customer_id = ?", (customer_id,)).fetchone()
+        if not c:
+            return {"ok": False, "error": f"customer {customer_id} not found"}
+
+        # Generate ref with retry on UNIQUE collision (extremely rare)
+        ref = None
+        sale_id = None
+        for attempt in range(5):
+            candidate = "CE-" + ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(4))
+            try:
+                cur = conn.execute("""
+                    INSERT INTO sales
+                      (ref, occurred_at, modality, origin, customer_id, payment_method,
+                       fulfillment_status, shipping_method, tracking_code, subtotal, shipping_fee,
+                       discount, total, source_vault_ref, notes, created_at)
+                    VALUES (?, datetime('now'), 'stock', 'manual', ?, ?, ?, NULL, NULL,
+                            ?, ?, ?, ?, NULL, ?, datetime('now'))
+                """, (candidate, customer_id, payment_method, fulfillment_status,
+                      subtotal, shipping_fee, discount, total, notes))
+                ref = candidate
+                sale_id = cur.lastrowid
+                break
+            except sqlite3_mod.IntegrityError:
+                continue
+
+        if ref is None:
+            return {"ok": False, "error": "ref collision after 5 retries"}
+
+        # Insert items
+        for item in items:
+            conn.execute("""
+                INSERT INTO sale_items
+                  (sale_id, family_id, jersey_id, team, season, variant_label, version, size,
+                   personalization_json, unit_price, unit_cost, notes, import_id, item_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
+            """, (
+                sale_id,
+                item.get("familyId"),
+                item.get("jerseyId"),
+                item.get("team"),
+                None,  # season — not in R4 form
+                item.get("variantLabel"),
+                item.get("version"),
+                item.get("size"),
+                item.get("personalizationJson"),
+                item.get("unitPrice"),
+                item.get("unitCost"),
+                item.get("itemType") or "manual",
+            ))
+
+        conn.commit()
+        return {"ok": True, "ref": ref, "saleId": sale_id}
+    finally:
+        conn.close()
+
+
 COMMANDS = {
     "ping": cmd_ping,
     "regen_watermark": cmd_regen_watermark,
@@ -1549,6 +1871,12 @@ COMMANDS = {
     "list_customers": cmd_list_customers,
     "get_meta_sync": cmd_get_meta_sync,
     "get_conversation_messages": cmd_get_conversation_messages,
+    "get_customer_profile": cmd_get_customer_profile,
+    "create_customer": cmd_create_customer,
+    "update_customer_traits": cmd_update_customer_traits,
+    "set_customer_blocked": cmd_set_customer_blocked,
+    "update_customer_source": cmd_update_customer_source,
+    "create_manual_order": cmd_create_manual_order,
 }
 
 
