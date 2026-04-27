@@ -353,14 +353,14 @@
     {#if loadingCatalog}
       <div class="px-6 py-4 text-[11px] text-[var(--color-text-tertiary)]">Cargando catálogo…</div>
     {:else}
-      <div class="grid grid-cols-[1fr_320px] gap-0 max-h-[600px] overflow-hidden">
+      <div class="grid grid-cols-[1fr_320px] gap-0">
 
         <!-- LEFT: customer + address + items -->
-        <div class="overflow-y-auto border-r border-[var(--color-border)] px-6 py-4 space-y-4">
+        <div class="border-r border-[var(--color-border)] px-6 py-4 space-y-5">
 
           <!-- Customer block -->
           <section>
-            <h3 class="text-display mb-2 text-[9.5px] text-[var(--color-text-tertiary)]">CLIENTE</h3>
+            <h3 class="text-display mb-3 pb-1.5 border-b border-[var(--color-border)] text-[10.5px] font-semibold tracking-wider" style="color: var(--color-accent);">CLIENTE</h3>
             <div class="space-y-2">
               <!-- Typeahead search -->
               <div class="relative">
@@ -372,7 +372,7 @@
                     bind:value={custQuery}
                     oninput={onCustQueryInput}
                     placeholder="Nombre, teléfono o email..."
-                    class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] py-1 pl-7 pr-2 text-[11px]"
+                    class="w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] py-1 pl-7 pr-2 text-[11px]"
                   />
                 </div>
                 {#if custDropdownOpen}
@@ -406,15 +406,15 @@
               <div class="grid grid-cols-2 gap-2">
                 <div>
                   <label class="text-display mb-0.5 block text-[9px] text-[var(--color-text-muted)]">Nombre *</label>
-                  <input type="text" bind:value={custName} class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[11px]" />
+                  <input type="text" bind:value={custName} class="w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[11px]" />
                 </div>
                 <div>
                   <label class="text-display mb-0.5 block text-[9px] text-[var(--color-text-muted)]">Teléfono</label>
-                  <input type="text" bind:value={custPhone} class="text-mono w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[11px]" />
+                  <input type="text" bind:value={custPhone} class="text-mono w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[11px]" />
                 </div>
                 <div class="col-span-2">
                   <label class="text-display mb-0.5 block text-[9px] text-[var(--color-text-muted)]">Email (opcional)</label>
-                  <input type="email" bind:value={custEmail} class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[11px]" />
+                  <input type="email" bind:value={custEmail} class="w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[11px]" />
                 </div>
               </div>
             </div>
@@ -422,37 +422,37 @@
 
           <!-- Address block -->
           <section>
-            <h3 class="text-display mb-2 text-[9.5px] text-[var(--color-text-tertiary)]">DIRECCIÓN DE ENTREGA</h3>
+            <h3 class="text-display mb-3 pb-1.5 border-b border-[var(--color-border)] text-[10.5px] font-semibold tracking-wider" style="color: var(--color-accent);">DIRECCIÓN DE ENTREGA</h3>
             <div class="space-y-2">
               <div>
                 <label class="text-display mb-0.5 block text-[9px] text-[var(--color-text-muted)]">Dirección</label>
-                <input type="text" bind:value={addrAddress} placeholder="Avenida X, calle Y, casa Z" class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[11px]" />
+                <input type="text" bind:value={addrAddress} placeholder="Avenida X, calle Y, casa Z" class="w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[11px]" />
               </div>
               <div class="grid grid-cols-3 gap-2">
                 <div>
                   <label class="text-display mb-0.5 block text-[9px] text-[var(--color-text-muted)]">Depto.</label>
-                  <input type="text" bind:value={addrDepartment} class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[11px]" />
+                  <input type="text" bind:value={addrDepartment} class="w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[11px]" />
                 </div>
                 <div>
                   <label class="text-display mb-0.5 block text-[9px] text-[var(--color-text-muted)]">Municipio</label>
-                  <input type="text" bind:value={addrMunicipality} class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[11px]" />
+                  <input type="text" bind:value={addrMunicipality} class="w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[11px]" />
                 </div>
                 <div>
                   <label class="text-display mb-0.5 block text-[9px] text-[var(--color-text-muted)]">Zona</label>
-                  <input type="text" bind:value={addrZone} class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[11px]" />
+                  <input type="text" bind:value={addrZone} class="w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[11px]" />
                 </div>
               </div>
               <div>
                 <label class="text-display mb-0.5 block text-[9px] text-[var(--color-text-muted)]">Referencia</label>
-                <input type="text" bind:value={addrReference} placeholder="Casa color verde, frente al parque" class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[11px]" />
+                <input type="text" bind:value={addrReference} placeholder="Casa color verde, frente al parque" class="w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[11px]" />
               </div>
             </div>
           </section>
 
           <!-- Items block -->
           <section>
-            <div class="mb-2 flex items-baseline justify-between">
-              <h3 class="text-display text-[9.5px] text-[var(--color-text-tertiary)]">ITEMS · {items.length}</h3>
+            <div class="mb-3 flex items-baseline justify-between pb-1.5 border-b border-[var(--color-border)]">
+              <h3 class="text-display text-[10.5px] font-semibold tracking-wider" style="color: var(--color-accent);">ITEMS · {items.length}</h3>
               <button type="button" onclick={addItem} class="flex items-center gap-1 text-[10px] text-[var(--color-accent)]">
                 <Plus size={10} /> Agregar
               </button>
@@ -548,15 +548,15 @@
         </div>
 
         <!-- RIGHT: meta sidebar -->
-        <div class="overflow-y-auto bg-[var(--color-surface-0)] px-4 py-4 space-y-4">
+        <div class="bg-[var(--color-surface-0)] px-4 py-4 space-y-5">
 
           <!-- Date + modality -->
           <section>
-            <h3 class="text-display mb-2 text-[9.5px] text-[var(--color-text-tertiary)]">PEDIDO</h3>
+            <h3 class="text-display mb-3 pb-1.5 border-b border-[var(--color-border)] text-[10.5px] font-semibold tracking-wider" style="color: var(--color-accent);">PEDIDO</h3>
             <div class="space-y-2">
               <div>
                 <label class="text-display mb-0.5 block text-[9px] text-[var(--color-text-muted)]">Fecha</label>
-                <input type="date" bind:value={occurredAt} class="text-mono w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[11px]" />
+                <input type="date" bind:value={occurredAt} class="text-mono w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[11px]" />
               </div>
               <div>
                 <label class="text-display mb-1 block text-[9px] text-[var(--color-text-muted)]">Producto</label>
@@ -582,17 +582,17 @@
 
           <!-- Origin / channel + attribution -->
           <section>
-            <h3 class="text-display mb-2 text-[9.5px] text-[var(--color-text-tertiary)]">ATRIBUCIÓN</h3>
+            <h3 class="text-display mb-3 pb-1.5 border-b border-[var(--color-border)] text-[10.5px] font-semibold tracking-wider" style="color: var(--color-accent);">ATRIBUCIÓN</h3>
             <div class="space-y-2">
               <div>
                 <label class="text-display mb-0.5 block text-[9px] text-[var(--color-text-muted)]">Canal / origen</label>
-                <select bind:value={origin} class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[11px]">
+                <select bind:value={origin} class="w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[11px]">
                   {#each ORIGINS as o}<option value={o}>{o}</option>{/each}
                 </select>
               </div>
               <div>
                 <label class="text-display mb-0.5 block text-[9px] text-[var(--color-text-muted)]">Ad / Campaña (opcional)</label>
-                <select bind:value={selectedCampaignId} class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[11px]">
+                <select bind:value={selectedCampaignId} class="w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[11px]">
                   <option value={null}>— ninguna —</option>
                   {#each campaigns as c}<option value={c.campaignId}>{c.campaignName ?? c.campaignId}</option>{/each}
                 </select>
@@ -602,11 +602,11 @@
 
           <!-- Pago + entrega -->
           <section>
-            <h3 class="text-display mb-2 text-[9.5px] text-[var(--color-text-tertiary)]">PAGO + ENTREGA</h3>
+            <h3 class="text-display mb-3 pb-1.5 border-b border-[var(--color-border)] text-[10.5px] font-semibold tracking-wider" style="color: var(--color-accent);">PAGO + ENTREGA</h3>
             <div class="space-y-2">
               <div>
                 <label class="text-display mb-0.5 block text-[9px] text-[var(--color-text-muted)]">Forma de pago</label>
-                <select bind:value={paymentMethod} class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[11px]">
+                <select bind:value={paymentMethod} class="w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[11px]">
                   <option value="transferencia">Transferencia</option>
                   <option value="recurrente">Recurrente (tarjeta)</option>
                   <option value="contra_entrega">Contra entrega</option>
@@ -616,7 +616,7 @@
               </div>
               <div>
                 <label class="text-display mb-0.5 block text-[9px] text-[var(--color-text-muted)]">Estado del pedido</label>
-                <select bind:value={fulfillmentStatus} class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[11px]">
+                <select bind:value={fulfillmentStatus} class="w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[11px]">
                   <option value="pending">Pendiente</option>
                   <option value="sent_to_supplier">Enviado al chino</option>
                   <option value="in_production">En producción</option>
@@ -627,7 +627,7 @@
               </div>
               <div>
                 <label class="text-display mb-0.5 block text-[9px] text-[var(--color-text-muted)]">Envío (absorbido por El Club)</label>
-                <select bind:value={shippingMethod} class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[11px]">
+                <select bind:value={shippingMethod} class="w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[11px]">
                   {#each SHIPPING_METHODS as s}<option value={s}>{s}</option>{/each}
                 </select>
               </div>
@@ -636,7 +636,7 @@
 
           <!-- Totals -->
           <section>
-            <h3 class="text-display mb-2 text-[9.5px] text-[var(--color-text-tertiary)]">TOTALES</h3>
+            <h3 class="text-display mb-3 pb-1.5 border-b border-[var(--color-border)] text-[10.5px] font-semibold tracking-wider" style="color: var(--color-accent);">TOTALES</h3>
             <div class="space-y-1 text-[11px]">
               <div class="flex justify-between">
                 <span class="text-[var(--color-text-tertiary)]">Subtotal</span>
@@ -644,11 +644,11 @@
               </div>
               <div class="flex items-baseline justify-between gap-1.5">
                 <span class="text-[var(--color-text-tertiary)]">Envío Q</span>
-                <input type="number" bind:value={shippingFee} min="0" class="text-mono w-16 rounded-[2px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-1.5 py-0.5 text-right text-[10.5px]" />
+                <input type="number" bind:value={shippingFee} min="0" class="text-mono w-16 rounded-[2px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[10.5px]" />
               </div>
               <div class="flex items-baseline justify-between gap-1.5">
                 <span class="text-[var(--color-text-tertiary)]">Descuento Q</span>
-                <input type="number" bind:value={discount} min="0" class="text-mono w-16 rounded-[2px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-1.5 py-0.5 text-right text-[10.5px]" />
+                <input type="number" bind:value={discount} min="0" class="text-mono w-16 rounded-[2px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-1.5 py-0.5 text-right text-[10.5px]" />
               </div>
               <div class="flex justify-between border-t border-[var(--color-border)] pt-1 text-[12px]">
                 <span class="font-semibold">TOTAL</span>
@@ -659,8 +659,8 @@
 
           <!-- Notes -->
           <section>
-            <h3 class="text-display mb-2 text-[9.5px] text-[var(--color-text-tertiary)]">NOTAS</h3>
-            <textarea bind:value={notes} rows="2" class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 py-1 text-[10.5px]" placeholder="Internal notes..."></textarea>
+            <h3 class="text-display mb-3 pb-1.5 border-b border-[var(--color-border)] text-[10.5px] font-semibold tracking-wider" style="color: var(--color-accent);">NOTAS</h3>
+            <textarea bind:value={notes} rows="2" class="w-full rounded-[3px] border border-[var(--color-border-strong)] bg-[var(--color-bg)] px-2 py-1 text-[10.5px]" placeholder="Internal notes..."></textarea>
           </section>
 
           {#if error}
