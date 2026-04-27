@@ -12,7 +12,10 @@ import type {
 	ConversationMeta,
 	ConversationMessage,
 	Customer,
-	MetaSyncStatus
+	MetaSyncStatus,
+	CustomerProfile,
+	CreateCustomerArgs,
+	CreateOrderArgs
 } from '../data/comercial';
 
 export type AuditStatus =
@@ -277,6 +280,14 @@ export interface Adapter {
 	listCustomers(filter?: { lastOrderBefore?: string; minLtvGtq?: number }): Promise<Customer[]>;
 	getMetaSync(source: string): Promise<MetaSyncStatus>;
 	getConversationMessages(args: { convId: string; workerBase?: string; dashboardKey: string }): Promise<ConversationMessage[]>;
+
+	// ─── Comercial R4 ──────────────────────────────────────────
+	getCustomerProfile(customerId: number): Promise<CustomerProfile | null>;
+	createCustomer(args: CreateCustomerArgs): Promise<{ ok: boolean; customerId?: number; error?: string }>;
+	updateCustomerTraits(customerId: number, traitsJson: Record<string, unknown>): Promise<void>;
+	setCustomerBlocked(customerId: number, blocked: boolean): Promise<void>;
+	updateCustomerSource(customerId: number, source: string | null): Promise<void>;
+	createManualOrder(args: CreateOrderArgs): Promise<{ ok: boolean; ref?: string; saleId?: number; error?: string }>;
 }
 
 // ─── Error para operaciones no disponibles en dev ────────────────────
