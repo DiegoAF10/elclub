@@ -2,7 +2,18 @@
 // Implementaciones concretas: browser.ts (dev sin Tauri) + tauri.ts (app nativa).
 
 import type { Family, Status } from '../data/types';
-import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange } from '../data/comercial';
+import type {
+	ComercialEvent,
+	DetectedEvent,
+	EventStatus,
+	OrderForModal,
+	PeriodRange,
+	Lead,
+	ConversationMeta,
+	ConversationMessage,
+	Customer,
+	MetaSyncStatus
+} from '../data/comercial';
 
 export type AuditStatus =
 	| 'pending'
@@ -258,6 +269,14 @@ export interface Adapter {
 	listSalesInRange(range: PeriodRange): Promise<Array<{ ref: string; totalGtq: number; paidAt: string; status: string }>>;
 	listLeadsInRange(range: PeriodRange): Promise<Array<{ leadId: number; firstContactAt: string }>>;
 	listAdSpendInRange(range: PeriodRange): Promise<Array<{ campaignId: string; spendGtq: number; capturedAt: string }>>;
+
+	// ─── Comercial R2-combo ────────────────────────────────────────
+	syncManychatData(args: { since: string | null; workerBase?: string; dashboardKey: string }): Promise<{ ok: boolean; leadsUpserted: number; conversationsUpserted: number; lastSyncAt: string; error?: string }>;
+	listLeads(filter?: { status?: string; range?: PeriodRange }): Promise<Lead[]>;
+	listConversations(filter?: { outcome?: string; range?: PeriodRange; leadId?: number }): Promise<ConversationMeta[]>;
+	listCustomers(filter?: { lastOrderBefore?: string; minLtvGtq?: number }): Promise<Customer[]>;
+	getMetaSync(source: string): Promise<MetaSyncStatus>;
+	getConversationMessages(args: { convId: string; workerBase?: string; dashboardKey: string }): Promise<ConversationMessage[]>;
 }
 
 // ─── Error para operaciones no disponibles en dev ────────────────────
