@@ -495,6 +495,12 @@ def init_audit_schema():
         conn.execute("ALTER TABLE customers ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0")
     except sqlite3.OperationalError:
         pass  # column already exists, safe to ignore
+    # Comercial R5: ensure campaign_name column exists on campaigns_snapshot (additive migration).
+    # Captured separately from raw_json for fast SELECT in lists.
+    try:
+        conn.execute("ALTER TABLE campaigns_snapshot ADD COLUMN campaign_name TEXT")
+    except sqlite3.OperationalError:
+        pass  # column already exists, safe to ignore
     conn.commit()
     conn.close()
 
