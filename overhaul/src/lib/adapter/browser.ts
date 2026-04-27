@@ -26,7 +26,7 @@ import type {
 } from './types';
 import { NotAvailableInBrowser } from './types';
 import type { Family } from '../data/types';
-import type { Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult } from '../data/comercial';
+import type { Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, BackfillAttributionResult } from '../data/comercial';
 import { transformFamily } from './transform';
 
 // ─── Endpoints (definidos en vite/plugin-erp-dev.ts) ──────────────────
@@ -317,6 +317,14 @@ export const browserAdapter: Adapter = {
 	},
 	async generateCoupon(): Promise<{ ok: boolean; code?: string; error?: string; pending?: boolean }> {
 		return { ok: false, error: 'Not available in browser', pending: true };
+	},
+
+	// ─── Comercial R6 ──────────────────────────────────────────
+	async backfillSalesAttribution(): Promise<BackfillAttributionResult> {
+		throw new NotAvailableInBrowser('backfillSalesAttribution');
+	},
+	async getSaleAttribution(): Promise<null> {
+		return null;
 	},
 };
 

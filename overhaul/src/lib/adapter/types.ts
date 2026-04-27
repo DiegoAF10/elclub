@@ -19,7 +19,9 @@ import type {
 	Campaign,
 	CampaignDetail,
 	FunnelAwarenessReal,
-	MetaSyncResult
+	MetaSyncResult,
+	SaleAttribution,
+	BackfillAttributionResult
 } from '../data/comercial';
 
 export type AuditStatus =
@@ -299,6 +301,10 @@ export interface Adapter {
 	getCampaignDetail(campaignId: string, periodDays?: number): Promise<CampaignDetail | null>;
 	getFunnelAwarenessReal(args?: { periodStart?: string; periodEnd?: string }): Promise<FunnelAwarenessReal | null>;
 	generateCoupon(args: { customerId: number; type: 'percent' | 'amount'; value: number; expiresInDays?: number }): Promise<{ ok: boolean; code?: string; error?: string; pending?: boolean }>;
+
+	// ─── Comercial R6 ──────────────────────────────────────────
+	backfillSalesAttribution(): Promise<BackfillAttributionResult>;
+	getSaleAttribution(saleId: number): Promise<SaleAttribution | null>;
 }
 
 // ─── Error para operaciones no disponibles en dev ────────────────────

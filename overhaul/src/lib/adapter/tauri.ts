@@ -28,7 +28,7 @@ import type {
 	WatermarkArgs,
 	WatermarkResult
 } from './types';
-import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult } from '../data/comercial';
+import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult } from '../data/comercial';
 import type { Family } from '../data/types';
 import { transformFamily } from './transform';
 
@@ -429,5 +429,15 @@ export const tauriAdapter: Adapter = {
 			'comercial_generate_coupon',
 			{ args: { customerId: args.customerId, type: args.type, value: args.value, expiresInDays: args.expiresInDays } }
 		);
+	},
+
+	// ─── Comercial R6 ──────────────────────────────────────────
+	async backfillSalesAttribution() {
+		return invoke<BackfillAttributionResult>('comercial_backfill_sales_attribution');
+	},
+
+	async getSaleAttribution(saleId: number) {
+		const result = await invoke<unknown>('comercial_get_sale_attribution', { saleId });
+		return (result as SaleAttribution | null) ?? null;
 	},
 };

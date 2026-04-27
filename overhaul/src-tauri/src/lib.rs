@@ -2190,6 +2190,25 @@ async fn comercial_generate_coupon(args: GenerateCouponArgs) -> Result<Value> {
         .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
 }
 
+// ─── Comercial R6 ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn comercial_backfill_sales_attribution() -> Result<Value> {
+    let payload = serde_json::json!({ "cmd": "backfill_sales_attribution" });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
+#[tauri::command]
+async fn comercial_get_sale_attribution(sale_id: i64) -> Result<Value> {
+    let payload = serde_json::json!({ "cmd": "get_sale_attribution", "saleId": sale_id });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("attribution").cloned().unwrap_or(Value::Null))
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -2256,6 +2275,9 @@ pub fn run() {
             comercial_get_campaign_detail,
             comercial_get_funnel_awareness_real,
             comercial_generate_coupon,
+            // Comercial R6
+            comercial_backfill_sales_attribution,
+            comercial_get_sale_attribution,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");

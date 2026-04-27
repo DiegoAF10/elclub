@@ -300,3 +300,23 @@ export interface MetaSyncResult {
   errors: string[];
   syncedAt: string;
 }
+
+// ─── R6: Sales Attribution ─────────────────────────────────────
+
+export interface SaleAttribution {
+  id: number;
+  saleId: number;
+  adCampaignId: string | null;
+  adCampaignName: string | null;
+  source: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface BackfillAttributionResult {
+  ok: boolean;
+  inserted: number;
+  skippedNoMatch: number;
+  skippedAlreadyAttributed: number;
+  errors: string[];
+}
