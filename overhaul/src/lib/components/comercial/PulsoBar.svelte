@@ -1,7 +1,7 @@
 <script lang="ts">
   import { adapter } from '$lib/adapter';
   import type { Period, PulsoKPIs } from '$lib/data/comercial';
-  import { computePulsoKPIs, resolvePeriod } from '$lib/data/kpis';
+  import { computePulsoKPIs, resolvePeriod, resolvePreviousRange } from '$lib/data/kpis';
   import PeriodSelector from './PeriodSelector.svelte';
 
   let period = $state<Period>('today');
@@ -17,13 +17,17 @@
 
   async function loadKPIs(p: Period) {
     const range = resolvePeriod(p);
+    const prevRange = resolvePreviousRange(range);
     try {
-      // Adapter call — listSalesInRange / listLeadsInRange / listAdSpendInRange
-      // implementadas en Tasks 14-15. Por ahora stubbed con empty arrays.
-      const sales = await adapter.listSalesInRange?.(range) ?? [];
-      const leads = await adapter.listLeadsInRange?.(range) ?? [];
-      const adSpend = await adapter.listAdSpendInRange?.(range) ?? [];
-      kpis = computePulsoKPIs(sales, leads, adSpend, range);
+      const [sales, leads, adSpend, prevSales, prevLeads, prevAdSpend] = await Promise.all([
+        adapter.listSalesInRange?.(range) ?? Promise.resolve([]),
+        adapter.listLeadsInRange?.(range) ?? Promise.resolve([]),
+        adapter.listAdSpendInRange?.(range) ?? Promise.resolve([]),
+        adapter.listSalesInRange?.(prevRange) ?? Promise.resolve([]),
+        adapter.listLeadsInRange?.(prevRange) ?? Promise.resolve([]),
+        adapter.listAdSpendInRange?.(prevRange) ?? Promise.resolve([]),
+      ]);
+      kpis = computePulsoKPIs(sales, leads, adSpend, range, prevSales, prevLeads, prevAdSpend);
     } catch (e) {
       console.warn('[pulso] load failed', e);
       kpis = null;
@@ -52,22 +56,26 @@
     {@const tRev = fmtTrend(kpis.trends.revenue)}
     {@const tOrd = fmtTrend(kpis.trends.orders)}
     {@const tLead = fmtTrend(kpis.trends.leads)}
+    {@const tConv = fmtTrend(kpis.trends.conversionRate * 100)}
     <div class="flex items-baseline gap-2">
       <span class="text-display text-[9.5px] text-[var(--color-text-muted)]">Revenue</span>
       <span class="text-mono font-semibold tabular-nums">{fmtMoney(kpis.revenue)}</span>
-      <span class="text-[10.5px] text-[var(--color-{tRev.cls === 'up' ? 'success' : tRev.cls === 'down' ? 'danger' : 'text-tertiary'})]">{tRev.sign}</span>
+      <span class="text-[10.5px]" style="color: var(--color-{tRev.cls === 'up' ? 'success' : tRev.cls === 'down' ? 'danger' : 'text-tertiary'});">{tRev.sign}</span>
     </div>
     <div class="flex items-baseline gap-2">
       <span class="text-display text-[9.5px] text-[var(--color-text-muted)]">Órdenes</span>
       <span class="text-mono font-semibold tabular-nums">{kpis.orders}</span>
+      <span class="text-[10.5px]" style="color: var(--color-{tOrd.cls === 'up' ? 'success' : tOrd.cls === 'down' ? 'danger' : 'text-tertiary'});">{tOrd.sign}</span>
     </div>
     <div class="flex items-baseline gap-2">
       <span class="text-display text-[9.5px] text-[var(--color-text-muted)]">Leads</span>
       <span class="text-mono font-semibold tabular-nums">{kpis.leads}</span>
+      <span class="text-[10.5px]" style="color: var(--color-{tLead.cls === 'up' ? 'success' : tLead.cls === 'down' ? 'danger' : 'text-tertiary'});">{tLead.sign}</span>
     </div>
     <div class="flex items-baseline gap-2">
       <span class="text-display text-[9.5px] text-[var(--color-text-muted)]">Conv</span>
       <span class="text-mono font-semibold tabular-nums">{fmtPct(kpis.conversionRate)}</span>
+      <span class="text-[10.5px]" style="color: var(--color-{tConv.cls === 'up' ? 'success' : tConv.cls === 'down' ? 'danger' : 'text-tertiary'});">{tConv.sign}</span>
     </div>
     <div class="flex items-baseline gap-2">
       <span class="text-display text-[9.5px] text-[var(--color-text-muted)]">Ad spend</span>
