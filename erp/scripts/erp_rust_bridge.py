@@ -1216,6 +1216,310 @@ def cmd_list_ad_spend_in_range(args):
         conn.close()
 
 
+def cmd_sync_manychat(args):
+    """Pull data desde el worker y upsertea leads + conversations.
+    Args:
+        since: ISO string o null (full backfill)
+        worker_base: URL del worker
+        dashboard_key: bearer token
+    Returns:
+        {ok, leadsUpserted, conversationsUpserted, lastSyncAt}
+    """
+    import json
+    import urllib.request
+    from db import get_conn
+
+    since = args.get("since")
+    worker_base = args.get("workerBase") or "https://ventus-backoffice.ventusgt.workers.dev"
+    dashboard_key = args.get("dashboardKey")
+
+    if not dashboard_key:
+        return {"ok": False, "error": "dashboardKey required"}
+
+    qs = f"?since={since}" if since else ""
+    url = f"{worker_base}/api/comercial/sync-data{qs}"
+
+    try:
+        req = urllib.request.Request(url, headers={
+            "Authorization": f"Bearer {dashboard_key}",
+        })
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = resp.read().decode("utf-8")
+            data = json.loads(body)
+    except Exception as e:
+        return {"ok": False, "error": f"worker fetch failed: {e}"}
+
+    leads_data = data.get("leads", [])
+    convs_data = data.get("conversations", [])
+    now_iso = data.get("until") or args.get("now") or ""
+
+    conn = get_conn()
+    leads_upserted = 0
+    convs_upserted = 0
+    try:
+        # Upsert leads (UNIQUE composite (platform, sender_id))
+        for ld in leads_data:
+            try:
+                conn.execute("""
+                    INSERT INTO leads
+                      (name, handle, phone, platform, sender_id, source_campaign_id,
+                       first_contact_at, last_activity_at, status, traits_json)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(platform, sender_id) DO UPDATE SET
+                      name = COALESCE(excluded.name, leads.name),
+                      handle = COALESCE(excluded.handle, leads.handle),
+                      phone = COALESCE(excluded.phone, leads.phone),
+                      source_campaign_id = COALESCE(excluded.source_campaign_id, leads.source_campaign_id),
+                      first_contact_at = MIN(leads.first_contact_at, excluded.first_contact_at),
+                      last_activity_at = MAX(leads.last_activity_at, excluded.last_activity_at),
+                      status = excluded.status
+                """, (
+                    ld.get("name"), ld.get("handle"), ld.get("phone"),
+                    ld.get("platform"), ld.get("senderId"),
+                    ld.get("sourceCampaignId"),
+                    ld.get("firstContactAt"), ld.get("lastActivityAt"),
+                    ld.get("status") or "new",
+                    json.dumps(ld.get("traitsJson") or {}),
+                ))
+                leads_upserted += 1
+            except Exception as e:
+                print(f"[sync_manychat] lead upsert failed: {e}", flush=True)
+
+        # Build (platform, sender_id) -> lead_id lookup
+        lead_lookup = {}
+        for row in conn.execute("SELECT lead_id, platform, sender_id FROM leads").fetchall():
+            lead_lookup[(row[1], row[2])] = row[0]
+
+        # Upsert conversations (PK conv_id)
+        for cv in convs_data:
+            try:
+                conn.execute("""
+                    INSERT INTO conversations
+                      (conv_id, brand, platform, sender_id, started_at, ended_at,
+                       outcome, order_id, messages_total, messages_json, tags_json,
+                       analyzed, synced_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, datetime('now'))
+                    ON CONFLICT(conv_id) DO UPDATE SET
+                      ended_at = excluded.ended_at,
+                      outcome = excluded.outcome,
+                      order_id = excluded.order_id,
+                      messages_total = excluded.messages_total,
+                      tags_json = excluded.tags_json,
+                      analyzed = excluded.analyzed,
+                      synced_at = datetime('now')
+                """, (
+                    cv.get("convId"), cv.get("brand"), cv.get("platform"),
+                    cv.get("senderId"), cv.get("startedAt"), cv.get("endedAt"),
+                    cv.get("outcome"), cv.get("orderId"), cv.get("messagesTotal", 0),
+                    json.dumps(cv.get("tagsJson") or []),
+                    1 if cv.get("analyzed") else 0,
+                ))
+                convs_upserted += 1
+            except Exception as e:
+                print(f"[sync_manychat] conv upsert failed: {e}", flush=True)
+
+        # Update meta_sync
+        conn.execute("""
+            INSERT INTO meta_sync (source, last_sync_at, last_status, last_error)
+            VALUES ('manychat', datetime('now'), 'ok', NULL)
+            ON CONFLICT(source) DO UPDATE SET
+              last_sync_at = datetime('now'),
+              last_status = 'ok',
+              last_error = NULL
+        """)
+        conn.commit()
+        return {
+            "ok": True,
+            "leadsUpserted": leads_upserted,
+            "conversationsUpserted": convs_upserted,
+            "lastSyncAt": now_iso,
+        }
+    finally:
+        conn.close()
+
+
+def cmd_list_leads(args):
+    """Lista leads con filtros opcionales por status y range."""
+    import json
+    from db import get_conn
+
+    status = args.get("status")
+    range_start = args.get("rangeStart")
+    range_end = args.get("rangeEnd")
+
+    sql = "SELECT lead_id, name, handle, phone, platform, sender_id, source_campaign_id, first_contact_at, last_activity_at, status, traits_json FROM leads"
+    clauses = []
+    params = []
+    if status:
+        clauses.append("status = ?"); params.append(status)
+    if range_start and range_end:
+        clauses.append("first_contact_at BETWEEN ? AND ?")
+        params.extend([range_start, range_end])
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+    sql += " ORDER BY last_activity_at DESC LIMIT 500"
+
+    conn = get_conn()
+    try:
+        rows = conn.execute(sql, params).fetchall()
+        leads = []
+        for r in rows:
+            try:
+                traits = json.loads(r[10] or '{}')
+            except Exception:
+                traits = {}
+            leads.append({
+                "leadId": r[0], "name": r[1], "handle": r[2], "phone": r[3],
+                "platform": r[4], "senderId": r[5], "sourceCampaignId": r[6],
+                "firstContactAt": r[7], "lastActivityAt": r[8], "status": r[9],
+                "traitsJson": traits,
+            })
+        return {"ok": True, "leads": leads}
+    finally:
+        conn.close()
+
+
+def cmd_list_conversations(args):
+    """Lista conversations con filtros opcionales."""
+    import json
+    from db import get_conn
+
+    outcome = args.get("outcome")
+    range_start = args.get("rangeStart")
+    range_end = args.get("rangeEnd")
+    lead_id = args.get("leadId")
+
+    sql = """
+        SELECT c.conv_id, l.lead_id, c.brand, c.platform, c.sender_id,
+               c.started_at, c.ended_at, c.outcome, c.order_id, c.messages_total,
+               c.tags_json, c.analyzed, c.synced_at
+        FROM conversations c
+        LEFT JOIN leads l ON l.platform = c.platform AND l.sender_id = c.sender_id
+    """
+    clauses = []
+    params = []
+    if outcome:
+        clauses.append("c.outcome = ?"); params.append(outcome)
+    if range_start and range_end:
+        clauses.append("c.started_at BETWEEN ? AND ?")
+        params.extend([range_start, range_end])
+    if lead_id:
+        clauses.append("l.lead_id = ?"); params.append(lead_id)
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+    sql += " ORDER BY c.ended_at DESC LIMIT 500"
+
+    conn = get_conn()
+    try:
+        rows = conn.execute(sql, params).fetchall()
+        convs = []
+        for r in rows:
+            try:
+                tags = json.loads(r[10] or '[]')
+            except Exception:
+                tags = []
+            convs.append({
+                "convId": r[0], "leadId": r[1], "brand": r[2], "platform": r[3],
+                "senderId": r[4], "startedAt": r[5], "endedAt": r[6],
+                "outcome": r[7], "orderId": r[8], "messagesTotal": r[9],
+                "tagsJson": tags, "analyzed": bool(r[11]), "syncedAt": r[12],
+            })
+        return {"ok": True, "conversations": convs}
+    finally:
+        conn.close()
+
+
+def cmd_list_customers(args):
+    """Lista customers con totals computados (totalOrders, totalRevenueGtq, lastOrderAt)."""
+    from db import get_conn
+
+    last_order_before = args.get("lastOrderBefore")
+    min_ltv_gtq = args.get("minLtvGtq")
+
+    sql = """
+        SELECT c.customer_id, c.name, c.phone, c.email, c.source, c.first_order_at,
+               COUNT(s.sale_id) AS total_orders,
+               COALESCE(SUM(s.total), 0) AS total_revenue,
+               MAX(s.occurred_at) AS last_order_at
+        FROM customers c
+        LEFT JOIN sales s ON s.customer_id = c.customer_id
+        GROUP BY c.customer_id
+    """
+    having = []
+    params = []
+    if last_order_before:
+        having.append("last_order_at < ?"); params.append(last_order_before)
+    if min_ltv_gtq is not None:
+        having.append("total_revenue >= ?"); params.append(min_ltv_gtq)
+    if having:
+        sql += " HAVING " + " AND ".join(having)
+    sql += " ORDER BY total_revenue DESC LIMIT 500"
+
+    conn = get_conn()
+    try:
+        rows = conn.execute(sql, params).fetchall()
+        customers = [{
+            "customerId": r[0], "name": r[1] or "(sin nombre)", "phone": r[2],
+            "email": r[3], "source": r[4], "firstOrderAt": r[5] or "",
+            "totalOrders": r[6], "totalRevenueGtq": r[7], "lastOrderAt": r[8],
+        } for r in rows]
+        return {"ok": True, "customers": customers}
+    finally:
+        conn.close()
+
+
+def cmd_get_meta_sync(args):
+    """Devuelve el último estado de sync para una source."""
+    from db import get_conn
+
+    source = args.get("source") or "manychat"
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT source, last_sync_at, last_status, last_error FROM meta_sync WHERE source = ?",
+            (source,)
+        ).fetchone()
+        if not row:
+            return {"ok": True, "metaSync": {"source": source, "lastSyncAt": None, "lastStatus": None, "lastError": None}}
+        return {"ok": True, "metaSync": {
+            "source": row[0], "lastSyncAt": row[1], "lastStatus": row[2], "lastError": row[3]
+        }}
+    finally:
+        conn.close()
+
+
+def cmd_get_conversation_messages(args):
+    """Lazy fetch de mensajes desde el worker."""
+    import json
+    import urllib.request
+    import urllib.error
+
+    conv_id = args.get("convId")
+    worker_base = args.get("workerBase") or "https://ventus-backoffice.ventusgt.workers.dev"
+    dashboard_key = args.get("dashboardKey")
+
+    if not conv_id:
+        return {"ok": False, "error": "convId required"}
+    if not dashboard_key:
+        return {"ok": False, "error": "dashboardKey required"}
+
+    url = f"{worker_base}/api/comercial/conversation/{conv_id}/messages"
+    try:
+        req = urllib.request.Request(url, headers={
+            "Authorization": f"Bearer {dashboard_key}",
+        })
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = resp.read().decode("utf-8")
+            data = json.loads(body)
+        return {"ok": True, "messages": data.get("messages", [])}
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return {"ok": True, "messages": [], "note": "purged_or_missing"}
+        return {"ok": False, "error": f"worker http {e.code}"}
+    except Exception as e:
+        return {"ok": False, "error": f"fetch failed: {e}"}
+
+
 COMMANDS = {
     "ping": cmd_ping,
     "regen_watermark": cmd_regen_watermark,
@@ -1237,6 +1541,12 @@ COMMANDS = {
     "list_sales_in_range": cmd_list_sales_in_range,
     "list_leads_in_range": cmd_list_leads_in_range,
     "list_ad_spend_in_range": cmd_list_ad_spend_in_range,
+    "sync_manychat": cmd_sync_manychat,
+    "list_leads": cmd_list_leads,
+    "list_conversations": cmd_list_conversations,
+    "list_customers": cmd_list_customers,
+    "get_meta_sync": cmd_get_meta_sync,
+    "get_conversation_messages": cmd_get_conversation_messages,
 }
 
 
