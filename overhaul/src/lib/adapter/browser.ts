@@ -26,6 +26,7 @@ import type {
 } from './types';
 import { NotAvailableInBrowser } from './types';
 import type { Family } from '../data/types';
+import type { Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult } from '../data/comercial';
 import { transformFamily } from './transform';
 
 // ─── Endpoints (definidos en vite/plugin-erp-dev.ts) ──────────────────
@@ -299,6 +300,23 @@ export const browserAdapter: Adapter = {
 	},
 	async createManualOrder() {
 		throw new NotAvailableInBrowser('createManualOrder');
+	},
+
+	// ─── Comercial R5 ──────────────────────────────────────────
+	async syncMetaAds(): Promise<MetaSyncResult> {
+		throw new NotAvailableInBrowser('syncMetaAds');
+	},
+	async listCampaigns(): Promise<Campaign[]> {
+		return [];
+	},
+	async getCampaignDetail(): Promise<CampaignDetail | null> {
+		return null;
+	},
+	async getFunnelAwarenessReal(): Promise<FunnelAwarenessReal | null> {
+		return null;
+	},
+	async generateCoupon(): Promise<{ ok: boolean; code?: string; error?: string; pending?: boolean }> {
+		return { ok: false, error: 'Not available in browser', pending: true };
 	},
 };
 

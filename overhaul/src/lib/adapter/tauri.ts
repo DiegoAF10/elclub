@@ -28,7 +28,7 @@ import type {
 	WatermarkArgs,
 	WatermarkResult
 } from './types';
-import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs } from '../data/comercial';
+import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult } from '../data/comercial';
 import type { Family } from '../data/types';
 import { transformFamily } from './transform';
 
@@ -401,6 +401,33 @@ export const tauriAdapter: Adapter = {
 					notes: args.notes,
 				},
 			}
+		);
+	},
+
+	// ─── Comercial R5 ──────────────────────────────────────────
+	async syncMetaAds(args = {}) {
+		return invoke<MetaSyncResult>('comercial_sync_meta_ads', { args: { days: args.days, datePreset: args.datePreset } });
+	},
+
+	async listCampaigns(args = {}) {
+		const result = await invoke<unknown>('comercial_list_campaigns', { args: { periodDays: args.periodDays } });
+		return (result as Campaign[]) ?? [];
+	},
+
+	async getCampaignDetail(campaignId: string, periodDays?: number) {
+		const result = await invoke<unknown>('comercial_get_campaign_detail', { args: { campaignId, periodDays } });
+		return (result as CampaignDetail | null) ?? null;
+	},
+
+	async getFunnelAwarenessReal(args = {}) {
+		const result = await invoke<unknown>('comercial_get_funnel_awareness_real', { args: { periodStart: args.periodStart, periodEnd: args.periodEnd } });
+		return (result as FunnelAwarenessReal | null) ?? null;
+	},
+
+	async generateCoupon(args) {
+		return invoke<{ ok: boolean; code?: string; error?: string; pending?: boolean }>(
+			'comercial_generate_coupon',
+			{ args: { customerId: args.customerId, type: args.type, value: args.value, expiresInDays: args.expiresInDays } }
 		);
 	},
 };
