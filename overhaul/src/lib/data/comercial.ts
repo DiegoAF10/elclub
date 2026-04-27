@@ -170,3 +170,62 @@ export interface MetaSyncStatus {
   lastStatus: 'ok' | 'error' | null;
   lastError: string | null;
 }
+
+// ─── R4: Customers + Atribución ────────────────────────────────────
+
+export interface CustomerProfile {
+  // Base customer fields (from Customer type, but with R4 additions)
+  customerId: number;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  source: string | null;
+  firstOrderAt: string;
+  totalOrders: number;
+  totalRevenueGtq: number;
+  lastOrderAt: string | null;
+  // R4 additions
+  isVip: boolean;                        // derived: totalRevenueGtq >= 1500
+  daysInactive: number | null;           // null if never ordered; computed from lastOrderAt
+  blocked: boolean;
+  traitsJson: Record<string, unknown>;
+  attribution: {
+    customerSource: string | null;
+    leadCampaigns: string[];             // unique source_campaign_id from joined leads (by phone)
+  };
+  timeline: TimelineEntry[];
+}
+
+export type TimelineEntry =
+  | { kind: 'order'; ref: string; totalGtq: number; status: string; occurredAt: string; itemsCount: number }
+  | { kind: 'conversation'; convId: string; platform: string; outcome: string | null; messagesTotal: number; endedAt: string };
+
+export interface CreateCustomerArgs {
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  source?: string | null;
+}
+
+export interface CreateOrderArgs {
+  customerId: number;
+  items: CreateOrderItem[];
+  paymentMethod: 'recurrente' | 'transfer' | 'cod' | 'cash';
+  fulfillmentStatus: 'pending_payment' | 'paid' | 'awaiting_shipment' | 'shipped' | 'delivered';
+  shippingFee?: number;        // default 0
+  discount?: number;           // default 0
+  notes?: string;
+}
+
+export interface CreateOrderItem {
+  familyId: string;
+  jerseyId: string;
+  team: string;
+  size: string;
+  variantLabel?: string | null;
+  version?: string | null;
+  personalizationJson?: string | null;
+  unitPrice: number;
+  unitCost?: number | null;
+  itemType?: string | null;
+}
