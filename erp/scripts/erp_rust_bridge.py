@@ -1242,6 +1242,7 @@ def cmd_sync_manychat(args):
     try:
         req = urllib.request.Request(url, headers={
             "Authorization": f"Bearer {dashboard_key}",
+            "User-Agent": "ElClub-ERP/0.1.29",
         })
         with urllib.request.urlopen(req, timeout=30) as resp:
             body = resp.read().decode("utf-8")
@@ -1507,6 +1508,7 @@ def cmd_get_conversation_messages(args):
     try:
         req = urllib.request.Request(url, headers={
             "Authorization": f"Bearer {dashboard_key}",
+            "User-Agent": "ElClub-ERP/0.1.29",
         })
         with urllib.request.urlopen(req, timeout=15) as resp:
             body = resp.read().decode("utf-8")
