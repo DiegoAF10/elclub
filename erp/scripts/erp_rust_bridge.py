@@ -2598,6 +2598,93 @@ def cmd_import_orders_from_worker(args):
         conn.close()
 
 
+def cmd_list_sales(args):
+    """Lista sales con joined customer info + items count.
+    Filters: search (ref/customer name/phone), status, payment_method, periodDays.
+    Sort: occurred_at DESC default.
+    """
+    from db import get_conn  # type: ignore
+
+    search = (args.get("search") or "").strip().lower()
+    status_filter = args.get("status")  # 'all' or fulfillment_status enum
+    payment_filter = args.get("paymentMethod")
+    period_days = args.get("periodDays")  # int or null = all-time
+    limit = int(args.get("limit") or 200)
+    offset = int(args.get("offset") or 0)
+
+    where = ["1=1"]
+    params = []
+
+    if period_days:
+        where.append(f"s.occurred_at >= datetime('now', 'localtime', '-{int(period_days)} days')")
+    if status_filter and status_filter != 'all':
+        where.append("s.fulfillment_status = ?")
+        params.append(status_filter)
+    if payment_filter and payment_filter != 'all':
+        where.append("s.payment_method = ?")
+        params.append(payment_filter)
+    if search:
+        where.append("(LOWER(s.ref) LIKE ? OR LOWER(c.name) LIKE ? OR LOWER(c.phone) LIKE ?)")
+        like = f"%{search}%"
+        params.extend([like, like, like])
+
+    sql = f"""
+        SELECT s.sale_id, s.ref, s.occurred_at, s.fulfillment_status, s.payment_method,
+               s.total, s.shipping_fee, s.discount, s.notes,
+               s.modality, s.origin, s.shipped_at,
+               c.customer_id, c.name, c.phone, c.email,
+               (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id) AS items_count
+        FROM sales s
+        LEFT JOIN customers c ON c.customer_id = s.customer_id
+        WHERE {' AND '.join(where)}
+        ORDER BY s.occurred_at DESC
+        LIMIT ? OFFSET ?
+    """
+    params.extend([limit, offset])
+
+    conn = get_conn()
+    try:
+        rows = conn.execute(sql, params).fetchall()
+        total_count = conn.execute(f"""
+            SELECT COUNT(*) FROM sales s
+            LEFT JOIN customers c ON c.customer_id = s.customer_id
+            WHERE {' AND '.join(where)}
+        """, params[:-2]).fetchone()[0]
+
+        sales = [{
+            "saleId": r[0],
+            "ref": r[1],
+            "occurredAt": r[2],
+            "fulfillmentStatus": r[3],
+            "paymentMethod": r[4],
+            "totalGtq": r[5] or 0,
+            "shippingFeeGtq": r[6] or 0,
+            "discountGtq": r[7] or 0,
+            "notes": r[8],
+            "modality": r[9],
+            "origin": r[10],
+            "shippedAt": r[11],
+            "customerId": r[12],
+            "customerName": r[13],
+            "customerPhone": r[14],
+            "customerEmail": r[15],
+            "itemsCount": r[16],
+        } for r in rows]
+
+        # Aggregate KPIs over filter scope (without limit/offset)
+        kpi_sql = f"""
+            SELECT COUNT(*), COALESCE(SUM(s.total), 0)
+            FROM sales s
+            LEFT JOIN customers c ON c.customer_id = s.customer_id
+            WHERE {' AND '.join(where)}
+        """
+        kpi = conn.execute(kpi_sql, params[:-2]).fetchone()
+
+        return {"ok": True, "sales": sales, "total": total_count, "totalRevenue": kpi[1] or 0}
+    finally:
+        conn.close()
+
+
 COMMANDS = {
     "ping": cmd_ping,
     "regen_watermark": cmd_regen_watermark,
@@ -2641,6 +2728,7 @@ COMMANDS = {
     "get_conversation_meta": cmd_get_conversation_meta,
     "attribute_sale": cmd_attribute_sale,
     "import_orders_from_worker": cmd_import_orders_from_worker,
+    "list_sales": cmd_list_sales,
 }
 
 

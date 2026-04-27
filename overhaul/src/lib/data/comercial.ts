@@ -34,7 +34,7 @@ export interface ItemAffected {
   hint?: string;            // info breve para mostrar
 }
 
-export type ComercialTab = 'funnel' | 'customers' | 'inbox' | 'ads' | 'settings';
+export type ComercialTab = 'funnel' | 'sales' | 'customers' | 'inbox' | 'ads' | 'settings';
 
 export interface DetectedEvent {
   type: string;
@@ -331,4 +331,33 @@ export interface ImportOrdersResult {
   skippedExisting: number;
   totalFromWorker: number;
   errors: string[];
+}
+
+// ─── R9 Part 2: Sales list ──────────────────────────────────────
+
+export interface SaleRow {
+  saleId: number;
+  ref: string;
+  occurredAt: string;
+  fulfillmentStatus: string;
+  paymentMethod: string | null;
+  totalGtq: number;
+  shippingFeeGtq: number;
+  discountGtq: number;
+  notes: string | null;
+  modality: string | null;
+  origin: string | null;
+  shippedAt: string | null;
+  customerId: number | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  customerEmail: string | null;
+  itemsCount: number;
+}
+
+export interface SalesListResult {
+  ok: boolean;
+  sales: SaleRow[];
+  total: number;
+  totalRevenue: number;
 }

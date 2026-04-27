@@ -22,7 +22,8 @@ import type {
 	MetaSyncResult,
 	SaleAttribution,
 	BackfillAttributionResult,
-	ImportOrdersResult
+	ImportOrdersResult,
+	SalesListResult
 } from '../data/comercial';
 
 export type AuditStatus =
@@ -313,6 +314,7 @@ export interface Adapter {
 
 	// ─── Comercial R9 ──────────────────────────────────────────
 	importOrdersFromWorker(): Promise<ImportOrdersResult>;
+	listSales(args?: { search?: string; status?: string; paymentMethod?: string; periodDays?: number; limit?: number; offset?: number }): Promise<SalesListResult>;
 }
 
 // ─── Error para operaciones no disponibles en dev ────────────────────

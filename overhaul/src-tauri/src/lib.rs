@@ -919,6 +919,11 @@ fn run_python_bridge_inner(
     use std::process::{Command, Stdio};
     use tauri::Emitter;
 
+    #[cfg(windows)]
+    use std::os::windows::process::CommandExt;
+    #[cfg(windows)]
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+
     let erp_dir = erp_scripts_dir();
     let script = erp_dir.join("scripts").join("erp_rust_bridge.py");
     if !script.exists() {
@@ -928,12 +933,17 @@ fn run_python_bridge_inner(
         )));
     }
 
-    let mut child = Command::new(python_exe())
-        .arg(script.as_os_str())
+    let mut cmd = Command::new(python_exe());
+    cmd.arg(script.as_os_str())
         .current_dir(&erp_dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+
+    let mut child = cmd
         .spawn()
         .map_err(|e| ErpError::Other(format!("no se pudo ejecutar python: {}", e)))?;
 
@@ -2249,6 +2259,33 @@ async fn comercial_import_orders_from_worker() -> Result<Value> {
         .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListSalesArgs {
+    pub search: Option<String>,
+    pub status: Option<String>,
+    pub payment_method: Option<String>,
+    pub period_days: Option<i64>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+#[tauri::command]
+async fn comercial_list_sales(args: ListSalesArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "list_sales",
+        "search": args.search,
+        "status": args.status,
+        "paymentMethod": args.payment_method,
+        "periodDays": args.period_days,
+        "limit": args.limit,
+        "offset": args.offset,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -2323,6 +2360,7 @@ pub fn run() {
             comercial_attribute_sale,
             // Comercial R9
             comercial_import_orders_from_worker,
+            comercial_list_sales,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");

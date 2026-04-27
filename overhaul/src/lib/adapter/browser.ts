@@ -26,7 +26,7 @@ import type {
 } from './types';
 import { NotAvailableInBrowser } from './types';
 import type { Family } from '../data/types';
-import type { Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, BackfillAttributionResult, ImportOrdersResult } from '../data/comercial';
+import type { Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, BackfillAttributionResult, ImportOrdersResult, SalesListResult } from '../data/comercial';
 import { transformFamily } from './transform';
 
 // ─── Endpoints (definidos en vite/plugin-erp-dev.ts) ──────────────────
@@ -338,6 +338,9 @@ export const browserAdapter: Adapter = {
 	// ─── Comercial R9 ──────────────────────────────────────────
 	async importOrdersFromWorker(): Promise<ImportOrdersResult> {
 		throw new NotAvailableInBrowser('importOrdersFromWorker');
+	},
+	async listSales(): Promise<SalesListResult> {
+		return { ok: true, sales: [], total: 0, totalRevenue: 0 };
 	},
 };
 
