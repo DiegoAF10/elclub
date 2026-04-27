@@ -3,6 +3,7 @@
   import { runSync, type SyncResult } from '$lib/data/manychatSync';
   import type { MetaSyncStatus, MetaSyncResult, BackfillAttributionResult, ImportOrdersResult } from '$lib/data/comercial';
   import { RefreshCw, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-svelte';
+  import { bumpSalesSync } from '$lib/data/salesSyncBus';
 
   let metaSync = $state<MetaSyncStatus | null>(null);
   let syncing = $state(false);
@@ -27,7 +28,11 @@
     try {
       const result = await adapter.importOrdersFromWorker();
       importResult = result;
-      if (!result.ok) importError = (result.errors || []).join('; ') || 'Error desconocido';
+      if (!result.ok) {
+        importError = (result.errors || []).join('; ') || 'Error desconocido';
+      } else {
+        bumpSalesSync();  // R11: tell SalesTab to reload
+      }
     } catch (e) {
       importError = e instanceof Error ? e.message : String(e);
     } finally {

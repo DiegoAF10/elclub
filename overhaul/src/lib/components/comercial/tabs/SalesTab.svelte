@@ -4,6 +4,8 @@
   import { Search, RefreshCw, Plus } from 'lucide-svelte';
   import OrderDetailModal from '../modals/OrderDetailModal.svelte';
   import SaleFormModal from '../modals/SaleFormModal.svelte';
+  import { salesSyncBumper } from '$lib/data/salesSyncBus';
+  import { onMount } from 'svelte';
 
   let sales = $state<SaleRow[]>([]);
   let total = $state(0);
@@ -49,6 +51,14 @@
     if (searchTimer) clearTimeout(searchTimer);
     searchTimer = setTimeout(() => { void loadSales(); }, 250);
     return () => { if (searchTimer) clearTimeout(searchTimer); };
+  });
+
+  // R11: reload when SettingsTab triggers import (via salesSyncBus)
+  onMount(() => {
+    const unsubscribe = salesSyncBumper.subscribe(() => {
+      void loadSales();
+    });
+    return unsubscribe;
   });
 
   let sorted = $derived.by(() => {
