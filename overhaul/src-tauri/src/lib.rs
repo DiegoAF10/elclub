@@ -2087,6 +2087,109 @@ async fn comercial_create_manual_order(args: CreateManualOrderArgs) -> Result<Va
         .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
 }
 
+// ─── Comercial R5 ──────────────────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncMetaAdsArgs {
+    pub days: Option<i64>,
+    pub date_preset: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_sync_meta_ads(args: SyncMetaAdsArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "sync_meta_ads",
+        "days": args.days,
+        "datePreset": args.date_preset,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListCampaignsArgs {
+    pub period_days: Option<i64>,
+}
+
+#[tauri::command]
+async fn comercial_list_campaigns(args: ListCampaignsArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "list_campaigns",
+        "periodDays": args.period_days,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("campaigns").cloned().unwrap_or(Value::Array(vec![])))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetCampaignDetailArgs {
+    pub campaign_id: String,
+    pub period_days: Option<i64>,
+}
+
+#[tauri::command]
+async fn comercial_get_campaign_detail(args: GetCampaignDetailArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "get_campaign_detail",
+        "campaignId": args.campaign_id,
+        "periodDays": args.period_days,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("detail").cloned().unwrap_or(Value::Null))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetFunnelAwarenessRealArgs {
+    pub period_start: Option<String>,
+    pub period_end: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_get_funnel_awareness_real(args: GetFunnelAwarenessRealArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "get_funnel_awareness_real",
+        "periodStart": args.period_start,
+        "periodEnd": args.period_end,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("awareness").cloned().unwrap_or(Value::Null))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateCouponArgs {
+    pub customer_id: i64,
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub value: f64,
+    pub expires_in_days: Option<i64>,
+}
+
+#[tauri::command]
+async fn comercial_generate_coupon(args: GenerateCouponArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "generate_coupon",
+        "customerId": args.customer_id,
+        "type": args.type_,
+        "value": args.value,
+        "expiresInDays": args.expires_in_days,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -2147,6 +2250,12 @@ pub fn run() {
             comercial_set_customer_blocked,
             comercial_update_customer_source,
             comercial_create_manual_order,
+            // Comercial R5
+            comercial_sync_meta_ads,
+            comercial_list_campaigns,
+            comercial_get_campaign_detail,
+            comercial_get_funnel_awareness_real,
+            comercial_generate_coupon,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
