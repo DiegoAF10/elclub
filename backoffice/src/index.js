@@ -827,7 +827,7 @@ async function sendCustomOrderAlert(env, order) {
     ? 'Con parches (Q15)'
     : 'Sin parches';
 
-  const customerPhone = (order.customer.whatsapp || '').replace(/\D/g, '');
+  const customerPhone = (order.customer.phone || order.customer.whatsapp || '').replace(/\D/g, '');
   const customerFirst = (order.customer.name || 'cliente').split(' ')[0];
   const waMessage = `Hola ${customerFirst}! Soy Diego de El Club. Recibí tu pedido ${order.order_code} de la camiseta de ${order.team} (${order.version}). Te confirmo disponibilidad y coordino el pago. Cualquier duda me avisás!`;
   const waLink = customerPhone
@@ -849,7 +849,7 @@ async function sendCustomOrderAlert(env, order) {
 
   <table style="font-size: 14px; border-collapse: collapse; width: 100%; margin-bottom: 16px;">
     <tr><td style="padding: 4px 8px 4px 0; color: #888;">Cliente</td><td style="padding: 4px 0;">${order.customer.name}</td></tr>
-    <tr><td style="padding: 4px 8px 4px 0; color: #888;">WhatsApp</td><td style="padding: 4px 0;">${order.customer.whatsapp || '(no proporcionado)'}</td></tr>
+    <tr><td style="padding: 4px 8px 4px 0; color: #888;">WhatsApp</td><td style="padding: 4px 0;">${order.customer.phone || order.customer.whatsapp || '(no proporcionado)'}</td></tr>
     <tr><td style="padding: 4px 8px 4px 0; color: #888;">Zona</td><td style="padding: 4px 0;">${order.customer.zone || '(no especificada)'}</td></tr>
     <tr><td style="padding: 4px 8px 4px 0; color: #888;">Notas</td><td style="padding: 4px 0;">${order.customer.notes || '(ninguna)'}</td></tr>
   </table>
@@ -960,9 +960,14 @@ export default {
           size: data.size,
           price: data.price,
           customer: {
-            name: data.customer.name,
-            whatsapp: data.customer.whatsapp,
+            name: data.customer.name || '',
+            email: data.customer.email || null,
+            phone: data.customer.whatsapp || data.customer.phone || '',  // accept both, normalize to phone
+            address: data.customer.address || '',
+            department: data.customer.department || '',
+            municipality: data.customer.municipality || '',
             zone: data.customer.zone || '',
+            reference: data.customer.reference || '',
             notes: data.customer.notes || '',
           },
           status: 'pending',
