@@ -1958,6 +1958,129 @@ async fn comercial_get_conversation_messages(args: GetConvMessagesArgs) -> Resul
     Ok(result.get("messages").and_then(|v| v.as_array()).cloned().unwrap_or_default())
 }
 
+// ─── Comercial R4 ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+async fn comercial_get_customer_profile(customer_id: i64) -> Result<Value> {
+    let payload = serde_json::json!({ "cmd": "get_customer_profile", "customerId": customer_id });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("profile").cloned().unwrap_or(Value::Null))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCustomerArgs {
+    pub name: String,
+    pub phone: Option<String>,
+    pub email: Option<String>,
+    pub source: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_create_customer(args: CreateCustomerArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "create_customer",
+        "name": args.name,
+        "phone": args.phone,
+        "email": args.email,
+        "source": args.source,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateTraitsArgs {
+    pub customer_id: i64,
+    pub traits_json: Value,
+}
+
+#[tauri::command]
+async fn comercial_update_customer_traits(args: UpdateTraitsArgs) -> Result<()> {
+    let payload = serde_json::json!({
+        "cmd": "update_customer_traits",
+        "customerId": args.customer_id,
+        "traitsJson": args.traits_json,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetBlockedArgs {
+    pub customer_id: i64,
+    pub blocked: bool,
+}
+
+#[tauri::command]
+async fn comercial_set_customer_blocked(args: SetBlockedArgs) -> Result<()> {
+    let payload = serde_json::json!({
+        "cmd": "set_customer_blocked",
+        "customerId": args.customer_id,
+        "blocked": args.blocked,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSourceArgs {
+    pub customer_id: i64,
+    pub source: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_update_customer_source(args: UpdateSourceArgs) -> Result<()> {
+    let payload = serde_json::json!({
+        "cmd": "update_customer_source",
+        "customerId": args.customer_id,
+        "source": args.source,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateManualOrderArgs {
+    pub customer_id: i64,
+    pub items: Vec<Value>,
+    pub payment_method: String,
+    pub fulfillment_status: String,
+    pub shipping_fee: Option<f64>,
+    pub discount: Option<f64>,
+    pub notes: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_create_manual_order(args: CreateManualOrderArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "create_manual_order",
+        "customerId": args.customer_id,
+        "items": args.items,
+        "paymentMethod": args.payment_method,
+        "fulfillmentStatus": args.fulfillment_status,
+        "shippingFee": args.shipping_fee,
+        "discount": args.discount,
+        "notes": args.notes,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -2011,6 +2134,13 @@ pub fn run() {
             comercial_list_customers,
             comercial_get_meta_sync,
             comercial_get_conversation_messages,
+            // Comercial R4
+            comercial_get_customer_profile,
+            comercial_create_customer,
+            comercial_update_customer_traits,
+            comercial_set_customer_blocked,
+            comercial_update_customer_source,
+            comercial_create_manual_order,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
