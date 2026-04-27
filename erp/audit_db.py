@@ -489,6 +489,12 @@ def init_audit_schema():
         conn.execute("ALTER TABLE sales ADD COLUMN shipped_at TEXT")
     except sqlite3.OperationalError:
         pass  # column already exists, safe to ignore
+    # Comercial R4: ensure blocked column exists on customers (additive migration).
+    # Default 0 = not blocked. NOT NULL with default keeps queries simple.
+    try:
+        conn.execute("ALTER TABLE customers ADD COLUMN blocked INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # column already exists, safe to ignore
     conn.commit()
     conn.close()
 
