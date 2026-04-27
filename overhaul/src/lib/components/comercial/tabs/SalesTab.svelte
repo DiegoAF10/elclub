@@ -96,6 +96,25 @@
     };
     return map[p] ?? p;
   }
+
+  function modalityLabel(m: string): string {
+    if (m === 'mystery') return 'MYS';
+    if (m === 'stock') return 'DROP';
+    if (m === 'ondemand') return 'VAULT';
+    return m.toUpperCase();
+  }
+  function modalityBg(m: string): string {
+    if (m === 'mystery') return 'rgba(168, 85, 247, 0.18)';   // purple
+    if (m === 'stock') return 'rgba(56, 189, 248, 0.18)';     // sky-blue
+    if (m === 'ondemand') return 'rgba(74, 222, 128, 0.18)';  // accent green
+    return 'rgba(180,181,184,0.18)';
+  }
+  function modalityFg(m: string): string {
+    if (m === 'mystery') return '#c084fc';
+    if (m === 'stock') return '#7dd3fc';
+    if (m === 'ondemand') return 'var(--color-accent)';
+    return 'var(--color-text-muted)';
+  }
 </script>
 
 <div class="flex h-full flex-col">
@@ -203,7 +222,9 @@
     <div class="w-16">FECHA</div>
     <div class="w-14">STATUS</div>
     <div class="w-12">PAGO</div>
-    <div class="flex-1 min-w-0">CLIENTE</div>
+    <div class="w-14">MOD</div>
+    <div class="w-16">CANAL</div>
+    <div class="flex-1 min-w-0">CLIENTE / ITEM</div>
     <div class="w-12 text-right">ITEMS</div>
     <div class="w-20 text-right">TOTAL</div>
   </div>
@@ -232,10 +253,23 @@
             </span>
           </div>
           <div class="text-mono w-12 text-[9.5px] text-[var(--color-text-muted)]">{paymentLabel(s.paymentMethod)}</div>
-          <div class="flex-1 min-w-0 truncate text-[11px] text-[var(--color-text-primary)]">
-            {s.customerName ?? '—'}
-            {#if s.customerPhone}
-              <span class="text-mono ml-1.5 text-[9.5px] text-[var(--color-text-muted)]">{s.customerPhone}</span>
+          <div class="w-14">
+            {#if s.modality}
+              <span class="text-display rounded-[3px] px-1.5 py-0.5 text-[9px]" style="background: {modalityBg(s.modality)}; color: {modalityFg(s.modality)};">
+                {modalityLabel(s.modality)}
+              </span>
+            {:else}
+              <span class="text-[9px] text-[var(--color-text-muted)]">—</span>
+            {/if}
+          </div>
+          <div class="text-mono w-16 text-[9.5px] text-[var(--color-text-muted)] truncate" title={s.origin ?? ''}>{s.origin ?? '—'}</div>
+          <div class="flex-1 min-w-0 truncate">
+            <div class="text-[11px] text-[var(--color-text-primary)] truncate">
+              {s.customerName ?? '—'}
+              {#if s.customerPhone}<span class="text-mono ml-1.5 text-[9.5px] text-[var(--color-text-muted)]">{s.customerPhone}</span>{/if}
+            </div>
+            {#if s.firstItemLabel}
+              <div class="text-[9.5px] text-[var(--color-text-tertiary)] truncate">{s.firstItemLabel}{#if s.itemsCount > 1}<span class="text-[var(--color-text-muted)]"> +{s.itemsCount - 1} más</span>{/if}</div>
             {/if}
           </div>
           <div class="text-mono w-12 text-right text-[10px] text-[var(--color-text-tertiary)]">{s.itemsCount}×</div>

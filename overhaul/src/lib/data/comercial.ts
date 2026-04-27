@@ -354,11 +354,13 @@ export interface SaleRow {
   modality: string | null;
   origin: string | null;
   shippedAt: string | null;
+  shippingAddress: string | null;  // raw JSON string
   customerId: number | null;
   customerName: string | null;
   customerPhone: string | null;
   customerEmail: string | null;
   itemsCount: number;
+  firstItemLabel: string | null;   // R11 NEW
 }
 
 export interface SalesListResult {
