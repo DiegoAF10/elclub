@@ -501,6 +501,12 @@ def init_audit_schema():
         conn.execute("ALTER TABLE campaigns_snapshot ADD COLUMN campaign_name TEXT")
     except sqlite3.OperationalError:
         pass  # column already exists, safe to ignore
+    # Comercial R10: shipping_address column on sales (additive migration).
+    # Stores JSON: {name, phone, address, department, municipality, zone, reference, notes}
+    try:
+        conn.execute("ALTER TABLE sales ADD COLUMN shipping_address TEXT")
+    except sqlite3.OperationalError:
+        pass  # column already exists, safe to ignore
     conn.commit()
     conn.close()
 

@@ -1766,6 +1766,15 @@ def cmd_create_manual_order(args):
     shipping_fee = args.get("shippingFee") or 0
     discount = args.get("discount") or 0
     notes = args.get("notes")
+    # R10 new fields
+    modality = args.get("modality") or "stock"
+    if modality not in ("mystery", "stock", "ondemand"):
+        modality = "stock"
+    origin = args.get("origin") or "manual"
+    shipping_method = args.get("shippingMethod")
+    shipping_address_obj = args.get("shippingAddress")
+    shipping_address = json.dumps(shipping_address_obj, ensure_ascii=False) if isinstance(shipping_address_obj, dict) else None
+    occurred_at = args.get("occurredAt")  # may be None — bridge will use datetime('now', 'localtime') in SQL
 
     if not customer_id:
         return {"ok": False, "error": "customerId required"}
@@ -1816,11 +1825,12 @@ def cmd_create_manual_order(args):
                     INSERT INTO sales
                       (ref, occurred_at, modality, origin, customer_id, payment_method,
                        fulfillment_status, shipping_method, tracking_code, subtotal, shipping_fee,
-                       discount, total, source_vault_ref, notes, created_at)
-                    VALUES (?, datetime('now', 'localtime'), 'stock', 'manual', ?, ?, ?, NULL, NULL,
-                            ?, ?, ?, ?, NULL, ?, datetime('now', 'localtime'))
-                """, (candidate, customer_id, payment_method, fulfillment_status,
-                      subtotal, shipping_fee, discount, total, notes))
+                       discount, total, source_vault_ref, notes, created_at, shipping_address)
+                    VALUES (?, COALESCE(?, datetime('now', 'localtime')), ?, ?, ?, ?, ?, ?, NULL,
+                            ?, ?, ?, ?, NULL, ?, datetime('now', 'localtime'), ?)
+                """, (candidate, occurred_at, modality, origin, customer_id, payment_method,
+                      fulfillment_status, shipping_method, subtotal, shipping_fee, discount,
+                      total, notes, shipping_address))
                 ref = candidate
                 sale_id = cur.lastrowid
                 break
@@ -1855,6 +1865,33 @@ def cmd_create_manual_order(args):
             ))
 
         conn.commit()
+
+        # R10: if modality='ondemand' (Vault), auto-create entry in vault_orders for next supplier batch
+        # vault_orders schema: ref, received_at, cliente_nombre, cliente_tel, cliente_email,
+        #                      envio_json, pago_metodo, total, status, notas, synced_at, raw_json
+        if modality == "ondemand":
+            try:
+                cust_row = conn.execute(
+                    "SELECT name, phone, email FROM customers WHERE customer_id = ?", (customer_id,)
+                ).fetchone()
+                v_nombre = cust_row[0] if cust_row else None
+                v_tel = cust_row[1] if cust_row else None
+                v_email = cust_row[2] if cust_row else None
+                conn.execute("""
+                    INSERT INTO vault_orders
+                      (ref, received_at, cliente_nombre, cliente_tel, cliente_email,
+                       envio_json, pago_metodo, total, status, notas, synced_at, raw_json)
+                    VALUES (?, datetime('now', 'localtime'), ?, ?, ?,
+                            ?, ?, ?, 'pending_supplier_order', ?, NULL, ?)
+                """, (ref, v_nombre, v_tel, v_email,
+                      shipping_address, payment_method, total,
+                      f"Auto-created from manual sale {ref}",
+                      json.dumps({"sale_id": sale_id, "source": "manual_erp"}, ensure_ascii=False)))
+                conn.commit()
+            except Exception as ve:
+                # Non-fatal — sale already committed, just the Vault link missing
+                import sys
+                print(f"[R10] vault_orders auto-create skipped for {ref}: {ve}", file=sys.stderr)
 
         # R6: auto-attribute via phone → lead.source_campaign_id lookup
         try:
@@ -2489,8 +2526,27 @@ def cmd_import_orders_from_worker(args):
                 # Resolve customer (auto-create if needed)
                 customer_data = order.get("customer") or {}
                 cust_name = (customer_data.get("name") or "").strip() or "(sin nombre)"
-                cust_phone = (customer_data.get("phone") or "").strip() or None
+                cust_phone = (customer_data.get("phone") or customer_data.get("whatsapp") or "").strip() or None
                 cust_email = (customer_data.get("email") or "").strip() or None
+
+                # R10: build shipping_address JSON for storage on sale
+                shipping_address = None
+                if any([
+                    customer_data.get("address"),
+                    customer_data.get("department"),
+                    customer_data.get("municipality"),
+                    customer_data.get("zone"),
+                ]):
+                    shipping_address = json.dumps({
+                        "name": cust_name,
+                        "phone": cust_phone,
+                        "address": customer_data.get("address") or "",
+                        "department": customer_data.get("department") or "",
+                        "municipality": customer_data.get("municipality") or "",
+                        "zone": customer_data.get("zone") or "",
+                        "reference": customer_data.get("reference") or "",
+                        "notes": customer_data.get("notes") or "",
+                    }, ensure_ascii=False)
 
                 customer_id = None
                 if cust_phone:
@@ -2550,11 +2606,11 @@ def cmd_import_orders_from_worker(args):
                     INSERT INTO sales
                       (ref, occurred_at, modality, origin, customer_id, payment_method,
                        fulfillment_status, shipping_method, tracking_code, subtotal, shipping_fee,
-                       discount, total, source_vault_ref, notes, created_at)
+                       discount, total, source_vault_ref, notes, created_at, shipping_address)
                     VALUES (?, COALESCE(?, datetime('now', 'localtime')), 'stock', 'web', ?, ?, ?, NULL, NULL,
-                            ?, 0, 0, ?, NULL, ?, datetime('now', 'localtime'))
+                            ?, 0, 0, ?, NULL, ?, datetime('now', 'localtime'), ?)
                 """, (ref, occurred_at, customer_id, payment_method, fulfillment_status,
-                      subtotal, total_gtq, customer_data.get("notes")))
+                      subtotal, total_gtq, customer_data.get("notes"), shipping_address))
                 sale_id = cur.lastrowid
 
                 # INSERT sale_items
@@ -2716,6 +2772,119 @@ def cmd_cleanup_chat_orders(args):
         conn.close()
 
 
+def cmd_search_customers(args):
+    """Typeahead search for customers by name/phone/email partial match.
+    Returns top 10 matches.
+    """
+    from db import get_conn
+
+    query = (args.get("query") or "").strip().lower()
+    if len(query) < 2:
+        return {"ok": True, "customers": []}
+
+    like = f"%{query}%"
+    conn = get_conn()
+    try:
+        rows = conn.execute("""
+            SELECT customer_id, name, phone, email, source
+            FROM customers
+            WHERE LOWER(name) LIKE ? OR LOWER(phone) LIKE ? OR LOWER(email) LIKE ?
+            ORDER BY
+              CASE WHEN LOWER(name) LIKE ? THEN 0 ELSE 1 END,
+              name
+            LIMIT 10
+        """, (like, like, like, f"{query}%")).fetchall()
+        return {
+            "ok": True,
+            "customers": [{
+                "customerId": r[0],
+                "name": r[1],
+                "phone": r[2],
+                "email": r[3],
+                "source": r[4],
+            } for r in rows]
+        }
+    finally:
+        conn.close()
+
+
+def cmd_update_sale(args):
+    """Update editable fields on an existing sale. ref is immutable."""
+    import json
+    from db import get_conn
+
+    sale_id = args.get("saleId")
+    if not sale_id:
+        return {"ok": False, "error": "saleId required"}
+
+    fields = {}
+    if "occurredAt" in args: fields["occurred_at"] = args["occurredAt"]
+    if "modality" in args:
+        if args["modality"] not in ("mystery", "stock", "ondemand"):
+            return {"ok": False, "error": "invalid modality"}
+        fields["modality"] = args["modality"]
+    if "origin" in args: fields["origin"] = args["origin"]
+    if "paymentMethod" in args:
+        if args["paymentMethod"] and args["paymentMethod"] not in ("recurrente", "transferencia", "contra_entrega", "efectivo", "otro"):
+            return {"ok": False, "error": "invalid paymentMethod"}
+        fields["payment_method"] = args["paymentMethod"]
+    if "fulfillmentStatus" in args:
+        if args["fulfillmentStatus"] not in ("pending", "sent_to_supplier", "in_production", "shipped", "delivered", "cancelled"):
+            return {"ok": False, "error": "invalid fulfillmentStatus"}
+        fields["fulfillment_status"] = args["fulfillmentStatus"]
+    if "shippingMethod" in args: fields["shipping_method"] = args["shippingMethod"]
+    if "trackingCode" in args: fields["tracking_code"] = args["trackingCode"]
+    if "shippingFee" in args:
+        if args["shippingFee"] < 0:
+            return {"ok": False, "error": "shippingFee must be >= 0"}
+        fields["shipping_fee"] = args["shippingFee"]
+    if "discount" in args:
+        if args["discount"] < 0:
+            return {"ok": False, "error": "discount must be >= 0"}
+        fields["discount"] = args["discount"]
+    if "notes" in args: fields["notes"] = args["notes"]
+    if "shippingAddress" in args:
+        # Allow null (clear) or dict (set)
+        if args["shippingAddress"] is None:
+            fields["shipping_address"] = None
+        elif isinstance(args["shippingAddress"], dict):
+            fields["shipping_address"] = json.dumps(args["shippingAddress"], ensure_ascii=False)
+        else:
+            return {"ok": False, "error": "shippingAddress must be null or object"}
+    if "customerId" in args: fields["customer_id"] = args["customerId"]
+
+    if not fields:
+        return {"ok": False, "error": "no fields to update"}
+
+    set_clauses = ", ".join(f"{k} = ?" for k in fields)
+    params = list(fields.values()) + [sale_id]
+
+    conn = get_conn()
+    try:
+        cur = conn.execute(f"UPDATE sales SET {set_clauses} WHERE sale_id = ?", params)
+        if cur.rowcount == 0:
+            return {"ok": False, "error": f"sale {sale_id} not found"}
+
+        # Recompute total: subtotal (sum of items) + shipping_fee - discount
+        if "shipping_fee" in fields or "discount" in fields:
+            row = conn.execute("""
+                SELECT COALESCE(SUM(unit_price), 0), shipping_fee, discount
+                FROM sales s LEFT JOIN sale_items si ON si.sale_id = s.sale_id
+                WHERE s.sale_id = ?
+                GROUP BY s.sale_id
+            """, (sale_id,)).fetchone()
+            if row:
+                new_subtotal = row[0]
+                new_total = new_subtotal + (row[1] or 0) - (row[2] or 0)
+                conn.execute("UPDATE sales SET subtotal = ?, total = ? WHERE sale_id = ?",
+                             (new_subtotal, new_total, sale_id))
+
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
 COMMANDS = {
     "ping": cmd_ping,
     "regen_watermark": cmd_regen_watermark,
@@ -2761,6 +2930,8 @@ COMMANDS = {
     "import_orders_from_worker": cmd_import_orders_from_worker,
     "list_sales": cmd_list_sales,
     "cleanup_chat_orders": cmd_cleanup_chat_orders,
+    "search_customers": cmd_search_customers,
+    "update_sale": cmd_update_sale,
 }
 
 
