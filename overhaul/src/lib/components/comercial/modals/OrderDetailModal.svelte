@@ -1,6 +1,6 @@
 <script lang="ts">
   import { adapter } from '$lib/adapter';
-  import type { OrderForModal, SaleAttribution } from '$lib/data/comercial';
+  import type { OrderForModal, SaleAttribution, Campaign } from '$lib/data/comercial';
   import { Package, MessageCircle, Truck, Phone, Loader2, TrendingUp } from 'lucide-svelte';
   import BaseModal from '../BaseModal.svelte';
 
@@ -17,6 +17,13 @@
   let action = $state<'idle' | 'shipping'>('idle');
   let attribution = $state<SaleAttribution | null>(null);
   let attributionError = $state<string | null>(null);
+
+  // Attribution editor state
+  let editingAttribution = $state(false);
+  let campaigns = $state<Campaign[]>([]);
+  let selectedCampaignId = $state<string | null>(null);
+  let savingAttr = $state(false);
+  let attrSaveError = $state<string | null>(null);
 
   $effect(() => {
     loadOrder();
@@ -35,6 +42,44 @@
       })();
     }
   });
+
+  async function loadCampaigns() {
+    try {
+      campaigns = await adapter.listCampaigns({ periodDays: 90 });
+    } catch (e) {
+      console.warn('[order-detail] campaigns load failed', e);
+    }
+  }
+
+  function startEditAttr() {
+    selectedCampaignId = attribution?.adCampaignId ?? null;
+    attrSaveError = null;
+    editingAttribution = true;
+    if (campaigns.length === 0) void loadCampaigns();
+  }
+
+  async function saveAttribution() {
+    if (!order) return;
+    savingAttr = true;
+    attrSaveError = null;
+    try {
+      const result = await adapter.attributeSale({
+        saleId: order.saleId,
+        campaignId: selectedCampaignId,
+      });
+      if (!result.ok) {
+        attrSaveError = result.error ?? 'Error desconocido';
+        return;
+      }
+      editingAttribution = false;
+      // Reload attribution
+      attribution = await adapter.getSaleAttribution(order.saleId);
+    } catch (e) {
+      attrSaveError = e instanceof Error ? e.message : String(e);
+    } finally {
+      savingAttr = false;
+    }
+  }
 
   async function loadOrder() {
     loading = true;
@@ -162,9 +207,42 @@
             </div>
           {/if}
 
-          {#if attribution}
-            <div class="mt-5 rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] p-3">
-              <div class="text-display mb-1 text-[9.5px] text-[var(--color-text-tertiary)]">Atribución</div>
+          <div class="mt-5 rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] p-3">
+            <div class="text-display mb-1 text-[9.5px] text-[var(--color-text-tertiary)]">
+              Atribución
+              {#if !editingAttribution}
+                <button type="button" onclick={startEditAttr} class="ml-1 text-[10px] text-[var(--color-accent)]">[editar]</button>
+              {/if}
+            </div>
+            {#if editingAttribution}
+              <div class="space-y-2">
+                <select
+                  bind:value={selectedCampaignId}
+                  class="w-full rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-0)] px-2 py-1 text-[11px]"
+                >
+                  <option value={null}>— sin atribución —</option>
+                  {#each campaigns as c (c.campaignId)}
+                    <option value={c.campaignId}>{c.campaignName ?? c.campaignId}</option>
+                  {/each}
+                </select>
+                {#if attrSaveError}<div class="text-[9.5px] text-[var(--color-danger)]">⚠ {attrSaveError}</div>{/if}
+                <div class="flex gap-2">
+                  <button
+                    type="button"
+                    onclick={saveAttribution}
+                    disabled={savingAttr}
+                    class="flex-1 rounded-[3px] bg-[var(--color-accent)] px-2 py-1 text-[10px] font-semibold text-black disabled:opacity-60"
+                  >
+                    {#if savingAttr}Guardando…{:else}Guardar{/if}
+                  </button>
+                  <button
+                    type="button"
+                    onclick={() => (editingAttribution = false)}
+                    class="flex-1 rounded-[3px] border border-[var(--color-border)] px-2 py-1 text-[10px]"
+                  >Cancelar</button>
+                </div>
+              </div>
+            {:else if attribution}
               <div class="flex items-center gap-2 text-[11px]">
                 <TrendingUp size={12} strokeWidth={1.8} style="color: var(--color-accent);" />
                 <span class="font-medium">{attribution.adCampaignName ?? attribution.adCampaignId ?? '—'}</span>
@@ -172,8 +250,10 @@
                   <span class="text-[9px] text-[var(--color-text-muted)]">· {attribution.source}</span>
                 {/if}
               </div>
-            </div>
-          {/if}
+            {:else}
+              <div class="text-[10px] text-[var(--color-text-tertiary)]">— sin atribución</div>
+            {/if}
+          </div>
           {#if attributionError}<div class="mt-1 text-[9.5px] text-[var(--color-danger)]">⚠ {attributionError}</div>{/if}
         </div>
       </div>
