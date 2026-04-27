@@ -4,10 +4,22 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mundial 2026 — El Club</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
+    /* Self-hosted fonts (Midnight Stadium F1) — minimal subset para PDF standalone.
+       NO importa elclub.css completo para mantener page peso bajo. */
+    @font-face {
+      font-family: 'Oswald';
+      src: url('/assets/fonts/Oswald-VariableFont_wght.ttf') format('truetype-variations'),
+           url('/assets/fonts/Oswald-Regular.ttf') format('truetype');
+      font-weight: 200 700; font-style: normal; font-display: swap;
+    }
+    @font-face {
+      font-family: 'Space Grotesk';
+      src: url('/assets/fonts/SpaceGrotesk-VariableFont_wght.ttf') format('truetype-variations'),
+           url('/assets/fonts/SpaceGrotesk-Regular.ttf') format('truetype');
+      font-weight: 300 700; font-style: normal; font-display: swap;
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'Space Grotesk', system-ui, sans-serif;
