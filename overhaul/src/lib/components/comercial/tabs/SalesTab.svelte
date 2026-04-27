@@ -1,8 +1,9 @@
 <script lang="ts">
   import { adapter } from '$lib/adapter';
   import type { SaleRow } from '$lib/data/comercial';
-  import { Search, RefreshCw } from 'lucide-svelte';
+  import { Search, RefreshCw, Plus } from 'lucide-svelte';
   import OrderDetailModal from '../modals/OrderDetailModal.svelte';
+  import SaleFormModal from '../modals/SaleFormModal.svelte';
 
   let sales = $state<SaleRow[]>([]);
   let total = $state(0);
@@ -14,6 +15,7 @@
   let paymentFilter = $state<string>('all');
 
   let openOrderRef = $state<string | null>(null);
+  let openCreate = $state(false);
 
   type SortKey = 'date' | 'total' | 'customer' | 'status';
   let sortBy = $state<SortKey>('date');
@@ -150,9 +152,17 @@
 
       <button
         type="button"
+        onclick={() => (openCreate = true)}
+        class="ml-auto flex items-center gap-1.5 rounded-[4px] bg-[var(--color-accent)] px-3 py-1 text-[11px] font-semibold text-black"
+      >
+        <Plus size={12} strokeWidth={2} /> Nueva venta
+      </button>
+
+      <button
+        type="button"
         onclick={loadSales}
         disabled={loading}
-        class="ml-auto flex items-center gap-1.5 rounded-[4px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-3 py-1 text-[11px] text-[var(--color-text-secondary)]"
+        class="flex items-center gap-1.5 rounded-[4px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-3 py-1 text-[11px] text-[var(--color-text-secondary)]"
       >
         <RefreshCw size={12} strokeWidth={2} /> Refresh
       </button>
@@ -238,4 +248,8 @@
 
 {#if openOrderRef}
   <OrderDetailModal orderRef={openOrderRef} onClose={() => { openOrderRef = null; void loadSales(); }} />
+{/if}
+
+{#if openCreate}
+  <SaleFormModal mode="create" onClose={() => { openCreate = false; void loadSales(); }} />
 {/if}
