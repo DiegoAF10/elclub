@@ -30,8 +30,10 @@
 
   let editingSource = $state(false);
   let sourceDraft = $state('');
+  let sourceError = $state<string | null>(null);
 
   let blockedToggling = $state(false);
+  let blockedError = $state<string | null>(null);
 
   const SOURCES = ['f&f', 'ads_meta', 'organic_wa', 'organic_ig', 'messenger', 'web', 'manual', 'otro'];
 
@@ -112,11 +114,13 @@
 
   async function saveSource() {
     if (!profile) return;
+    sourceError = null;
     try {
       await adapter.updateCustomerSource(profile.customerId, sourceDraft || null);
       editingSource = false;
       await loadProfile();
     } catch (e) {
+      sourceError = e instanceof Error ? e.message : String(e);
       console.warn('[customer-profile] source update failed', e);
     }
   }
@@ -124,11 +128,13 @@
   // === Block / unblock ===
   async function toggleBlocked() {
     if (!profile || blockedToggling) return;
+    blockedError = null;
     blockedToggling = true;
     try {
       await adapter.setCustomerBlocked(profile.customerId, !profile.blocked);
       await loadProfile();
     } catch (e) {
+      blockedError = e instanceof Error ? e.message : String(e);
       console.warn('[customer-profile] block toggle failed', e);
     } finally {
       blockedToggling = false;
@@ -243,6 +249,7 @@
                   <option value={s}>{s}</option>
                 {/each}
               </select>
+              {#if sourceError}<div class="text-[10px] text-[var(--color-danger)]">⚠ {sourceError}</div>{/if}
               <div class="flex gap-2">
                 <button type="button" onclick={saveSource} class="flex-1 rounded-[3px] bg-[var(--color-accent)] px-2 py-0.5 text-[10px] font-semibold text-black">Guardar</button>
                 <button type="button" onclick={() => (editingSource = false)} class="flex-1 rounded-[3px] border border-[var(--color-border)] px-2 py-0.5 text-[10px] text-[var(--color-text-secondary)]">Cancelar</button>
@@ -302,6 +309,7 @@
               {profile.blocked ? 'Desbloquear' : 'Bloquear'}
             </button>
           </div>
+          {#if blockedError}<div class="mt-1 text-[10px] text-[var(--color-danger)]">⚠ {blockedError}</div>{/if}
         </div>
       </div>
     {/if}
