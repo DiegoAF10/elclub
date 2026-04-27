@@ -229,3 +229,73 @@ export interface CreateOrderItem {
   unitCost?: number | null;
   itemType?: string | null;
 }
+
+// ─── R5: Ads + Performance ────────────────────────────────────
+
+export interface Campaign {
+  campaignId: string;
+  campaignName: string | null;
+  lastSyncAt: string | null;
+  totalSpendGtq: number;
+  totalImpressions: number;
+  totalClicks: number;
+  totalConversions: number;
+  totalRevenueGtq: number;
+  costPerConversionGtq: number | null;
+  status: 'active' | 'paused' | 'archived' | 'unknown';
+}
+
+export interface CampaignSnapshot {
+  snapshotId: number;
+  campaignId: string;
+  capturedAt: string;
+  impressions: number;
+  clicks: number;
+  spendGtq: number;
+  conversions: number;
+  revenueAttributedGtq: number;
+}
+
+export interface CampaignTimePoint {
+  date: string;
+  spendGtq: number;
+  conversions: number;
+  revenueGtq: number;
+  impressions: number;
+  clicks: number;
+}
+
+export interface CampaignDetail {
+  campaign: Campaign;
+  daily: CampaignTimePoint[];
+  attributedSales: Array<{
+    saleId: number;
+    ref: string;
+    customerName: string | null;
+    totalGtq: number;
+    occurredAt: string;
+  }>;
+}
+
+export interface FunnelAwarenessReal {
+  periodStart: string;
+  periodEnd: string;
+  totalCampaigns: number;
+  impressions: number;
+  clicks: number;
+  spendGtq: number;
+  conversions: number;
+  revenueAttributedGtq: number;
+  cpm: number | null;
+  cpc: number | null;
+  ctr: number | null;
+  byCampaign: Array<{ campaignId: string; campaignName: string | null; spendGtq: number; impressions: number }>;
+  lastSyncAt: string | null;
+}
+
+export interface MetaSyncResult {
+  ok: boolean;
+  campaignsSynced: number;
+  errors: string[];
+  syncedAt: string;
+}
