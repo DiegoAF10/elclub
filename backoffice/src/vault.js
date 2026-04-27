@@ -862,6 +862,47 @@ export async function runVaultPendingConfirmationSweep(env) {
 }
 
 /**
+ * Send an email to a customer (not Diego) via Brevo. Brevo free tier supports
+ * multi-domain (300/day). Para emails internos a Diego seguimos usando Resend
+ * (notifyDiegoVaultPayment) que ya tiene la cuenta + fallback graceful.
+ *
+ * NOTE: si BREVO_API_KEY no está seteado, falla silently (logging) en vez
+ * de bloquear el sweep. Diego puede ver el log y configurar después.
+ *
+ * @returns {Promise<void>}  throws on Brevo non-2xx for upstream error handling
+ */
+async function sendBrevoEmail(env, { to, toName, subject, html, fromName = 'El Club Vault' }) {
+  if (!env.BREVO_API_KEY) {
+    console.warn('[brevo] BREVO_API_KEY not set — skipping customer email');
+    return;
+  }
+  const fromEmail = env.VAULT_CUSTOMER_EMAIL_FROM || 'vault@elclub.club';
+
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'accept': 'application/json',
+      'api-key': env.BREVO_API_KEY,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: { name: fromName, email: fromEmail },
+      to: [{ email: to, name: toName || to.split('@')[0] }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    console.error(`[brevo] send failed ${res.status}: ${errText}`);
+    throw new Error(`Brevo ${res.status}`);
+  }
+  const data = await res.json().catch(() => ({}));
+  console.log(`[brevo] sent to ${to} messageId=${data.messageId || '?'}`);
+}
+
+/**
  * Send a single email nudge to the CUSTOMER (not Diego) at T+12h reminding
  * them to confirm their Path B pedido by sending the WhatsApp message.
  * Pre-rellena el wa.me link con el formato exacto que el bot detecta.
@@ -869,16 +910,13 @@ export async function runVaultPendingConfirmationSweep(env) {
  * Silent-fail — sweep continues even if email send errors.
  *
  * NOTE customer-facing: respeta la regla "no China" (memory:feedback_elclub_no_china).
+ * NOTE: usa Brevo (no Resend) porque Resend free permite solo 1 domain
+ *       verificado y ese es de VENTUS.
  */
 export async function sendCodPendingNudge(env, lead) {
-  if (!env.RESEND_API_KEY) {
-    console.warn('RESEND_API_KEY not set — skipping customer nudge');
-    return;
-  }
   if (!lead?.cliente?.email) return;
 
   const to       = lead.cliente.email;
-  const from     = env.VAULT_EMAIL_FROM || 'El Club Vault <onboarding@resend.dev>';
   const ref      = lead.ref;
   const nombre   = lead.cliente.nombre?.split(/\s+/)[0] || 'amigo';
   const totalCod = lead.total_cod || '?';
@@ -886,74 +924,150 @@ export async function sendCodPendingNudge(env, lead) {
   const confirmText = `CONFIRMO PEDIDO ${ref}`;
   const waLink   = `https://wa.me/${waNumber}?text=${encodeURIComponent(confirmText)}`;
 
-  const subject = `⏰ Tu pedido del Vault necesita 1 paso más — ${ref}`;
+  const subject = `Falta 1 paso para activar tu pedido — ${ref}`;
+
+  // Product cards (max 2 visible — más se ve abrumador). Thumbnail prominent
+  // a la izquierda, info estructurada a la derecha. Tabla porque flexbox no
+  // funciona consistente en Outlook/Gmail iOS.
+  const productosArr = lead.productos || [];
+  const productCards = productosArr.slice(0, 2).map(p => {
+    const team = p.team || 'Jersey';
+    const season = p.season ? ` ${p.season}` : '';
+    const variant = p.variant_label ? ` · ${p.variant_label}` : '';
+    const sleeve = p.sleeve === 'long' ? ' · Manga larga' : '';
+    const size = p.size ? `Talla ${p.size}` : 'Talla a definir';
+    const pers = p.personalization || {};
+    const persLine = (pers.nombre || pers.numero) ? `${pers.nombre || ''} ${pers.numero ? '#' + pers.numero : ''}`.trim() : '';
+    const parche = pers.parche_label && pers.parche_label !== 'ninguno' ? pers.parche_label : '';
+    const thumb = p.thumbnail || 'https://vault.elclub.club/assets/img/placeholder.png';
+    return `
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:12px;background:#111827;border-radius:8px;overflow:hidden">
+        <tr>
+          <td width="96" style="vertical-align:top;background:#fff">
+            <img src="${thumb}" alt="${team}${season}" width="96" height="96" style="display:block;width:96px;height:96px;object-fit:cover">
+          </td>
+          <td style="padding:14px 16px;vertical-align:top">
+            <div style="font-size:15px;font-weight:700;color:#f9fafb;line-height:1.3;margin-bottom:4px">${team}${season}${variant}</div>
+            <div style="font-size:13px;color:#9ca3af;line-height:1.4">${size}${sleeve}</div>
+            ${persLine ? `<div style="font-size:12px;color:#fbbf24;font-family:monospace;margin-top:6px;letter-spacing:0.5px">${persLine}</div>` : ''}
+            ${parche ? `<div style="font-size:11px;color:#a78bfa;margin-top:4px">+ ${parche}</div>` : ''}
+          </td>
+        </tr>
+      </table>
+    `;
+  }).join('');
+  const remainder = productosArr.length > 2 ? `<div style="text-align:center;font-size:12px;color:#6b7280;margin-top:-4px;margin-bottom:12px">+ ${productosArr.length - 2} producto${productosArr.length - 2 === 1 ? '' : 's'} más</div>` : '';
 
   const html = `
-    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;background:#0a0b0d;color:#e5e7eb;padding:0">
-      <div style="background:#f59e0b;padding:24px;text-align:center;color:#1f2937">
-        <div style="font-size:13px;letter-spacing:1.5px;text-transform:uppercase;font-weight:600;opacity:0.85">El Club Vault</div>
-        <h1 style="margin:8px 0 0;font-size:22px;font-weight:700">⏰ Falta 1 paso, ${nombre}</h1>
-      </div>
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${subject}</title></head>
+<body style="margin:0;padding:0;background:#0a0b0d;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,sans-serif">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#0a0b0d;padding:20px 0">
+  <tr><td align="center">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;background:#0f1115;border-radius:12px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,0.4)">
 
-      <div style="padding:24px;background:#1f2937">
-        <p style="margin:0 0 16px;font-size:15px;line-height:1.5;color:#e5e7eb">
-          Tu pedido <code style="background:#374151;padding:2px 8px;border-radius:4px;font-family:monospace">${ref}</code> está reservado pero <strong>aún no fue confirmado</strong>.
-          Para activarlo, mandanos un mensaje por WhatsApp con este texto exacto:
-        </p>
+      <!-- HEADER amber con branding -->
+      <tr><td style="background:linear-gradient(135deg,#f59e0b 0%,#d97706 100%);padding:28px 24px;text-align:center;color:#1f2937">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:11px;letter-spacing:4px;text-transform:uppercase;font-weight:700;opacity:0.7;margin-bottom:4px">EL CLUB</div>
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:24px;letter-spacing:6px;text-transform:uppercase;font-weight:900;color:#1f2937;line-height:1">VAULT</div>
+        <div style="height:2px;width:48px;background:#1f2937;margin:14px auto 18px;opacity:0.4"></div>
+        <h1 style="margin:0;font-size:22px;font-weight:700;color:#1f2937;line-height:1.3">Falta 1 paso, ${nombre}</h1>
+        <div style="margin-top:8px;font-size:13px;color:#1f2937;opacity:0.75">Tu pedido espera tu confirmación por WhatsApp</div>
+      </td></tr>
 
-        <div style="background:#374151;padding:14px 16px;border-radius:6px;margin:16px 0;border-left:3px solid #25D366">
-          <code style="font-family:monospace;font-size:15px;color:#f3f4f6;letter-spacing:0.5px">${confirmText}</code>
+      <!-- BODY -->
+      <tr><td style="padding:28px 24px;background:#0f1115">
+
+        <!-- REF badge -->
+        <div style="text-align:center;margin-bottom:24px">
+          <span style="display:inline-block;padding:6px 14px;background:#1f2937;border-radius:20px;font-family:monospace;font-size:13px;color:#9ca3af;letter-spacing:1px">${ref}</span>
         </div>
 
-        <a href="${waLink}" style="display:block;padding:16px 24px;background:#25D366;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:16px;text-align:center;margin:16px 0">
-          ✓ CONFIRMAR POR WHATSAPP
-        </a>
+        <!-- PRODUCT CARDS -->
+        <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#6b7280;margin-bottom:10px;font-weight:600">Tu pedido</div>
+        ${productCards}
+        ${remainder}
 
-        <p style="margin:16px 0 0;font-size:13px;color:#9ca3af;text-align:center">
-          El botón abre WhatsApp con el mensaje listo. Solo dale enviar.
+        <!-- TOTAL pill -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:8px;margin-bottom:28px">
+          <tr>
+            <td style="padding:12px 14px;background:#0a0b0d;border:1px solid #1f2937;border-radius:6px">
+              <table role="presentation" width="100%"><tr>
+                <td style="font-size:13px;color:#9ca3af">Total al recibir</td>
+                <td style="text-align:right;font-size:18px;font-weight:700;color:#f9fafb;font-family:monospace">Q${totalCod}</td>
+              </tr><tr>
+                <td colspan="2" style="font-size:11px;color:#6b7280;padding-top:4px">Envío gratis a domicilio · Pago contra entrega</td>
+              </tr></table>
+            </td>
+          </tr>
+        </table>
+
+        <!-- DIVIDER -->
+        <div style="height:1px;background:#1f2937;margin:0 0 24px"></div>
+
+        <!-- CTA INSTRUCTIONS -->
+        <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#fbbf24;margin-bottom:12px;font-weight:600;text-align:center">⏱ Acción requerida</div>
+        <p style="margin:0 0 18px;font-size:15px;line-height:1.5;color:#e5e7eb;text-align:center">
+          Para activar tu pedido, copiá <strong style="color:#f9fafb">este texto exacto</strong> y mandalo por WhatsApp:
         </p>
 
-        <hr style="border:none;border-top:1px solid #374151;margin:24px 0">
+        <!-- COPY-ME box -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px">
+          <tr><td style="padding:18px 16px;background:#1f2937;border:2px dashed #25D366;border-radius:8px;text-align:center">
+            <code style="font-family:'SF Mono',Monaco,Consolas,monospace;font-size:16px;color:#f9fafb;letter-spacing:1px;font-weight:600">${confirmText}</code>
+          </td></tr>
+        </table>
 
-        <div style="font-size:13px;color:#9ca3af;line-height:1.6">
-          <strong style="color:#f3f4f6">Tu pedido:</strong><br>
-          ${(lead.productos || []).slice(0, 3).map(p => {
-            const label = [p.team, p.season, p.variant_label].filter(Boolean).join(' ');
-            return `&bull; ${label || 'Jersey'} · Talla ${p.size || '—'}`;
-          }).join('<br>')}
-          ${(lead.productos || []).length > 3 ? `<br>&bull; +${lead.productos.length - 3} más` : ''}
-          <br><br>
-          <strong style="color:#f3f4f6">Total al recibir:</strong> Q${totalCod}<br>
-          <strong style="color:#f3f4f6">Envío:</strong> Gratis a domicilio
+        <!-- CTA BUTTON -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 12px">
+          <tr><td align="center">
+            <a href="${waLink}" target="_blank" style="display:inline-block;width:100%;padding:18px 24px;background:#25D366;color:#ffffff;text-decoration:none;border-radius:10px;font-weight:700;font-size:17px;text-align:center;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,sans-serif">
+              ✓ CONFIRMAR POR WHATSAPP
+            </a>
+          </td></tr>
+        </table>
+
+        <p style="margin:0 0 24px;font-size:12px;color:#9ca3af;text-align:center;line-height:1.5">
+          El botón abre WhatsApp con el mensaje listo.<br>Solo dale <strong style="color:#e5e7eb">Enviar</strong>.
+        </p>
+
+        <!-- DEADLINE -->
+        <div style="margin:24px 0 0;padding:14px 16px;background:rgba(245,158,11,0.08);border-left:3px solid #f59e0b;border-radius:4px">
+          <div style="font-size:12px;color:#fbbf24;font-weight:600;margin-bottom:4px">⏳ Te quedan ~12 horas</div>
+          <div style="font-size:12px;color:#9ca3af;line-height:1.5">
+            Si no confirmás, el pedido se cancela automáticamente. ¿Cambiaste de idea? Ignorá este correo y se cancela solo.
+          </div>
         </div>
 
-        <p style="margin:20px 0 0;font-size:12px;color:#6b7280;line-height:1.5">
-          Si no confirmás en las próximas ~12 horas, tu pedido se cancelará automáticamente.
-          ¿Cambiaste de idea? Ignorá este correo y se cancela solo.
-        </p>
-      </div>
+      </td></tr>
 
-      <div style="background:#0a0b0d;padding:16px;text-align:center;font-size:12px;color:#6b7280">
-        El Club Vault · vault.elclub.club · La camiseta te elige a vos.
-      </div>
-    </div>
+      <!-- FOOTER -->
+      <tr><td style="background:#0a0b0d;padding:24px;text-align:center">
+        <div style="font-family:Georgia,serif;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#6b7280;margin-bottom:6px">El Club</div>
+        <div style="font-size:13px;color:#9ca3af;font-style:italic;margin-bottom:14px">"La camiseta te elige a vos."</div>
+        <div style="font-size:11px;color:#4b5563;line-height:1.6">
+          <a href="https://vault.elclub.club" style="color:#9ca3af;text-decoration:none">vault.elclub.club</a>
+          &nbsp;·&nbsp;
+          <a href="https://instagram.com/club.gt" style="color:#9ca3af;text-decoration:none">@club.gt</a>
+          &nbsp;·&nbsp;
+          <a href="https://tiktok.com/@club.gtm" style="color:#9ca3af;text-decoration:none">@club.gtm</a>
+        </div>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body></html>
   `;
 
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ from, to: [to], subject, html }),
+  await sendBrevoEmail(env, {
+    to,
+    toName: lead.cliente.nombre || nombre,
+    subject,
+    html,
+    fromName: 'El Club Vault',
   });
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '');
-    console.error(`Resend nudge failed ${res.status} for ${ref}: ${errText}`);
-    throw new Error(`Resend ${res.status}`);
-  }
-
   console.log(`[nudge] ${ref} → ${to}`);
 }
 
