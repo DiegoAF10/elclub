@@ -1959,6 +1959,12 @@ async fn comercial_get_conversation_messages(args: GetConvMessagesArgs) -> Resul
 }
 
 // ─── Comercial R4 ──────────────────────────────────────────────────────────
+// NOTE: Commands taking struct args expect TS callers to wrap as `{ args: {...} }`
+// (pattern established by R1 Task 4 fix 1708b12). The primitive-arg command below
+// (`comercial_get_customer_profile`) takes `{ customerId }` directly without wrap.
+// DEFERRED to R5: `comercial_generate_coupon` — pending Task 0 worker endpoint
+// confirmation (current /api/coupons/generate uses COUPON_API_KEY + ig_user_id
+// dedup, incompatible with the planned customer_id + amount/percent contract).
 
 #[tauri::command]
 async fn comercial_get_customer_profile(customer_id: i64) -> Result<Value> {
