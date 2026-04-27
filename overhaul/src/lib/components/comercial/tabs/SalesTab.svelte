@@ -189,7 +189,7 @@
 
   <!-- Table header -->
   <div class="text-display flex border-b border-[var(--color-border)] bg-[var(--color-surface-0)] px-6 py-1.5 text-[9px] text-[var(--color-text-tertiary)]">
-    <div class="w-20">REF</div>
+    <div class="w-24">REF</div>
     <div class="w-16">FECHA</div>
     <div class="w-14">STATUS</div>
     <div class="w-12">PAGO</div>
@@ -214,7 +214,7 @@
           class="flex w-full items-baseline border-b border-[var(--color-border)] px-6 py-2 text-left transition-colors hover:bg-[var(--color-surface-1)]"
           style="border-left: 3px solid {statusColor(s.fulfillmentStatus)};"
         >
-          <div class="text-mono w-20 text-[11px] text-[var(--color-text-primary)]">{s.ref}</div>
+          <div class="text-mono w-24 truncate text-[11px] text-[var(--color-text-primary)]" title={s.ref}>{s.ref}</div>
           <div class="text-mono w-16 text-[10px] text-[var(--color-text-secondary)]">{fmtDate(s.occurredAt)}</div>
           <div class="w-14">
             <span class="text-display text-[9px]" style="color: {statusColor(s.fulfillmentStatus)};">
