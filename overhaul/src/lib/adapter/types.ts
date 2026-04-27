@@ -15,7 +15,11 @@ import type {
 	MetaSyncStatus,
 	CustomerProfile,
 	CreateCustomerArgs,
-	CreateOrderArgs
+	CreateOrderArgs,
+	Campaign,
+	CampaignDetail,
+	FunnelAwarenessReal,
+	MetaSyncResult
 } from '../data/comercial';
 
 export type AuditStatus =
@@ -288,6 +292,13 @@ export interface Adapter {
 	setCustomerBlocked(customerId: number, blocked: boolean): Promise<void>;
 	updateCustomerSource(customerId: number, source: string | null): Promise<void>;
 	createManualOrder(args: CreateOrderArgs): Promise<{ ok: boolean; ref?: string; saleId?: number; error?: string }>;
+
+	// ─── Comercial R5 ──────────────────────────────────────────
+	syncMetaAds(args?: { days?: number; datePreset?: string }): Promise<MetaSyncResult>;
+	listCampaigns(args?: { periodDays?: number }): Promise<Campaign[]>;
+	getCampaignDetail(campaignId: string, periodDays?: number): Promise<CampaignDetail | null>;
+	getFunnelAwarenessReal(args?: { periodStart?: string; periodEnd?: string }): Promise<FunnelAwarenessReal | null>;
+	generateCoupon(args: { customerId: number; type: 'percent' | 'amount'; value: number; expiresInDays?: number }): Promise<{ ok: boolean; code?: string; error?: string; pending?: boolean }>;
 }
 
 // ─── Error para operaciones no disponibles en dev ────────────────────
