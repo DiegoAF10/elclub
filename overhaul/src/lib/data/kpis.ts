@@ -48,6 +48,25 @@ export function resolvePeriod(period: Period, now: Date = new Date()): PeriodRan
 }
 
 /**
+ * Devuelve el rango inmediatamente anterior al `range` dado, con la misma duración.
+ * Ejemplo: si range = hoy 00:00 → ahora, prev = ayer 00:00 → ayer-23:59.
+ */
+export function resolvePreviousRange(range: PeriodRange): PeriodRange {
+  const startMs = new Date(range.start).getTime();
+  const endMs = new Date(range.end).getTime();
+  const duration = endMs - startMs;
+
+  const prevEnd = new Date(startMs);
+  const prevStart = new Date(startMs - duration);
+
+  return {
+    period: range.period,  // semánticamente "el período anterior del mismo tipo"
+    start: prevStart.toISOString(),
+    end: prevEnd.toISOString(),
+  };
+}
+
+/**
  * Computa KPIs del pulso bar para un período dado.
  * Comparación de trend vs período anterior de igual longitud.
  */
