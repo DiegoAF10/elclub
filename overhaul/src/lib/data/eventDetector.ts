@@ -42,6 +42,44 @@ export async function detectOrdersPending24h(): Promise<DetectedEvent | null> {
 }
 
 /**
+ * Detector "leads sin responder >12h".
+ * Considera conversations donde outcome es null o 'pending' y last_activity (ended_at)
+ * es más viejo que 12h. severity = warn (NO push WA — solo Inbox).
+ */
+export async function detectLeadsUnanswered12h(): Promise<DetectedEvent | null> {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - 12 * 3600 * 1000).toISOString();
+
+  let convs;
+  try {
+    convs = await adapter.listConversations({ outcome: 'pending' });
+  } catch (e) {
+    console.warn('[detector] listConversations failed', e);
+    return null;
+  }
+
+  // Considerar también las que tienen outcome=null
+  const stale = convs.filter((c: any) =>
+    c.endedAt < cutoff && (c.outcome === null || c.outcome === 'pending')
+  );
+
+  if (stale.length === 0) return null;
+
+  return {
+    type: 'leads_unanswered_12h',
+    severity: 'warn',
+    title: `${stale.length} lead${stale.length === 1 ? '' : 's'} sin responder >12h`,
+    sub: stale.slice(0, 3).map((c: any) => `${c.platform}:${c.senderId}`).join(' · ')
+      + (stale.length > 3 ? ` · +${stale.length - 3}` : ''),
+    itemsAffected: stale.map((c: any) => ({
+      type: 'conversation',
+      id: c.convId,
+      hint: c.platform,
+    })),
+  };
+}
+
+/**
  * Inserta el evento en comercial_events vía adapter.
  * Si ya existe un evento activo del mismo type, NO duplica.
  */
@@ -82,7 +120,9 @@ export function startDetectorLoop(): () => void {
     try {
       const ordersPending = await detectOrdersPending24h();
       if (ordersPending) await persistEvent(ordersPending);
-      // R3+ agregará más detectores: lead_unanswered_12h, etc.
+
+      const leadsUnanswered = await detectLeadsUnanswered12h();
+      if (leadsUnanswered) await persistEvent(leadsUnanswered);
     } catch (e) {
       console.warn('[detector] run failed', e);
     }
