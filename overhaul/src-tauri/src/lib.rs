@@ -462,8 +462,7 @@ fn set_family_published(
             .ok_or_else(|| ErpError::NotFound(format!("family_id {}", family_id)))?;
         fam.insert("published".to_string(), Value::Bool(published));
     }
-    write_catalog_atomic(&catalog)?;
-    invalidate_catalog(&state);
+    write_catalog_atomic_keep_cache(&catalog, &state)?;
     Ok(())
 }
 
@@ -479,8 +478,7 @@ fn set_family_featured(
             .ok_or_else(|| ErpError::NotFound(format!("family_id {}", family_id)))?;
         fam.insert("featured".to_string(), Value::Bool(featured));
     }
-    write_catalog_atomic(&catalog)?;
-    invalidate_catalog(&state);
+    write_catalog_atomic_keep_cache(&catalog, &state)?;
     Ok(())
 }
 
@@ -544,8 +542,7 @@ fn set_primary_modelo_idx(
             fam.insert("hero_thumbnail".to_string(), h);
         }
     }
-    write_catalog_atomic(&catalog)?;
-    invalidate_catalog(&state);
+    write_catalog_atomic_keep_cache(&catalog, &state)?;
     Ok(())
 }
 
@@ -561,8 +558,7 @@ fn set_family_archived(
             .ok_or_else(|| ErpError::NotFound(format!("family_id {}", family_id)))?;
         fam.insert("archived".to_string(), Value::Bool(archived));
     }
-    write_catalog_atomic(&catalog)?;
-    invalidate_catalog(&state);
+    write_catalog_atomic_keep_cache(&catalog, &state)?;
     Ok(())
 }
 
@@ -679,8 +675,7 @@ fn set_modelo_sold_out(
             .ok_or_else(|| ErpError::Other("modelo is not an object".to_string()))?;
         modelo_map.insert("sold_out".to_string(), Value::Bool(sold_out));
     }
-    write_catalog_atomic(&catalog)?;
-    invalidate_catalog(&state);
+    write_catalog_atomic_keep_cache(&catalog, &state)?;
     Ok(())
 }
 
@@ -777,8 +772,7 @@ async fn remove_modelo_photos(
     }
 
     // 2. Persist catalog (ANTES de borrar R2, por si falla R2 al menos el catalog queda limpio)
-    write_catalog_atomic(&catalog)?;
-    invalidate_catalog(&state);
+    write_catalog_atomic_keep_cache(&catalog, &state)?;
 
     // 3. Opcionalmente borrar de R2
     let (deleted_r2, r2_failed, r2_errors) = if also_delete_r2.unwrap_or(false) && !removed_urls.is_empty() {
@@ -864,8 +858,7 @@ fn update_gallery_order(
             }
         }
     }
-    write_catalog_atomic(&catalog)?;
-    invalidate_catalog(&state);
+    write_catalog_atomic_keep_cache(&catalog, &state)?;
     Ok(())
 }
 
@@ -1845,6 +1838,126 @@ async fn comercial_insert_event(args: InsertEventArgs) -> Result<i64> {
     Ok(result.get("eventId").and_then(|v| v.as_i64()).unwrap_or(-1))
 }
 
+// ─── Comercial R2-combo ────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncManychatArgs {
+    pub since: Option<String>,
+    pub worker_base: Option<String>,
+    pub dashboard_key: String,
+}
+
+#[tauri::command]
+async fn comercial_sync_manychat(args: SyncManychatArgs) -> Result<Value> {
+    let payload = serde_json::json!({
+        "cmd": "sync_manychat",
+        "since": args.since,
+        "workerBase": args.worker_base,
+        "dashboardKey": args.dashboard_key,
+    });
+    tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ListLeadsFilter {
+    pub status: Option<String>,
+    pub range_start: Option<String>,
+    pub range_end: Option<String>,
+}
+
+#[tauri::command]
+async fn comercial_list_leads(filter: ListLeadsFilter) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({
+        "cmd": "list_leads",
+        "status": filter.status,
+        "rangeStart": filter.range_start,
+        "rangeEnd": filter.range_end,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("leads").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ListConvsFilter {
+    pub outcome: Option<String>,
+    pub range_start: Option<String>,
+    pub range_end: Option<String>,
+    pub lead_id: Option<i64>,
+}
+
+#[tauri::command]
+async fn comercial_list_conversations(filter: ListConvsFilter) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({
+        "cmd": "list_conversations",
+        "outcome": filter.outcome,
+        "rangeStart": filter.range_start,
+        "rangeEnd": filter.range_end,
+        "leadId": filter.lead_id,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("conversations").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ListCustomersFilter {
+    pub last_order_before: Option<String>,
+    pub min_ltv_gtq: Option<f64>,
+}
+
+#[tauri::command]
+async fn comercial_list_customers(filter: ListCustomersFilter) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({
+        "cmd": "list_customers",
+        "lastOrderBefore": filter.last_order_before,
+        "minLtvGtq": filter.min_ltv_gtq,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("customers").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
+#[tauri::command]
+async fn comercial_get_meta_sync(source: String) -> Result<Value> {
+    let payload = serde_json::json!({ "cmd": "get_meta_sync", "source": source });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("metaSync").cloned().unwrap_or(Value::Null))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetConvMessagesArgs {
+    pub conv_id: String,
+    pub worker_base: Option<String>,
+    pub dashboard_key: String,
+}
+
+#[tauri::command]
+async fn comercial_get_conversation_messages(args: GetConvMessagesArgs) -> Result<Vec<Value>> {
+    let payload = serde_json::json!({
+        "cmd": "get_conversation_messages",
+        "convId": args.conv_id,
+        "workerBase": args.worker_base,
+        "dashboardKey": args.dashboard_key,
+    });
+    let result = tauri::async_runtime::spawn_blocking(move || run_python_bridge(&payload))
+        .await
+        .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))??;
+    Ok(result.get("messages").and_then(|v| v.as_array()).cloned().unwrap_or_default())
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1891,6 +2004,13 @@ pub fn run() {
             comercial_list_leads_in_range,
             comercial_list_ad_spend_in_range,
             comercial_insert_event,
+            // Comercial R2
+            comercial_sync_manychat,
+            comercial_list_leads,
+            comercial_list_conversations,
+            comercial_list_customers,
+            comercial_get_meta_sync,
+            comercial_get_conversation_messages,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
