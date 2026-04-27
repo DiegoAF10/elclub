@@ -1,7 +1,7 @@
 <script lang="ts">
   import { adapter } from '$lib/adapter';
-  import type { OrderForModal } from '$lib/data/comercial';
-  import { Package, MessageCircle, Truck, Phone, Loader2 } from 'lucide-svelte';
+  import type { OrderForModal, SaleAttribution } from '$lib/data/comercial';
+  import { Package, MessageCircle, Truck, Phone, Loader2, TrendingUp } from 'lucide-svelte';
   import BaseModal from '../BaseModal.svelte';
 
   interface Props {
@@ -15,9 +15,22 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let action = $state<'idle' | 'shipping'>('idle');
+  let attribution = $state<SaleAttribution | null>(null);
 
   $effect(() => {
     loadOrder();
+  });
+
+  $effect(() => {
+    if (order) {
+      void (async () => {
+        try {
+          attribution = await adapter.getSaleAttribution(order.saleId);
+        } catch (e) {
+          console.warn('[order-detail] attribution load failed', e);
+        }
+      })();
+    }
   });
 
   async function loadOrder() {
@@ -143,6 +156,19 @@
             <div class="text-display mt-5 mb-2 text-[9.5px] text-[var(--color-text-tertiary)]">Notas</div>
             <div class="rounded-[3px] bg-[var(--color-surface-1)] p-2 text-[11px] text-[var(--color-text-secondary)]">
               {order.notes}
+            </div>
+          {/if}
+
+          {#if attribution}
+            <div class="mt-5 rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)] p-3">
+              <div class="text-display mb-1 text-[9.5px] text-[var(--color-text-tertiary)]">Atribución</div>
+              <div class="flex items-center gap-2 text-[11px]">
+                <TrendingUp size={12} strokeWidth={1.8} style="color: var(--color-accent);" />
+                <span class="font-medium">{attribution.adCampaignName ?? attribution.adCampaignId ?? '—'}</span>
+                {#if attribution.source}
+                  <span class="text-[9px] text-[var(--color-text-muted)]">· {attribution.source}</span>
+                {/if}
+              </div>
             </div>
           {/if}
         </div>

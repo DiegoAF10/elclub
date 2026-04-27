@@ -1071,7 +1071,7 @@ def cmd_get_order(args):
         # NOTA: customers no tiene handle/platform en esta versión del schema.
         # Defaults: handle=null, platform="web". Enriquecimiento desde leads en R6+.
         sale = conn.execute("""
-            SELECT s.ref, s.fulfillment_status, s.occurred_at, s.shipped_at, s.total,
+            SELECT s.sale_id, s.ref, s.fulfillment_status, s.occurred_at, s.shipped_at, s.total,
                    s.payment_method, s.notes,
                    c.name, c.phone
             FROM sales s
@@ -1082,24 +1082,27 @@ def cmd_get_order(args):
         if not sale:
             return {"ok": True, "order": None}
 
+        sale_id = sale[0]
+
         # Items
         items = conn.execute("""
             SELECT family_id, jersey_id, size, unit_price, unit_cost, personalization_json
             FROM sale_items
-            WHERE sale_id = (SELECT sale_id FROM sales WHERE ref = ?)
-        """, (ref,)).fetchall()
+            WHERE sale_id = ?
+        """, (sale_id,)).fetchall()
 
         order = {
-            "ref": sale[0],
-            "status": sale[1] or "paid",
-            "paidAt": sale[2],          # occurred_at = momento del pago
-            "shippedAt": sale[3],        # shipped_at = null hasta marcar shipped
-            "totalGtq": sale[4],
-            "paymentMethod": sale[5] or "recurrente",
-            "notes": sale[6],
+            "ref": sale[1],
+            "saleId": sale_id,
+            "status": sale[2] or "paid",
+            "paidAt": sale[3],          # occurred_at = momento del pago
+            "shippedAt": sale[4],        # shipped_at = null hasta marcar shipped
+            "totalGtq": sale[5],
+            "paymentMethod": sale[6] or "recurrente",
+            "notes": sale[7],
             "customer": {
-                "name": sale[7] or "(sin nombre)",
-                "phone": sale[8],
+                "name": sale[8] or "(sin nombre)",
+                "phone": sale[9],
                 "handle": None,           # no existe en customers schema (R1)
                 "platform": "web",        # default; orden originada via vault/web
             },

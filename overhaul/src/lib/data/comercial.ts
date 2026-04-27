@@ -69,6 +69,7 @@ export interface PulsoKPIs {
 
 export interface OrderForModal {
   ref: string;              // CE-XXXX
+  saleId: number;
   status: 'paid' | 'shipped' | 'delivered' | 'refunded' | 'cancelled';
   paidAt: string | null;
   shippedAt: string | null;
