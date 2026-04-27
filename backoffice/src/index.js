@@ -263,15 +263,20 @@ async function handleWebhook(request, env) {
   const eventType = payload.event_type;
   console.log(`Webhook received: ${eventType}`);
 
-  // Only process successful payments
-  if (eventType !== 'payment_intent.succeeded') {
+  // Only process successful payments — both card (payment_intent) and bank transfer
+  // (bank_transfer_intent). Pending/failed events are acknowledged but ignored
+  // (we just track the success transition; failure flow handled separately).
+  const SUCCESS_EVENTS = new Set(['payment_intent.succeeded', 'bank_transfer_intent.succeeded']);
+  if (!SUCCESS_EVENTS.has(eventType)) {
     return new Response(JSON.stringify({ status: 'ignored', event: eventType }), {
       headers: { 'Content-Type': 'application/json' },
     });
   }
 
-  // Recurrente sends the payment intent as the root object
-  const pi = payload.payment_intent || payload;
+  // Extract the intent regardless of event type. Recurrente puts it under
+  // `payment_intent` for card and `bank_transfer_intent` for transferencias,
+  // OR sometimes nests under root. Defensive normalization:
+  const pi = payload.payment_intent || payload.bank_transfer_intent || payload;
   const checkout = pi.checkout || {};
   const checkoutId = checkout.id;
   const amountCents = pi.amount_in_cents;
