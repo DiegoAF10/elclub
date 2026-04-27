@@ -30,6 +30,17 @@
 		onRefresh = () => {}
 	}: Props = $props();
 
+	async function openPdpLive() {
+		if (!family) return;
+		const url = `https://vault.elclub.club/producto.html?id=${encodeURIComponent(family.id)}`;
+		try {
+			const { invoke } = await import('@tauri-apps/api/core');
+			await invoke('plugin:shell|open', { path: url });
+		} catch (err) {
+			onFlash(`Abrir PDP falló: ${err instanceof Error ? err.message : String(err)}`);
+		}
+	}
+
 	async function handleSetPrimary(modeloIdx: number) {
 		if (family.primaryModeloIdx === modeloIdx) {
 			onFlash('Este modelo ya es primary');
@@ -245,6 +256,7 @@
 			</button>
 			<button
 				type="button"
+				onclick={openPdpLive}
 				class="flex items-center gap-1.5 rounded-[4px] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--color-text-secondary)] transition-colors hover:border-[var(--color-accent)]/60 hover:bg-[var(--color-accent-soft)] hover:text-[var(--color-accent)]"
 			>
 				<ExternalLink size={12} strokeWidth={1.8} />
