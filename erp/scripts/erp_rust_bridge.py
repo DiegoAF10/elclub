@@ -1846,6 +1846,8 @@ def cmd_create_manual_order(args):
                 item.get("variantLabel"),
                 item.get("version"),
                 item.get("size"),
+                # Note: column name says "json" but accepts plain text labels (e.g. "10 MESSI").
+                # Future schema cleanup can rename the column to personalization_text.
                 item.get("personalizationJson"),
                 item.get("unitPrice"),
                 item.get("unitCost"),
