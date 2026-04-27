@@ -1331,3 +1331,19 @@ footer .copyright, .footer .copyright {
   background: rgba(77, 168, 255, 0.1);
   color: #4DA8FF;
 }
+
+/* ═══ Hub cards · sub-brand accent overrides (Midnight Stadium F1) ═══
+   Default hover = ice (per .hub-card:hover above).
+   Mystery Box hub override → amber accent (D1 sub-brand).
+   Drop hub mantiene ice (default — clarity by restriction).
+   Vault hub se agrega cuando #6 follow-up integre el 3er card. */
+.hub-card#hub-surprise:hover {
+  border-color: var(--color-mystery-amber);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 0 0 1px var(--color-mystery-amber-dim),
+    0 0 40px var(--color-mystery-amber-glow);
+}
+.hub-card#hub-surprise .hub-card-meta {
+  color: var(--color-mystery-amber);
+}
