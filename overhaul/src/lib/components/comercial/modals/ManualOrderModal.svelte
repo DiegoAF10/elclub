@@ -1,6 +1,7 @@
 <script lang="ts">
   import { adapter } from '$lib/adapter';
   import type { CustomerProfile, CreateOrderItem } from '$lib/data/comercial';
+  import type { Family } from '$lib/data/types';
   import { ShoppingCart, Loader2, Plus, X } from 'lucide-svelte';
   import BaseModal from '../BaseModal.svelte';
 
@@ -35,7 +36,7 @@
   let saving = $state(false);
   let error = $state<string | null>(null);
 
-  let families = $state<any[]>([]);
+  let families = $state<Family[]>([]);
   let loadingCatalog = $state(true);
 
   $effect(() => {
@@ -61,15 +62,15 @@
     return families.filter((f) => f.team === team);
   }
 
-  function jerseySublabel(family: any): string {
-    return `${family.season ?? ''} ${family.variant_label ?? family.variant ?? ''}`.trim() || family.id;
+  function jerseySublabel(family: Family): string {
+    return `${family.season ?? ''} ${family.variantLabel ?? family.variant ?? ''}`.trim() || family.id;
   }
 
   function onFamilyChange(item: EditableItem) {
     const fam = families.find((f) => f.id === item.familyId);
     if (fam) {
       item.team = fam.team;
-      item.variantLabel = fam.variant_label ?? fam.variant ?? null;
+      item.variantLabel = fam.variantLabel ?? fam.variant ?? null;
       item.version = fam.season ?? null;
       if (fam.modelos && fam.modelos[0]) {
         item.jerseyId = fam.modelos[0].sku || fam.id;
@@ -99,7 +100,7 @@
 
   async function handleSubmit() {
     error = null;
-    if (items.some((i) => !i.familyId || !i.jerseyId || !i.size || !i.unitPrice || i.unitPrice <= 0)) {
+    if (items.some((i) => !i.team || !i.familyId || !i.jerseyId || !i.size || !i.unitPrice || i.unitPrice <= 0)) {
       error = 'Cada item necesita: team, jersey, size, unit price > 0';
       return;
     }
@@ -119,7 +120,8 @@
         notes: notes || undefined,
       };
       const result = await adapter.createManualOrder(payload);
-      if (result.ok && result.ref) {
+      if (result.ok) {
+        if (!result.ref) console.warn('[manual-order] ok=true but no ref returned', result);
         onClose();
       } else {
         error = result.error ?? 'Error desconocido';
