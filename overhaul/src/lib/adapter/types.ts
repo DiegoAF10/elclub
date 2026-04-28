@@ -2,6 +2,7 @@
 // Implementaciones concretas: browser.ts (dev sin Tauri) + tauri.ts (app nativa).
 
 import type { Family, Status } from '../data/types';
+import type { Import, ImportItem, ImportPulso, CloseImportResult } from '../data/importaciones';
 import type {
 	ComercialEvent,
 	DetectedEvent,
@@ -325,6 +326,13 @@ export interface Adapter {
 
 	// ─── Comercial R11 ──────────────────────────────────────────
 	replaceSaleItems(args: { saleId: number; items: CreateOrderItem[] }): Promise<{ ok: boolean; newSubtotal?: number; newTotal?: number; itemCount?: number; error?: string }>;
+
+	// ─── Importaciones R1 ──────────────────────────────────────
+	listImports(): Promise<Import[]>;
+	getImport(importId: string): Promise<Import>;
+	getImportItems(importId: string): Promise<ImportItem[]>;
+	getImportPulso(): Promise<ImportPulso>;
+	closeImportProportional(import_id: string): Promise<CloseImportResult>;
 }
 
 // ─── Error para operaciones no disponibles en dev ────────────────────
@@ -375,6 +383,10 @@ export interface CatalogModeloRow {
 	source_family_id?: string;
 	[key: string]: unknown;
 }
+
+// ─── IMP-R1 ──────────────────────────────────────────────────────────
+export type { Import, ImportStatus, ImportItem, ImportPulso, ImportFilter, CloseImportResult } from '../data/importaciones';
+export { STATUS_LABELS as IMPORT_STATUS_LABELS, STATUS_PROGRESS as IMPORT_STATUS_PROGRESS } from '../data/importaciones';
 
 // Re-export para conveniencia
 export type { Family, Status };

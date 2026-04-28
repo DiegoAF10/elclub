@@ -8,6 +8,7 @@
 		Package,
 		DollarSign,
 		Truck,
+		Ship,
 		Command,
 		Upload,
 		Loader2,
@@ -148,6 +149,7 @@
 		{ id: 'dashboard', label: 'Dashboard', icon: BarChart3, section: 'data' },
 		{ id: 'inventory', label: 'Inventario', icon: Package, section: 'data' },
 		{ id: 'comercial', label: 'Comercial', icon: DollarSign, section: 'data' },
+		{ id: 'importaciones', label: 'Importaciones', icon: Ship, section: 'data' },
 		{ id: 'orders', label: 'Órdenes', icon: Truck, section: 'data' }
 	];
 
