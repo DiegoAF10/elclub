@@ -8,19 +8,23 @@
   import FreeUnitsTab from './tabs/FreeUnitsTab.svelte';
   import SupplierTab from './tabs/SupplierTab.svelte';
   import ImportSettingsTab from './tabs/ImportSettingsTab.svelte';
+  import NewImportModal from './NewImportModal.svelte';
   import { adapter } from '$lib/adapter';
-  import type { ImportPulso } from '$lib/data/importaciones';
+  import type { ImportPulso, Import } from '$lib/data/importaciones';
 
   type TabId = 'pedidos' | 'wishlist' | 'margen' | 'free' | 'supplier' | 'settings';
 
   const STORAGE_KEY = 'imp.activeTab';
-
   const VALID_TABS: TabId[] = ['pedidos', 'wishlist', 'margen', 'free', 'supplier', 'settings'];
   const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
   let activeTab = $state<TabId>(
     VALID_TABS.includes(stored as TabId) ? (stored as TabId) : 'pedidos'
   );
   let pulso = $state<ImportPulso | null>(null);
+
+  // R1.5: NewImportModal state
+  let showNewModal = $state(false);
+  let exportingCsv = $state(false);
 
   $effect(() => {
     if (typeof localStorage !== 'undefined') {
@@ -35,6 +39,32 @@
   async function refreshPulso() {
     pulso = await adapter.getImportPulso();
   }
+
+  function handleImportCreated(_imp: Import) {
+    refreshPulso();
+    activeTab = 'pedidos';
+    // PedidosTab refreshes via the tab switch + onPulsoRefresh prop wiring it already has
+  }
+
+  async function handleExportCsv() {
+    if (exportingCsv) return;
+    exportingCsv = true;
+    try {
+      const csv = await adapter.exportImportsCsv();
+      // Trigger Blob download
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `imports-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(`Error exportando CSV: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      exportingCsv = false;
+    }
+  }
 </script>
 
 <div class="flex h-full flex-col">
@@ -47,13 +77,26 @@
       </div>
     </div>
     <div class="ml-auto flex gap-2">
-      <button class="text-mono rounded-[3px] border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]">
-        ⇣ Export CSV
+      <button
+        onclick={handleExportCsv}
+        disabled={exportingCsv}
+        class="text-mono rounded-[3px] border border-[var(--color-border)] bg-transparent px-3 py-1.5 text-[11px] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
+        class:cursor-not-allowed={exportingCsv}
+        class:opacity-60={exportingCsv}
+      >
+        {exportingCsv ? '⏳ Exportando...' : '⇣ Export CSV'}
       </button>
-      <button class="text-mono rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-[11px] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-3)]">
+      <button
+        disabled
+        title="DHL real auto-sync diferido a IMP-R5 supplier · usá Registrar arrival manual por ahora"
+        class="text-mono rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-[11px] text-[var(--color-text-tertiary)] cursor-not-allowed opacity-60"
+      >
         ↻ Sync DHL
       </button>
-      <button class="text-mono rounded-[3px] bg-[var(--color-accent)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-bg)] hover:bg-[var(--color-accent-hover)]">
+      <button
+        onclick={() => { showNewModal = true; }}
+        class="text-mono rounded-[3px] bg-[var(--color-accent)] px-3 py-1.5 text-[11px] font-semibold text-[var(--color-bg)] hover:bg-[var(--color-accent-hover)]"
+      >
         + Nuevo pedido
       </button>
     </div>
@@ -84,3 +127,9 @@
     {/if}
   </div>
 </div>
+
+<NewImportModal
+  open={showNewModal}
+  onClose={() => { showNewModal = false; }}
+  onCreated={handleImportCreated}
+/>
