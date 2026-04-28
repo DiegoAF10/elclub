@@ -76,24 +76,30 @@ CREATE_TABLES = [
 
 CREATE_VIEWS = [
     """
-    CREATE VIEW IF NOT EXISTS v_monthly_profit AS
+    DROP VIEW IF EXISTS v_monthly_profit
+    """,
+    """
+    CREATE VIEW v_monthly_profit AS
     SELECT
-      strftime('%Y-%m', s.paid_at) AS month,
-      SUM(s.total_gtq) AS revenue,
+      strftime('%Y-%m', COALESCE(s.shipped_at, s.occurred_at)) AS month,
+      SUM(s.total) AS revenue,
       SUM(COALESCE(si.unit_cost, 0)) AS cogs,
       (SELECT COALESCE(SUM(amount_gtq), 0) FROM expenses
-        WHERE strftime('%Y-%m', paid_at) = strftime('%Y-%m', s.paid_at)
+        WHERE strftime('%Y-%m', paid_at) = strftime('%Y-%m', COALESCE(s.shipped_at, s.occurred_at))
         AND category = 'marketing') AS marketing_logged,
       (SELECT COALESCE(SUM(amount_gtq), 0) FROM expenses
-        WHERE strftime('%Y-%m', paid_at) = strftime('%Y-%m', s.paid_at)
+        WHERE strftime('%Y-%m', paid_at) = strftime('%Y-%m', COALESCE(s.shipped_at, s.occurred_at))
         AND category NOT IN ('marketing', 'owner_draw')) AS opex
     FROM sales s
     LEFT JOIN sale_items si ON si.sale_id = s.sale_id
-    WHERE s.paid_at IS NOT NULL
-    GROUP BY strftime('%Y-%m', s.paid_at)
+    WHERE s.fulfillment_status IN ('shipped','delivered')
+    GROUP BY strftime('%Y-%m', COALESCE(s.shipped_at, s.occurred_at))
     """,
     """
-    CREATE VIEW IF NOT EXISTS v_shareholder_loan_balance AS
+    DROP VIEW IF EXISTS v_shareholder_loan_balance
+    """,
+    """
+    CREATE VIEW v_shareholder_loan_balance AS
     SELECT
       COALESCE(SUM(amount_gtq), 0) AS current_balance,
       MAX(movement_date) AS last_movement_date
@@ -127,7 +133,7 @@ def main():
 
     for sql in CREATE_VIEWS:
         cur.execute(sql)
-    print(f"  created/verified {len(CREATE_VIEWS)} views")
+    print(f"  recreated {len(CREATE_VIEWS)//2} views")
 
     for sql in CREATE_INDEXES:
         cur.execute(sql)
