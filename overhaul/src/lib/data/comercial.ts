@@ -70,28 +70,45 @@ export interface PulsoKPIs {
 export interface OrderForModal {
   ref: string;              // CE-XXXX
   saleId: number;
-  status: 'paid' | 'shipped' | 'delivered' | 'refunded' | 'cancelled';
+  status: string;  // fulfillment_status: 'pending' | 'sent_to_supplier' | 'in_production' | 'shipped' | 'delivered' | 'cancelled'
   paidAt: string | null;
   shippedAt: string | null;
+  // R15 breakdown
+  subtotalGtq: number;
+  shippingFeeGtq: number;
+  discountGtq: number;
   totalGtq: number;
+  paymentMethod: string;
+  shippingMethod: string | null;
+  trackingCode: string | null;
+  modality: string;       // 'mystery' | 'stock' | 'ondemand'
+  origin: string;
+  shippingAddress: ShippingAddress | null;
+  notes: string | null;
+  sourceVaultRef: string | null;
   customer: {
+    customerId: number | null;
     name: string;
     phone: string | null;
+    email: string | null;
     handle: string | null;
     platform: 'wa' | 'ig' | 'messenger' | 'web';
   };
   items: OrderItem[];
-  paymentMethod: 'recurrente' | 'transfer' | 'cod';
-  notes: string | null;
 }
 
 export interface OrderItem {
   familyId: string;
   jerseySku: string | null;
+  team: string | null;
+  season: string | null;
+  variantLabel: string | null;
+  version: string | null;
   size: string;
+  personalizationJson: string | null;
   unitPriceGtq: number;
   unitCostGtq: number | null;
-  personalizationJson: string | null;
+  itemType: string | null;
 }
 
 // ─── R2-combo: ManyChat sync + Funnel ──────────────────────────────
@@ -361,6 +378,7 @@ export interface SaleRow {
   customerEmail: string | null;
   itemsCount: number;
   firstItemLabel: string | null;   // R11 NEW
+  itemsAllLabels: string[];        // R15 NEW — all item labels for row display
 }
 
 export interface SalesListResult {
