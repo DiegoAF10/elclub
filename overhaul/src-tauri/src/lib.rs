@@ -4250,6 +4250,502 @@ fn promote_to_mystery(args: PromoteToMysteryJsonArgs) -> Result<Value> {
     }))
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// ADMIN WEB R7 — Tags system (T5.1 + T5.2)
+// ═══════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Serialize)]
+pub struct TagTypeOut {
+    pub id: i64,
+    pub slug: String,
+    pub display_name: String,
+    pub icon: Option<String>,
+    pub cardinality: String,
+    pub display_order: i64,
+    pub conditional_rule: Option<Value>,
+    pub description: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TagOut {
+    pub id: i64,
+    pub type_id: i64,
+    pub type_slug: String,
+    pub slug: String,
+    pub display_name: String,
+    pub icon: Option<String>,
+    pub color: Option<String>,
+    pub is_auto_derived: bool,
+    pub derivation_rule: Option<Value>,
+    pub is_deleted: bool,
+    pub display_order: i64,
+    pub count: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[tauri::command]
+fn list_tag_types() -> Result<Vec<TagTypeOut>> {
+    let conn = open_db()?;
+    let mut stmt = conn.prepare(
+        "SELECT id, slug, display_name, icon, cardinality, display_order,
+                conditional_rule, description, created_at, updated_at
+         FROM tag_types ORDER BY display_order ASC, display_name ASC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let conditional_rule_str: Option<String> = row.get("conditional_rule").ok();
+        let conditional_rule: Option<Value> =
+            conditional_rule_str.and_then(|s| serde_json::from_str(&s).ok());
+        Ok(TagTypeOut {
+            id: row.get("id")?,
+            slug: row.get("slug")?,
+            display_name: row.get("display_name")?,
+            icon: row.get("icon").ok(),
+            cardinality: row.get("cardinality")?,
+            display_order: row.get("display_order")?,
+            conditional_rule,
+            description: row.get("description").ok(),
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+        })
+    })?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct ListTagsArgs {
+    pub type_id: Option<i64>,
+    pub include_deleted: Option<bool>,
+}
+
+#[tauri::command]
+fn list_tags(args: Option<ListTagsArgs>) -> Result<Vec<TagOut>> {
+    let conn = open_db()?;
+    let args = args.unwrap_or_default();
+    let include_deleted = args.include_deleted.unwrap_or(false);
+
+    // LEFT JOIN para count + JOIN tag_types para slug
+    let mut q = String::from(
+        "SELECT t.id, t.type_id, tt.slug AS type_slug, t.slug, t.display_name,
+                t.icon, t.color, t.is_auto_derived, t.derivation_rule,
+                t.is_deleted, t.display_order,
+                COUNT(jt.tag_id) AS count, t.created_at, t.updated_at
+         FROM tags t
+         JOIN tag_types tt ON tt.id = t.type_id
+         LEFT JOIN jersey_tags jt ON jt.tag_id = t.id
+         WHERE 1=1",
+    );
+    if !include_deleted {
+        q.push_str(" AND t.is_deleted = 0");
+    }
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+    if let Some(tid) = args.type_id {
+        q.push_str(" AND t.type_id = ?");
+        params.push(Box::new(tid));
+    }
+    q.push_str(" GROUP BY t.id ORDER BY tt.display_order ASC, t.display_order ASC, t.display_name ASC");
+
+    let mut stmt = conn.prepare(&q)?;
+    let param_refs: Vec<&dyn rusqlite::ToSql> =
+        params.iter().map(|p| p.as_ref() as &dyn rusqlite::ToSql).collect();
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
+        let derivation_rule_str: Option<String> = row.get("derivation_rule").ok();
+        let derivation_rule: Option<Value> =
+            derivation_rule_str.and_then(|s| serde_json::from_str(&s).ok());
+        Ok(TagOut {
+            id: row.get("id")?,
+            type_id: row.get("type_id")?,
+            type_slug: row.get("type_slug")?,
+            slug: row.get("slug")?,
+            display_name: row.get("display_name")?,
+            icon: row.get("icon").ok(),
+            color: row.get("color").ok(),
+            is_auto_derived: row.get::<_, Option<i64>>("is_auto_derived")?.unwrap_or(0) == 1,
+            derivation_rule,
+            is_deleted: row.get::<_, Option<i64>>("is_deleted")?.unwrap_or(0) == 1,
+            display_order: row.get("display_order")?,
+            count: row.get("count")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+        })
+    })?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateTagArgs {
+    pub type_id: i64,
+    pub slug: String,
+    pub display_name: String,
+    pub icon: Option<String>,
+    pub color: Option<String>,
+}
+
+#[tauri::command]
+fn create_tag(args: CreateTagArgs) -> Result<TagOut> {
+    let conn = open_db()?;
+    conn.execute(
+        "INSERT INTO tags (type_id, slug, display_name, icon, color)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![args.type_id, args.slug, args.display_name, args.icon, args.color],
+    )?;
+    let id = conn.last_insert_rowid();
+    let type_slug: String = conn.query_row(
+        "SELECT slug FROM tag_types WHERE id = ?1",
+        rusqlite::params![args.type_id],
+        |row| row.get(0),
+    )?;
+    Ok(TagOut {
+        id,
+        type_id: args.type_id,
+        type_slug,
+        slug: args.slug,
+        display_name: args.display_name,
+        icon: args.icon,
+        color: args.color,
+        is_auto_derived: false,
+        derivation_rule: None,
+        is_deleted: false,
+        display_order: 0,
+        count: 0,
+        created_at: chrono::Utc::now().timestamp(),
+        updated_at: chrono::Utc::now().timestamp(),
+    })
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateTagArgs {
+    pub id: i64,
+    pub updates: Value, // partial Tag — solo se aplican campos conocidos
+}
+
+#[tauri::command]
+fn update_tag(args: UpdateTagArgs) -> Result<()> {
+    let conn = open_db()?;
+    // Build dynamic UPDATE based on present fields. Whitelist para seguridad.
+    let mut sets: Vec<String> = vec!["updated_at = unixepoch()".to_string()];
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+
+    let update_obj = args.updates.as_object().ok_or_else(|| {
+        ErpError::Other("updates must be an object".to_string())
+    })?;
+
+    let allowed = [
+        "display_name",
+        "icon",
+        "color",
+        "display_order",
+    ];
+    for key in allowed {
+        if let Some(v) = update_obj.get(key) {
+            sets.push(format!("{} = ?", key));
+            match v {
+                Value::String(s) => params.push(Box::new(s.clone())),
+                Value::Number(n) if n.is_i64() => params.push(Box::new(n.as_i64().unwrap())),
+                Value::Null => params.push(Box::new(Option::<String>::None)),
+                _ => return Err(ErpError::Other(format!("invalid value for {}", key))),
+            }
+        }
+    }
+    if sets.len() == 1 {
+        // solo updated_at, nada que hacer
+        return Ok(());
+    }
+    let q = format!("UPDATE tags SET {} WHERE id = ?", sets.join(", "));
+    params.push(Box::new(args.id));
+    let param_refs: Vec<&dyn rusqlite::ToSql> =
+        params.iter().map(|p| p.as_ref() as &dyn rusqlite::ToSql).collect();
+    conn.execute(&q, param_refs.as_slice())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn soft_delete_tag(id: i64) -> Result<()> {
+    let conn = open_db()?;
+    conn.execute(
+        "UPDATE tags SET is_deleted = 1, updated_at = unixepoch() WHERE id = ?1",
+        rusqlite::params![id],
+    )?;
+    Ok(())
+}
+
+// ─── Tag assignment (T5.2) ───────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ListJerseyTagsArgs {
+    pub family_id: String,
+}
+
+#[tauri::command]
+fn list_jersey_tags(args: ListJerseyTagsArgs) -> Result<Vec<TagOut>> {
+    let conn = open_db()?;
+    let mut stmt = conn.prepare(
+        "SELECT t.id, t.type_id, tt.slug AS type_slug, t.slug, t.display_name,
+                t.icon, t.color, t.is_auto_derived, t.derivation_rule,
+                t.is_deleted, t.display_order, 0 AS count,
+                t.created_at, t.updated_at
+         FROM jersey_tags jt
+         JOIN tags t ON t.id = jt.tag_id
+         JOIN tag_types tt ON tt.id = t.type_id
+         WHERE jt.family_id = ?1 AND t.is_deleted = 0
+         ORDER BY tt.display_order, t.display_name",
+    )?;
+    let rows = stmt.query_map([&args.family_id], |row| {
+        let derivation_rule_str: Option<String> = row.get("derivation_rule").ok();
+        let derivation_rule: Option<Value> =
+            derivation_rule_str.and_then(|s| serde_json::from_str(&s).ok());
+        Ok(TagOut {
+            id: row.get("id")?,
+            type_id: row.get("type_id")?,
+            type_slug: row.get("type_slug")?,
+            slug: row.get("slug")?,
+            display_name: row.get("display_name")?,
+            icon: row.get("icon").ok(),
+            color: row.get("color").ok(),
+            is_auto_derived: row.get::<_, Option<i64>>("is_auto_derived")?.unwrap_or(0) == 1,
+            derivation_rule,
+            is_deleted: row.get::<_, Option<i64>>("is_deleted")?.unwrap_or(0) == 1,
+            display_order: row.get("display_order")?,
+            count: 0,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+        })
+    })?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ValidateTagAssignmentArgs {
+    pub family_id: String,
+    pub tag_id: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TagAssignmentValidationOut {
+    pub valid: bool,
+    pub reason: Option<String>,
+    pub conflicting_tags: Option<Vec<TagOut>>,
+    pub message: Option<String>,
+}
+
+#[tauri::command]
+fn validate_tag_assignment(args: ValidateTagAssignmentArgs) -> Result<TagAssignmentValidationOut> {
+    let conn = open_db()?;
+
+    // Tag existe y no esta deleted?
+    let tag_info: Option<(i64, i64, String)> = conn
+        .query_row(
+            "SELECT t.id, t.type_id, tt.cardinality
+             FROM tags t JOIN tag_types tt ON tt.id = t.type_id
+             WHERE t.id = ?1 AND t.is_deleted = 0",
+            rusqlite::params![args.tag_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .ok();
+
+    if tag_info.is_none() {
+        return Ok(TagAssignmentValidationOut {
+            valid: false,
+            reason: Some("tag_deleted".into()),
+            conflicting_tags: None,
+            message: Some("El tag no existe o está soft-deleted".into()),
+        });
+    }
+    let (_tag_id, type_id, cardinality) = tag_info.unwrap();
+
+    // Cardinality 'one': si ya hay un tag de este type para esta jersey, conflict
+    if cardinality == "one" {
+        let mut stmt = conn.prepare(
+            "SELECT t.id, t.type_id, tt.slug AS type_slug, t.slug, t.display_name,
+                    t.icon, t.color, t.is_auto_derived, t.derivation_rule,
+                    t.is_deleted, t.display_order, 0 AS count,
+                    t.created_at, t.updated_at
+             FROM jersey_tags jt
+             JOIN tags t ON t.id = jt.tag_id
+             JOIN tag_types tt ON tt.id = t.type_id
+             WHERE jt.family_id = ?1 AND t.type_id = ?2 AND t.id != ?3
+               AND t.is_deleted = 0",
+        )?;
+        let rows = stmt.query_map(
+            rusqlite::params![args.family_id, type_id, args.tag_id],
+            |row| {
+                Ok(TagOut {
+                    id: row.get("id")?,
+                    type_id: row.get("type_id")?,
+                    type_slug: row.get("type_slug")?,
+                    slug: row.get("slug")?,
+                    display_name: row.get("display_name")?,
+                    icon: row.get("icon").ok(),
+                    color: row.get("color").ok(),
+                    is_auto_derived: row.get::<_, Option<i64>>("is_auto_derived")?.unwrap_or(0)
+                        == 1,
+                    derivation_rule: None,
+                    is_deleted: false,
+                    display_order: row.get("display_order")?,
+                    count: 0,
+                    created_at: row.get("created_at")?,
+                    updated_at: row.get("updated_at")?,
+                })
+            },
+        )?;
+        let conflicting: Vec<TagOut> = rows.filter_map(|r| r.ok()).collect();
+        if !conflicting.is_empty() {
+            return Ok(TagAssignmentValidationOut {
+                valid: false,
+                reason: Some("cardinality_violation".into()),
+                conflicting_tags: Some(conflicting),
+                message: Some(
+                    "Tipo cardinality 'one' — ya hay un tag de este tipo asignado".into(),
+                ),
+            });
+        }
+    }
+
+    Ok(TagAssignmentValidationOut {
+        valid: true,
+        reason: None,
+        conflicting_tags: None,
+        message: None,
+    })
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AssignTagArgs {
+    pub family_id: String,
+    pub tag_id: i64,
+    pub force_replace: Option<bool>,
+}
+
+#[tauri::command]
+fn assign_tag(args: AssignTagArgs) -> Result<()> {
+    let conn = open_db()?;
+    let validation = validate_tag_assignment(ValidateTagAssignmentArgs {
+        family_id: args.family_id.clone(),
+        tag_id: args.tag_id,
+    })?;
+    if !validation.valid {
+        if validation.reason.as_deref() == Some("cardinality_violation")
+            && args.force_replace.unwrap_or(false)
+        {
+            // Remover conflicting tags
+            if let Some(conflicting) = validation.conflicting_tags {
+                for ct in conflicting {
+                    conn.execute(
+                        "DELETE FROM jersey_tags WHERE family_id = ?1 AND tag_id = ?2",
+                        rusqlite::params![args.family_id, ct.id],
+                    )?;
+                }
+            }
+        } else {
+            return Err(ErpError::Other(
+                validation
+                    .message
+                    .unwrap_or_else(|| "validation failed".to_string()),
+            ));
+        }
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO jersey_tags (family_id, tag_id, assigned_by)
+         VALUES (?1, ?2, 'manual')",
+        rusqlite::params![args.family_id, args.tag_id],
+    )?;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RemoveTagArgs {
+    pub family_id: String,
+    pub tag_id: i64,
+}
+
+#[tauri::command]
+fn remove_tag(args: RemoveTagArgs) -> Result<()> {
+    let conn = open_db()?;
+    conn.execute(
+        "DELETE FROM jersey_tags WHERE family_id = ?1 AND tag_id = ?2",
+        rusqlite::params![args.family_id, args.tag_id],
+    )?;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListJerseysByTagArgs {
+    pub tag_id: i64,
+    pub pagination: Option<PaginationArgs>,
+}
+
+#[tauri::command]
+fn list_jerseys_by_tag(
+    args: ListJerseysByTagArgs,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Value>> {
+    let conn = open_db()?;
+    let p = args.pagination.unwrap_or_default();
+    let per_page = p.per_page.unwrap_or(50).min(200) as i64;
+    let page = p.page.unwrap_or(1).max(1) as i64;
+    let offset = (page - 1) * per_page;
+
+    let catalog = load_catalog(&state)?;
+    let catalog_by_id: std::collections::HashMap<String, &Value> = catalog
+        .iter()
+        .filter_map(|f| {
+            f.get("family_id")
+                .and_then(|v| v.as_str())
+                .map(|id| (id.to_string(), f))
+        })
+        .collect();
+
+    let mut stmt = conn.prepare(
+        "SELECT family_id FROM jersey_tags
+         WHERE tag_id = ?1
+         ORDER BY assigned_at DESC
+         LIMIT ?2 OFFSET ?3",
+    )?;
+    let rows = stmt.query_map(
+        rusqlite::params![args.tag_id, per_page, offset],
+        |row| {
+            let fid: String = row.get(0)?;
+            Ok(fid)
+        },
+    )?;
+
+    let mut out: Vec<Value> = vec![];
+    for fid_res in rows {
+        if let Ok(fid) = fid_res {
+            if let Some(catalog_row) = catalog_by_id.get(&fid) {
+                let mut o = serde_json::Map::new();
+                o.insert("family_id".into(), Value::from(fid.clone()));
+                o.insert(
+                    "sku".into(),
+                    catalog_row
+                        .get("sku")
+                        .cloned()
+                        .unwrap_or(Value::from(fid.clone())),
+                );
+                o.insert(
+                    "team".into(),
+                    catalog_row.get("team").cloned().unwrap_or(Value::Null),
+                );
+                o.insert(
+                    "season".into(),
+                    catalog_row.get("season").cloned().unwrap_or(Value::Null),
+                );
+                o.insert(
+                    "hero_thumbnail".into(),
+                    catalog_row
+                        .get("hero_thumbnail")
+                        .cloned()
+                        .unwrap_or(Value::Null),
+                );
+                out.push(Value::Object(o));
+            }
+        }
+    }
+    Ok(out)
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -4359,6 +4855,17 @@ pub fn run() {
             revive_archived,
             promote_to_stock,
             promote_to_mystery,
+            // Admin Web R7 (T5.1 + T5.2) — Tags + Assignment
+            list_tag_types,
+            list_tags,
+            create_tag,
+            update_tag,
+            soft_delete_tag,
+            list_jersey_tags,
+            list_jerseys_by_tag,
+            validate_tag_assignment,
+            assign_tag,
+            remove_tag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
