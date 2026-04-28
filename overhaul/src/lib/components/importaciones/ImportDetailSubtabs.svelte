@@ -1,20 +1,18 @@
 <script lang="ts">
-  type SubtabId = 'overview' | 'items' | 'costos' | 'pagos' | 'timeline';
+  // Narrowed to match ImportDetailPane (Pagos/Timeline deferred to IMP-R5+ supplier scorecard build).
+  type SubtabId = 'overview' | 'items' | 'costos';
 
   interface Props {
     activeSubtab: SubtabId;
     itemsCount: number;
-    paymentsCount: number;
   }
 
-  let { activeSubtab = $bindable(), itemsCount, paymentsCount }: Props = $props();
+  let { activeSubtab = $bindable(), itemsCount }: Props = $props();
 
   let SUBTABS = $derived([
     { id: 'overview' as SubtabId, label: 'Overview',  count: undefined },
     { id: 'items'    as SubtabId, label: 'Items',     count: itemsCount },
     { id: 'costos'   as SubtabId, label: 'Costos',    count: undefined },
-    { id: 'pagos'    as SubtabId, label: 'Pagos',     count: paymentsCount },
-    { id: 'timeline' as SubtabId, label: 'Timeline',  count: undefined },
   ]);
 </script>
 

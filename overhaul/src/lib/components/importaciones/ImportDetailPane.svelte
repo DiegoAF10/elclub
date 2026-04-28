@@ -27,8 +27,15 @@
   let showCancelModal = $state(false);
 
   $effect(() => {
-    if (imp) loadItems(imp.import_id);
-    else items = [];
+    if (imp) {
+      loadItems(imp.import_id);
+    } else {
+      items = [];
+      // Close any open modals · prevents stale state if user reopens after re-selection
+      showArrivalModal = false;
+      showEditModal = false;
+      showCancelModal = false;
+    }
   });
 
   async function loadItems(id: string) {
@@ -76,7 +83,7 @@
       onCancel={handleCancel}
       onEdit={handleEdit}
     />
-    <ImportDetailSubtabs bind:activeSubtab itemsCount={items.length} paymentsCount={imp.bruto_usd ? 1 : 0} />
+    <ImportDetailSubtabs bind:activeSubtab itemsCount={items.length} />
 
     <div class="flex-1 overflow-y-auto">
       {#if activeSubtab === 'overview'}
