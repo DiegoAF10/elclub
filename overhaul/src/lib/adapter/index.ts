@@ -7,9 +7,9 @@
 // En `npm run dev`              → browserAdapter (reads via vite plugin)
 // En `npx tauri dev` o .msi     → tauriAdapter (reads via Rust commands)
 
-import type { Adapter } from './types';
-import { browserAdapter } from './browser';
-import { tauriAdapter, isTauri } from './tauri';
+import type { Adapter, AdminWebTauriCommands } from './types';
+import { browserAdapter, adminWebBrowser } from './browser';
+import { tauriAdapter, adminWebTauri, isTauri } from './tauri';
 
 export * from './types';
 export { isTauri };
@@ -40,7 +40,25 @@ export const adapter: Adapter = new Proxy({} as Adapter, {
 	}
 });
 
+// ─── Admin Web R7 (T1.4) — facade separado ─────────────────────────────
+// adminWebTauri / adminWebBrowser implementan AdminWebTauriCommands en
+// lugar de extender Adapter (60+ commands de un dominio nuevo). Mismo
+// patrón Proxy + lazy init para detección de runtime.
+function pickAdminWebAdapter(): AdminWebTauriCommands {
+	return isTauri() ? adminWebTauri : adminWebBrowser;
+}
+
+let _adminWebInstance: AdminWebTauriCommands | null = null;
+
+export const adminWeb: AdminWebTauriCommands = new Proxy({} as AdminWebTauriCommands, {
+	get(_target, prop: keyof AdminWebTauriCommands) {
+		if (!_adminWebInstance) _adminWebInstance = pickAdminWebAdapter();
+		return _adminWebInstance[prop];
+	}
+});
+
 // Helper para tests / invalidación manual
 export function _resetAdapter() {
 	_instance = null;
+	_adminWebInstance = null;
 }

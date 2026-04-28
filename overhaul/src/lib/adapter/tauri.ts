@@ -598,3 +598,169 @@ export const tauriAdapter: Adapter = {
 		});
 	},
 };
+
+// =============================================================================
+// Admin Web R7 (T1.4) — Tauri wrappers
+// =============================================================================
+// Free-standing object literal implementando AdminWebTauriCommands. NO se
+// hace methods sobre tauriAdapter porque el set es disjunto (60+ commands
+// de un dominio nuevo) y el plan dictó wrappers separados. La implementación
+// Rust de cada command vive en src-tauri/src/lib.rs (T2.X+ — por ahora son
+// stubs en lo que respecta a backend; las invocaciones existen pero el Rust
+// devolverá UNHANDLED hasta que T3.1+ las registre).
+
+import type { AdminWebTauriCommands } from './types';
+import type {
+	HomeKpis,
+	SavedView,
+	SitePage,
+	SiteComponent,
+	BrandingValue,
+	CommunicationTemplate,
+	Subscriber,
+	Workflow,
+	Review,
+	Survey,
+	AuditLogEntry,
+	ScrapHistoryEntry,
+	DeployHistoryEntry,
+	ScheduledJob,
+	BackupEntry,
+	HealthSnapshot
+} from '../data/admin-web';
+import type { Jersey } from '../data/jersey-states';
+import type { TagType, Tag, TagAssignmentValidation } from '../data/tags';
+import type { StockOverride, MysteryOverride } from '../data/overrides';
+import type { InboxEvent } from '../data/inbox-events';
+
+export const adminWebTauri: AdminWebTauriCommands = {
+	// === HOME ===
+	get_admin_web_kpis: () => invoke<HomeKpis>('get_admin_web_kpis'),
+	get_module_stats: (args) => invoke<Record<string, unknown>>('get_module_stats', args),
+
+	// === INBOX EVENTS ===
+	list_inbox_events: (args) => invoke<InboxEvent[]>('list_inbox_events', args),
+	dismiss_event: (args) => invoke<void>('dismiss_event', args),
+	resolve_event: (args) => invoke<void>('resolve_event', args),
+	detect_events_now: () => invoke<{ events_created: number }>('detect_events_now'),
+
+	// === VAULT — TAGS ===
+	list_tag_types: () => invoke<TagType[]>('list_tag_types'),
+	list_tags: (args) => invoke<Tag[]>('list_tags', args ?? {}),
+	create_tag: (args) => invoke<Tag>('create_tag', args),
+	update_tag: (args) => invoke<Tag>('update_tag', args),
+	soft_delete_tag: (args) => invoke<void>('soft_delete_tag', args),
+	list_jersey_tags: (args) => invoke<Tag[]>('list_jersey_tags', args),
+	list_jerseys_by_tag: (args) => invoke<Jersey[]>('list_jerseys_by_tag', args),
+	validate_tag_assignment: (args) =>
+		invoke<TagAssignmentValidation>('validate_tag_assignment', args),
+	assign_tag: (args) => invoke<void>('assign_tag', args),
+	remove_tag: (args) => invoke<void>('remove_tag', args),
+
+	// === VAULT — PUBLICADOS ===
+	list_published: (args) => invoke<Jersey[]>('list_published', args),
+	promote_to_stock: (args) => invoke<StockOverride>('promote_to_stock', args),
+	promote_to_mystery: (args) => invoke<MysteryOverride>('promote_to_mystery', args),
+	toggle_dirty_flag: (args) => invoke<void>('toggle_dirty_flag', args),
+	archive_jersey: (args) => invoke<void>('archive_jersey', args),
+	revive_archived: (args) => invoke<void>('revive_archived', args),
+
+	// === VAULT — UNIVERSO ===
+	list_universo: (args) => invoke('list_universo', args),
+	bulk_action: (args) => invoke('bulk_action', args),
+
+	// === SAVED VIEWS ===
+	list_saved_views: (args) => invoke<SavedView[]>('list_saved_views', args),
+	save_view: (args) => invoke<SavedView>('save_view', args),
+	delete_view: (args) => invoke<void>('delete_view', args),
+
+	// === STOCK ===
+	list_stock_overrides: (args) => invoke<StockOverride[]>('list_stock_overrides', args ?? {}),
+	create_stock_override: (args) => invoke<StockOverride>('create_stock_override', args),
+	update_stock_override: (args) => invoke<StockOverride>('update_stock_override', args),
+	delete_stock_override: (args) => invoke<void>('delete_stock_override', args),
+	pause_stock_override: (args) => invoke<void>('pause_stock_override', args),
+	list_stock_calendar: (args) => invoke<StockOverride[]>('list_stock_calendar', args),
+
+	// === MYSTERY ===
+	list_mystery_overrides: (args) =>
+		invoke<MysteryOverride[]>('list_mystery_overrides', args ?? {}),
+	create_mystery_override: (args) => invoke<MysteryOverride>('create_mystery_override', args),
+	update_mystery_override: (args) => invoke<MysteryOverride>('update_mystery_override', args),
+	delete_mystery_override: (args) => invoke<void>('delete_mystery_override', args),
+	list_mystery_calendar: (args) => invoke<MysteryOverride[]>('list_mystery_calendar', args),
+	get_mystery_rules: () => invoke<Record<string, unknown>>('get_mystery_rules'),
+	update_mystery_rules: (args) => invoke<void>('update_mystery_rules', args),
+
+	// === SITE — PAGES ===
+	list_pages: (args) => invoke<SitePage[]>('list_pages', args ?? {}),
+	get_page: (args) => invoke<SitePage>('get_page', args),
+	create_page: (args) => invoke<SitePage>('create_page', args),
+	update_page: (args) => invoke<SitePage>('update_page', args),
+	delete_page: (args) => invoke<void>('delete_page', args),
+	publish_page: (args) => invoke<void>('publish_page', args),
+
+	// === SITE — COMPONENTS ===
+	list_components: (args) => invoke<SiteComponent[]>('list_components', args ?? {}),
+	update_component: (args) => invoke<SiteComponent>('update_component', args),
+	toggle_component: (args) => invoke<void>('toggle_component', args),
+
+	// === SITE — BRANDING ===
+	list_branding: () => invoke<BrandingValue[]>('list_branding'),
+	set_branding: (args) => invoke<void>('set_branding', args),
+	apply_branding_changes: () =>
+		invoke<{ deploy_triggered: boolean }>('apply_branding_changes'),
+
+	// === SITE — COMMUNICATION ===
+	list_templates: (args) => invoke<CommunicationTemplate[]>('list_templates', args ?? {}),
+	create_template: (args) => invoke<CommunicationTemplate>('create_template', args),
+	update_template: (args) => invoke<CommunicationTemplate>('update_template', args),
+	list_subscribers: (args) => invoke<Subscriber[]>('list_subscribers', args ?? {}),
+	list_workflows: () => invoke<Workflow[]>('list_workflows'),
+	toggle_workflow: (args) => invoke<void>('toggle_workflow', args),
+
+	// === SITE — COMMUNITY ===
+	list_reviews: (args) => invoke<Review[]>('list_reviews', args ?? {}),
+	moderate_review: (args) => invoke<void>('moderate_review', args),
+	list_surveys: () => invoke<Survey[]>('list_surveys'),
+	list_survey_responses: (args) =>
+		invoke<{ id: number; answers: unknown; submitted_at: number }[]>(
+			'list_survey_responses',
+			args
+		),
+
+	// === SISTEMA ===
+	get_health_snapshot: () => invoke<HealthSnapshot>('get_health_snapshot'),
+	get_health_history: (args) => invoke<HealthSnapshot[]>('get_health_history', args),
+	list_scrap_history: (args) => invoke<ScrapHistoryEntry[]>('list_scrap_history', args ?? {}),
+	trigger_scrap: (args) => invoke<{ scrap_id: number }>('trigger_scrap', args),
+	list_deploy_history: (args) =>
+		invoke<DeployHistoryEntry[]>('list_deploy_history', args ?? {}),
+	trigger_deploy: (args) => invoke<{ deploy_id: number }>('trigger_deploy', args),
+	rollback_deploy: (args) => invoke<void>('rollback_deploy', args),
+	list_jobs: () => invoke<ScheduledJob[]>('list_jobs'),
+	toggle_job: (args) => invoke<void>('toggle_job', args),
+	run_job_now: (args) => invoke<void>('run_job_now', args),
+	list_backups: (args) => invoke<BackupEntry[]>('list_backups', args ?? {}),
+	create_backup_now: (args) => invoke<BackupEntry>('create_backup_now', args),
+	restore_from_backup: (args) => invoke<void>('restore_from_backup', args),
+	stream_logs: (args) => invoke<string>('stream_logs', args),
+	list_audit_log: (args) => invoke<AuditLogEntry[]>('list_audit_log', args),
+	export_audit_log_csv: (args) =>
+		invoke<{ file_path: string }>('export_audit_log_csv', args),
+	get_admin_config: () =>
+		invoke<Record<string, { value: string; value_type: string }>>('get_admin_config'),
+	set_admin_config: (args) => invoke<void>('set_admin_config', args),
+	list_api_connections: () =>
+		invoke<
+			{
+				name: string;
+				status: 'connected' | 'failing' | 'pending';
+				last_test_at?: number;
+				usage?: Record<string, unknown>;
+			}[]
+		>('list_api_connections'),
+	test_api_connection: (args) =>
+		invoke<{ success: boolean; message?: string }>('test_api_connection', args),
+	rotate_secret: (args) => invoke<{ success: boolean }>('rotate_secret', args)
+};
