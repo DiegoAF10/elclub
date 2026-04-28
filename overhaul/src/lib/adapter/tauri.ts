@@ -31,6 +31,7 @@ import type {
 import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, CreateOrderItem, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult, UpdateSaleArgs } from '../data/comercial';
 import type { Import, ImportItem, ImportPulso, CloseImportResult } from '../data/importaciones';
 import type { Family } from '../data/types';
+import type { Expense, ExpenseInput, ProfitSnapshot, HomeSnapshot, RecentExpense } from '../data/finanzas';
 import { transformFamily } from './transform';
 
 // ─── Detection ────────────────────────────────────────────────────────
@@ -528,5 +529,72 @@ export const tauriAdapter: Adapter = {
 
 	async closeImportProportional(import_id: string): Promise<CloseImportResult> {
 		return invoke<CloseImportResult>('cmd_close_import_proportional', { importId: import_id });
+	},
+
+	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────
+	async computeProfitSnapshot(
+		periodStart: string,
+		periodEnd: string,
+		periodLabel: string,
+		prevStart?: string,
+		prevEnd?: string,
+	): Promise<ProfitSnapshot> {
+		return invoke<ProfitSnapshot>('cmd_compute_profit_snapshot', {
+			periodStart,
+			periodEnd,
+			periodLabel,
+			prevStart: prevStart ?? null,
+			prevEnd: prevEnd ?? null,
+		});
+	},
+
+	async getHomeSnapshot(
+		periodStart: string,
+		periodEnd: string,
+		periodLabel: string,
+		prevStart?: string,
+		prevEnd?: string,
+	): Promise<HomeSnapshot> {
+		return invoke<HomeSnapshot>('cmd_get_home_snapshot', {
+			periodStart,
+			periodEnd,
+			periodLabel,
+			prevStart: prevStart ?? null,
+			prevEnd: prevEnd ?? null,
+		});
+	},
+
+	async createExpense(input: ExpenseInput): Promise<number> {
+		return invoke<number>('cmd_create_expense', { input });
+	},
+
+	async listExpenses(filters: {
+		periodStart?: string;
+		periodEnd?: string;
+		category?: string;
+		paymentMethod?: string;
+		limit?: number;
+	} = {}): Promise<Expense[]> {
+		return invoke<Expense[]>('cmd_list_expenses', filters);
+	},
+
+	async deleteExpense(expenseId: number): Promise<void> {
+		return invoke<void>('cmd_delete_expense', { expenseId });
+	},
+
+	async updateExpense(expenseId: number, input: ExpenseInput): Promise<void> {
+		return invoke<void>('cmd_update_expense', { expenseId, input });
+	},
+
+	async recentExpenses(limit?: number): Promise<RecentExpense[]> {
+		return invoke<RecentExpense[]>('cmd_recent_expenses', { limit: limit ?? null });
+	},
+
+	async setCashBalance(balanceGtq: number, source: string, notes?: string): Promise<number> {
+		return invoke<number>('cmd_set_cash_balance', {
+			balanceGtq,
+			source,
+			notes: notes ?? null,
+		});
 	},
 };

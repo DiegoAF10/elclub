@@ -43,8 +43,11 @@ export function computeProfitSnapshot(
 ): ProfitSnapshot {
   const profit = revenue_gtq - cogs_gtq - marketing_gtq - opex_gtq;
   const trend = prev_profit !== undefined ? trendPct(profit, prev_profit) : null;
+  const p = period ?? { start: '', end: '', label: '' };
   return {
-    period: period ?? { start: '', end: '', label: '' },
+    period_start: p.start,
+    period_end: p.end,
+    period_label: p.label,
     revenue_gtq,
     cogs_gtq,
     marketing_gtq,

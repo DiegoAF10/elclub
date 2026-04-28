@@ -28,6 +28,7 @@ import { NotAvailableInBrowser } from './types';
 import type { Family } from '../data/types';
 import type { Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult } from '../data/comercial';
 import type { Import, ImportItem, ImportPulso, CloseImportResult } from '../data/importaciones';
+import type { Expense, ExpenseInput, ProfitSnapshot, HomeSnapshot, RecentExpense } from '../data/finanzas';
 import { transformFamily } from './transform';
 
 // ─── Endpoints (definidos en vite/plugin-erp-dev.ts) ──────────────────
@@ -383,6 +384,67 @@ export const browserAdapter: Adapter = {
 
 	async closeImportProportional(_import_id: string): Promise<CloseImportResult> {
 		throw new NotAvailableInBrowser('closeImportProportional');
+	},
+
+	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────
+	async computeProfitSnapshot(
+		periodStart: string,
+		periodEnd: string,
+		periodLabel: string,
+	): Promise<ProfitSnapshot> {
+		return {
+			period_start: periodStart,
+			period_end: periodEnd,
+			period_label: periodLabel,
+			revenue_gtq: 0,
+			cogs_gtq: 0,
+			marketing_gtq: 0,
+			opex_gtq: 0,
+			profit_operativo: 0,
+			prev_period_profit: undefined,
+			trend_pct: undefined,
+		};
+	},
+
+	async getHomeSnapshot(
+		periodStart: string,
+		periodEnd: string,
+		periodLabel: string,
+	): Promise<HomeSnapshot> {
+		const profit = await this.computeProfitSnapshot(periodStart, periodEnd, periodLabel);
+		return {
+			profit,
+			cash_business_gtq: null,
+			cash_synced_at: null,
+			cash_stale_days: null,
+			capital_amarrado_gtq: 0,
+			shareholder_loan_balance: 0,
+			shareholder_loan_trend_30d: 0,
+		};
+	},
+
+	async createExpense(_input: ExpenseInput): Promise<number> {
+		throw new NotAvailableInBrowser('createExpense');
+	},
+
+	async listExpenses(): Promise<Expense[]> {
+		return [];
+	},
+
+	async deleteExpense(_expenseId: number): Promise<void> {
+		throw new NotAvailableInBrowser('deleteExpense');
+	},
+
+	async updateExpense(_expenseId: number, _input: ExpenseInput): Promise<void> {
+		throw new NotAvailableInBrowser('updateExpense');
+	},
+
+	async recentExpenses(): Promise<RecentExpense[]> {
+		return [];
+	},
+
+	async setCashBalance(_b: number, _s: string, _n?: string): Promise<number> {
+		throw new NotAvailableInBrowser('setCashBalance');
 	},
 };
 

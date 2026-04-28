@@ -40,7 +40,9 @@ export interface PeriodRange {
 }
 
 export interface ProfitSnapshot {
-  period: PeriodRange;
+  period_start: string;
+  period_end: string;
+  period_label: string;
   revenue_gtq: number;
   cogs_gtq: number;
   marketing_gtq: number;
