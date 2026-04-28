@@ -154,26 +154,34 @@
            - Mobile (941x1672, ratio 0.56): pirámide vertical (top: CR7+leyendas, bottom: Pelé+trofeo+Maradona)
          Overlay también responsive: desktop diagonal (copy left), mobile vertical bottom-up (copy bottom). -->
     <section class="relative min-h-[100svh] md:min-h-[88vh] flex items-end md:items-center overflow-hidden bg-midnight">
-      <!-- Background image (responsive — desktop usa cover, mobile usa contain con object-top
-           para respetar el espacio negro intencional que Diego diseñó abajo del trofeo).
-           El bg-midnight del section cubre lo que queda fuera de contain → continuidad
-           visual perfecta porque la imagen termina en negro abajo. -->
+      <!-- Background image (responsive — ambos viewports usan object-cover object-top
+           para garantizar que los jugadores siempre estén arriba visible. Espacio
+           para copy se gana via overlay fuerte abajo, no via crop diferente). -->
       <picture class="absolute inset-0 z-0">
         <source media="(max-width: 768px)" srcset="/assets/img/hero/mundial-2026-mobile.jpg">
         <img src="/assets/img/hero/mundial-2026-desktop.jpg"
              alt="Mundial 2026 — Leyendas alrededor del trofeo"
-             class="w-full h-full md:object-cover object-contain object-top"
+             class="w-full h-full object-cover object-top"
              fetchpriority="high">
       </picture>
 
-      <!-- Overlay desktop ONLY: diagonal izq→der, copy queda sobre lado oscuro.
-           Mobile NO necesita overlay — la imagen ya tiene su espacio negro nativo
-           abajo del trofeo donde va el copy. Pintarle overlay encima oscurecía a
-           los jugadores innecesariamente. -->
-      <div class="absolute inset-0 z-[1] hidden md:block bg-gradient-to-r from-midnight/95 via-midnight/65 to-midnight/20"></div>
+      <!-- Overlay desktop: gradient diagonal con stops manuales — dark fuerte en
+           la "safe zone" del copy (0-32%), transición (32-55%), imagen limpia
+           el resto (55-100%). Copy completamente legible sin oscurecer el panteón. -->
+      <div class="absolute inset-0 z-[1] hidden md:block"
+           style="background: linear-gradient(to right, rgb(10,11,13) 0%, rgba(10,11,13,0.92) 32%, rgba(10,11,13,0.4) 55%, rgba(10,11,13,0) 75%);"></div>
+      <div class="absolute inset-0 z-[1] hidden md:block"
+           style="background: linear-gradient(to top, rgba(10,11,13,0.55) 0%, rgba(10,11,13,0) 30%);"></div>
+
+      <!-- Overlay mobile: vertical bottom→top, dark fuerte cubre los últimos 50%
+           del viewport (donde va headline + párrafo + CTAs + footer strip), fade
+           rápido a transparent en el top 50% (donde están los jugadores y el trofeo).
+           Stops manuales para legibilidad bulletproof — Diego eligió safe bet. -->
+      <div class="absolute inset-0 z-[1] md:hidden"
+           style="background: linear-gradient(to top, rgb(10,11,13) 0%, rgba(10,11,13,0.95) 35%, rgba(10,11,13,0.65) 50%, rgba(10,11,13,0) 65%);"></div>
 
       <!-- Copy -->
-      <div class="relative z-10 max-w-6xl mx-auto px-4 w-full py-16 md:py-0">
+      <div class="relative z-10 max-w-6xl mx-auto px-4 w-full pb-12 pt-32 md:py-0">
         <div class="max-w-xl">
           <p class="text-ice text-sm font-semibold uppercase tracking-[0.2em] mb-4" style="font-family:'Oswald',system-ui,sans-serif;">
             ⚽ USA · México · Canadá
