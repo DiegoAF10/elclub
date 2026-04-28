@@ -14,9 +14,33 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { adminWeb } from '$lib/adapter';
+	import { LayoutGrid, List } from 'lucide-svelte';
 	import PublishedCard from '../PublishedCard.svelte';
 	import DropCreatorModal from '../DropCreatorModal.svelte';
 	import PublishedDetailModal from '../PublishedDetailModal.svelte';
+
+	type ViewMode = 'cards' | 'table';
+	const STORAGE_KEY = 'admin-web:vault.publicados:view';
+
+	function readStoredView(): ViewMode {
+		if (typeof localStorage === 'undefined') return 'cards';
+		try {
+			const v = localStorage.getItem(STORAGE_KEY);
+			return v === 'table' ? 'table' : 'cards';
+		} catch {
+			return 'cards';
+		}
+	}
+	let viewMode = $state<ViewMode>(readStoredView());
+
+	function setViewMode(v: ViewMode) {
+		viewMode = v;
+		try {
+			localStorage.setItem(STORAGE_KEY, v);
+		} catch {
+			/* noop */
+		}
+	}
 
 	const FILTERS = [
 		{ slug: 'all', label: 'Todas' },
@@ -101,9 +125,37 @@
 			</button>
 		{/each}
 
-		<!-- Result counter -->
-		<div class="text-mono ml-auto shrink-0 text-[10.5px] text-[var(--color-text-muted)]">
-			{loading ? 'cargando…' : `${jerseys.length} resultado${jerseys.length === 1 ? '' : 's'}`}
+		<!-- Result counter + view toggle -->
+		<div class="ml-auto flex shrink-0 items-center gap-2">
+			<div class="text-mono text-[10.5px] text-[var(--color-text-muted)]">
+				{loading ? 'cargando…' : `${jerseys.length} resultado${jerseys.length === 1 ? '' : 's'}`}
+			</div>
+			<div
+				class="ml-2 flex overflow-hidden rounded-[3px] border border-[var(--color-border)]"
+			>
+				<button
+					type="button"
+					onclick={() => setViewMode('cards')}
+					title="Ver como tarjetas"
+					class="flex h-7 w-7 items-center justify-center transition-colors"
+					class:bg-[var(--color-surface-2)]={viewMode === 'cards'}
+					class:text-[var(--color-text-primary)]={viewMode === 'cards'}
+					class:text-[var(--color-text-tertiary)]={viewMode !== 'cards'}
+				>
+					<LayoutGrid size={12} strokeWidth={1.8} />
+				</button>
+				<button
+					type="button"
+					onclick={() => setViewMode('table')}
+					title="Ver como tabla"
+					class="flex h-7 w-7 items-center justify-center transition-colors"
+					class:bg-[var(--color-surface-2)]={viewMode === 'table'}
+					class:text-[var(--color-text-primary)]={viewMode === 'table'}
+					class:text-[var(--color-text-tertiary)]={viewMode !== 'table'}
+				>
+					<List size={12} strokeWidth={1.8} />
+				</button>
+			</div>
 		</div>
 	</div>
 
@@ -130,7 +182,7 @@
 					</p>
 				</div>
 			</div>
-		{:else}
+		{:else if viewMode === 'cards'}
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
 				{#each jerseys as jersey (jersey.family_id)}
 					<PublishedCard
@@ -140,6 +192,92 @@
 						onDelete={archive}
 					/>
 				{/each}
+			</div>
+		{:else}
+			<!-- Tabla densa (T4.9 simple, T6.2 hace la version power-user) -->
+			<div
+				class="overflow-auto rounded-[3px] border border-[var(--color-border)] bg-[var(--color-surface-1)]"
+			>
+				<table class="w-full text-[12px]">
+					<thead
+						class="text-display sticky top-0 z-10 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] text-[9.5px] tracking-[0.14em] text-[var(--color-text-tertiary)]"
+					>
+						<tr>
+							<th class="px-3 py-2 text-left">Thumb</th>
+							<th class="px-3 py-2 text-left">SKU</th>
+							<th class="px-3 py-2 text-left">Team</th>
+							<th class="px-3 py-2 text-left">Season</th>
+							<th class="px-3 py-2 text-left">Tier</th>
+							<th class="px-3 py-2 text-left">Flags</th>
+							<th class="px-3 py-2"></th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each jerseys as jersey (jersey.family_id)}
+							{@const familyId = String(jersey.family_id ?? '')}
+							{@const sku = String(jersey.sku ?? jersey.family_id ?? '')}
+							{@const team = String(jersey.team ?? '')}
+							{@const season = String(jersey.season ?? '')}
+							{@const tier = jersey.tier as string | null | undefined}
+							{@const hero = jersey.hero_thumbnail as string | null | undefined}
+							{@const flags = (jersey.flags as Record<string, unknown> | undefined) ?? {}}
+							{@const isDirty = flags.dirty === true}
+							<tr
+								class="border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-surface-2)]"
+							>
+								<td class="px-2 py-1">
+									{#if hero}
+										<img
+											src={hero}
+											alt={team}
+											class="h-9 w-9 rounded-[2px] object-cover"
+											loading="lazy"
+										/>
+									{:else}
+										<div class="h-9 w-9 rounded-[2px] bg-[var(--color-surface-2)]"></div>
+									{/if}
+								</td>
+								<td class="text-mono px-3 py-2 text-[var(--color-text-primary)]">{sku}</td>
+								<td class="px-3 py-2 text-[var(--color-text-secondary)]">{team || '—'}</td>
+								<td class="text-mono px-3 py-2 text-[var(--color-text-secondary)]">
+									{season || '—'}
+								</td>
+								<td class="text-mono px-3 py-2 text-[var(--color-text-tertiary)]">
+									{tier ?? '—'}
+								</td>
+								<td class="px-3 py-2">
+									{#if isDirty}
+										<span
+											class="text-mono rounded-[2px] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+											style:background="rgba(244, 63, 94, 0.18)"
+											style:color="var(--color-danger)"
+										>
+											DIRTY
+										</span>
+									{:else}
+										<span class="text-mono text-[9.5px] text-[var(--color-text-muted)]">—</span>
+									{/if}
+								</td>
+								<td class="whitespace-nowrap px-3 py-2 text-right">
+									<button
+										type="button"
+										onclick={() => (promotingFamily = familyId)}
+										class="text-display rounded-[3px] border border-[var(--color-terminal)]/40 px-2 py-1 text-[9px] tracking-[0.14em] text-[var(--color-terminal)] hover:bg-[var(--color-terminal)] hover:text-[var(--color-bg)]"
+									>
+										PROMOVER
+									</button>
+									<button
+										type="button"
+										onclick={() => (detailFamily = familyId)}
+										class="text-display ml-1 rounded-[3px] px-2 py-1 text-[9px] tracking-[0.14em] text-[var(--color-text-tertiary)] hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-primary)]"
+									>
+										DETALLE
+									</button>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
 			</div>
 		{/if}
 	</div>
