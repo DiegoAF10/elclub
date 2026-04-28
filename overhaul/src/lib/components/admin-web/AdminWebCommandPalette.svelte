@@ -50,6 +50,7 @@
 		});
 
 		return [
+			nav('/', '← Volver al ERP principal', ['salir', 'audit', 'comercial', 'finanzas', 'back']),
 			nav('/admin-web/home', 'Ir a Home', ['inicio', 'dashboard', 'kpis', 'gh']),
 			nav('/admin-web/vault/queue', 'Vault › Queue', ['audit', 'pending', 'gv', 'gq']),
 			nav('/admin-web/vault/publicados', 'Vault › Publicados', ['live', 'cards', 'gp']),

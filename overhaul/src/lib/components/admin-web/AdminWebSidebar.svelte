@@ -15,7 +15,7 @@
 -->
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { Home, Archive, Package, Sparkles, Globe, Server } from 'lucide-svelte';
+	import { Home, Archive, Package, Sparkles, Globe, Server, ArrowLeft } from 'lucide-svelte';
 	import { adminWeb } from '$lib/adapter';
 	import type { ModuleSlug, InboxEvent, EventSeverity } from '$lib/adapter';
 
@@ -89,6 +89,17 @@
 <aside
 	class="ui-chrome flex w-[200px] shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface-1)]"
 >
+	<!-- Volver al ERP raíz (Audit, Comercial, Finanzas, etc) -->
+	<button
+		type="button"
+		onclick={() => goto('/')}
+		class="text-display flex h-9 shrink-0 items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 text-[10px] tracking-[0.14em] text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-surface-3)] hover:text-[var(--color-text-primary)]"
+		title="Volver al ERP principal (Audit, Comercial, Finanzas, etc)"
+	>
+		<ArrowLeft size={11} strokeWidth={1.8} />
+		VOLVER AL ERP
+	</button>
+
 	<!-- Brand strip -->
 	<div class="flex h-12 items-center border-b border-[var(--color-border)] px-4">
 		<span class="text-display text-[11px] tracking-[0.16em] text-[var(--color-text-primary)]"
