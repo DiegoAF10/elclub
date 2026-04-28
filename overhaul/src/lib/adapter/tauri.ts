@@ -15,6 +15,7 @@ import type {
 	CatalogRow,
 	CommitResult,
 	BackfillMetaResult,
+	CreateImportInput,
 	DeleteFamilyResult,
 	DeleteSkuResult,
 	EditModeloTypeResult,
@@ -23,8 +24,10 @@ import type {
 	MoveModeloArgs,
 	MoveModeloResult,
 	PhotoAction,
+	RegisterArrivalInput,
 	RemovePhotosResult,
 	SetFamilyVariantResult,
+	UpdateImportInput,
 	WatermarkArgs,
 	WatermarkResult
 } from './types';
@@ -529,6 +532,26 @@ export const tauriAdapter: Adapter = {
 
 	async closeImportProportional(import_id: string): Promise<CloseImportResult> {
 		return invoke<CloseImportResult>('cmd_close_import_proportional', { importId: import_id });
+	},
+
+	async createImport(input: CreateImportInput): Promise<Import> {
+		return await invoke<Import>('cmd_create_import', { input });
+	},
+
+	async registerArrival(input: RegisterArrivalInput): Promise<Import> {
+		return await invoke<Import>('cmd_register_arrival', { input });
+	},
+
+	async updateImport(input: UpdateImportInput): Promise<Import> {
+		return await invoke<Import>('cmd_update_import', { input });
+	},
+
+	async cancelImport(importId: string): Promise<Import> {
+		return await invoke<Import>('cmd_cancel_import', { importId });
+	},
+
+	async exportImportsCsv(): Promise<string> {
+		return await invoke<string>('cmd_export_imports_csv');
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────

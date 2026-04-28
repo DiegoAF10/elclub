@@ -11,6 +11,7 @@ import type {
 	CatalogRow,
 	CommitResult,
 	BackfillMetaResult,
+	CreateImportInput,
 	DeleteFamilyResult,
 	DeleteSkuResult,
 	EditModeloTypeResult,
@@ -19,8 +20,10 @@ import type {
 	MoveModeloArgs,
 	MoveModeloResult,
 	PhotoAction,
+	RegisterArrivalInput,
 	RemovePhotosResult,
 	SetFamilyVariantResult,
+	UpdateImportInput,
 	WatermarkArgs,
 	WatermarkResult
 } from './types';
@@ -384,6 +387,26 @@ export const browserAdapter: Adapter = {
 
 	async closeImportProportional(_import_id: string): Promise<CloseImportResult> {
 		throw new NotAvailableInBrowser('closeImportProportional');
+	},
+
+	async createImport(_input: CreateImportInput): Promise<Import> {
+		throw new NotAvailableInBrowser('createImport');
+	},
+
+	async registerArrival(_input: RegisterArrivalInput): Promise<Import> {
+		throw new NotAvailableInBrowser('registerArrival');
+	},
+
+	async updateImport(_input: UpdateImportInput): Promise<Import> {
+		throw new NotAvailableInBrowser('updateImport');
+	},
+
+	async cancelImport(_importId: string): Promise<Import> {
+		throw new NotAvailableInBrowser('cancelImport');
+	},
+
+	async exportImportsCsv(): Promise<string> {
+		throw new NotAvailableInBrowser('exportImportsCsv');
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────
