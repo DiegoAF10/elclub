@@ -30,7 +30,18 @@
 	}
 
 	$effect(() => {
-		void loadEvents();
+		// On-mount: trigger detector + load. Después solo poll list (detector
+		// es idempotente pero costoso para correr cada 60s — el cron del
+		// scheduled_job 'detect-inbox-events' se encarga del refresh real).
+		void (async () => {
+			try {
+				await adminWeb.detect_events_now();
+			} catch {
+				/* no fatal: lista igual carga lo que ya esté en DB */
+			}
+			void loadEvents();
+		})();
+
 		const interval = setInterval(() => {
 			void loadEvents();
 		}, REFRESH_MS);

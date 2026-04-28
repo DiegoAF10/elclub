@@ -3505,6 +3505,396 @@ fn list_inbox_events(args: Option<ListInboxEventsArgs>) -> Result<Vec<InboxEvent
     Ok(events)
 }
 
+// Auto-dismiss days por severity — match con AUTO_DISMISS_DAYS de TS.
+// None = no expira (critical persiste hasta resolverse manualmente).
+fn auto_dismiss_seconds(severity: &str) -> Option<i64> {
+    match severity {
+        "critical" => None,
+        "important" => Some(7 * 86400),
+        "info" => Some(3 * 86400),
+        _ => Some(7 * 86400),
+    }
+}
+
+// Insert un evento si no existe uno active del mismo type+module sin
+// dismiss/resolve. Si ya existe, hace UPDATE de title/description (refrescar
+// counts) en lugar de duplicar.
+fn upsert_event(
+    conn: &rusqlite::Connection,
+    event_type: &str,
+    module: &str,
+    severity: &str,
+    title: &str,
+    description: Option<&str>,
+    action_label: Option<&str>,
+    action_target: Option<&str>,
+) -> Result<bool> {
+    // Existe activo?
+    let existing_id: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM inbox_events
+             WHERE type = ?1 AND module = ?2
+               AND dismissed_at IS NULL AND resolved_at IS NULL
+             LIMIT 1",
+            rusqlite::params![event_type, module],
+            |row| row.get(0),
+        )
+        .ok();
+
+    if let Some(id) = existing_id {
+        // Refresh título y descripción (los counts pueden cambiar)
+        conn.execute(
+            "UPDATE inbox_events SET title = ?1, description = ?2 WHERE id = ?3",
+            rusqlite::params![title, description, id],
+        )?;
+        return Ok(false); // no creó uno nuevo
+    }
+
+    // Insert nuevo
+    let expires_at = auto_dismiss_seconds(severity)
+        .map(|secs| chrono::Utc::now().timestamp() + secs);
+
+    conn.execute(
+        "INSERT INTO inbox_events
+            (type, severity, title, description, action_label, action_target,
+             module, expires_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        rusqlite::params![
+            event_type,
+            severity,
+            title,
+            description,
+            action_label,
+            action_target,
+            module,
+            expires_at
+        ],
+    )?;
+    Ok(true)
+}
+
+// Resolve cualquier evento active del type+module dado.
+fn resolve_events_of_type(
+    conn: &rusqlite::Connection,
+    event_type: &str,
+    module: &str,
+) -> Result<u64> {
+    let count = conn.execute(
+        "UPDATE inbox_events SET resolved_at = unixepoch()
+         WHERE type = ?1 AND module = ?2
+           AND dismissed_at IS NULL AND resolved_at IS NULL",
+        rusqlite::params![event_type, module],
+    )? as u64;
+    Ok(count)
+}
+
+#[tauri::command]
+fn detect_events_now(state: tauri::State<AppState>) -> Result<serde_json::Value> {
+    // T3.5: detector que corre los queries del catálogo y upsertea eventos.
+    // Implementa subset de los 36 eventos del spec — los más críticos para
+    // el día a día. El resto (banner_expires, ab_test_significant, nps_dropped,
+    // etc) requieren tablas/integraciones que viven en el worker (T7+) y se
+    // suman cuando estén disponibles.
+    let conn = open_db()?;
+    let mut events_created: u64 = 0;
+    let mut events_resolved: u64 = 0;
+
+    // ─── VAULT — queue_pending ──────────────────────────────────────
+    {
+        let queue_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM audit_decisions WHERE status='pending'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if queue_count > 0 {
+            let title = format!("{} jerseys esperando audit", queue_count);
+            let description = if queue_count >= 30 {
+                format!("Queue alto · {} pendientes", queue_count)
+            } else {
+                format!("{} pendientes en cola", queue_count)
+            };
+            let severity = if queue_count >= 30 { "critical" } else { "info" };
+            if upsert_event(
+                &conn,
+                "queue_pending",
+                "vault",
+                severity,
+                &title,
+                Some(&description),
+                Some("QUEUE"),
+                Some("/admin-web/vault/queue"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "queue_pending", "vault")?;
+        }
+    }
+
+    // ─── VAULT — dirty_detected ─────────────────────────────────────
+    {
+        let dirty_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM audit_decisions WHERE dirty_flag=1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if dirty_count > 0 {
+            let title = format!("{} jerseys con foto rota", dirty_count);
+            let severity = if dirty_count >= 10 { "critical" } else { "important" };
+            if upsert_event(
+                &conn,
+                "dirty_detected",
+                "vault",
+                severity,
+                &title,
+                Some("Detector encontró galleries rotas / CDN stale"),
+                Some("REVISAR"),
+                Some("/admin-web/vault/universo"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "dirty_detected", "vault")?;
+        }
+    }
+
+    // ─── VAULT — orphan_drafts ──────────────────────────────────────
+    // Drafts (status NOT pending/verified/deleted) sin actividad > 30d
+    {
+        let orphans: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM audit_decisions
+                 WHERE status NOT IN ('pending','verified','deleted')
+                   AND archived_at IS NULL
+                   AND (decided_at IS NULL OR decided_at < datetime('now', '-30 days'))",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if orphans > 5 {
+            let title = format!("{} drafts huérfanos > 30d", orphans);
+            if upsert_event(
+                &conn,
+                "orphan_drafts",
+                "vault",
+                "important",
+                &title,
+                Some("DRAFTs sin actividad reciente — revisar o archivar"),
+                Some("REVISAR"),
+                Some("/admin-web/vault/universo"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "orphan_drafts", "vault")?;
+        }
+    }
+
+    // ─── VAULT — supplier_gap (count en catalog.json) ───────────────
+    {
+        let catalog = load_catalog(&state).unwrap_or_default();
+        let gaps = count_supplier_gaps_in_catalog(&catalog);
+        if gaps >= 15 {
+            let title = format!("{} jerseys sin proveedor", gaps);
+            let severity = if gaps >= 50 { "critical" } else { "important" };
+            if upsert_event(
+                &conn,
+                "supplier_gap_new",
+                "vault",
+                severity,
+                &title,
+                Some("Catalog tiene supplier_gap=true sin resolver — escalar a Diego/HB"),
+                Some("VER"),
+                Some("/admin-web/vault/universo"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "supplier_gap_new", "vault")?;
+        }
+    }
+
+    // ─── STOCK — drop_starting_24h ──────────────────────────────────
+    {
+        let starting: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM stock_overrides
+                 WHERE publish_at IS NOT NULL
+                   AND publish_at > unixepoch()
+                   AND publish_at < unixepoch() + 86400",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if starting > 0 {
+            let title = format!("{} drop(s) Stock arrancan en 24h", starting);
+            if upsert_event(
+                &conn,
+                "stock_drop_starting_24h",
+                "stock",
+                "info",
+                &title,
+                None,
+                Some("CALENDARIO"),
+                Some("/admin-web/stock/calendario"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "stock_drop_starting_24h", "stock")?;
+        }
+    }
+
+    // ─── MYSTERY — pool_low ─────────────────────────────────────────
+    {
+        let pool: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM v_mystery_status WHERE computed_status='live'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if pool == 0 {
+            if upsert_event(
+                &conn,
+                "mystery_pool_empty",
+                "mystery",
+                "critical",
+                "Pool Mystery vacío",
+                Some("Sin jerseys live en pool — agregar urgente o pausar producto"),
+                Some("POOL"),
+                Some("/admin-web/mystery/pool"),
+            )? {
+                events_created += 1;
+            }
+            events_resolved += resolve_events_of_type(&conn, "mystery_pool_low", "mystery")?;
+        } else if pool < 5 {
+            let title = format!("Pool Mystery con solo {} jerseys", pool);
+            if upsert_event(
+                &conn,
+                "mystery_pool_low",
+                "mystery",
+                "important",
+                &title,
+                Some("Pool bajo — agregar más antes de que se quede en cero"),
+                Some("POOL"),
+                Some("/admin-web/mystery/pool"),
+            )? {
+                events_created += 1;
+            }
+            events_resolved += resolve_events_of_type(&conn, "mystery_pool_empty", "mystery")?;
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "mystery_pool_low", "mystery")?;
+            events_resolved += resolve_events_of_type(&conn, "mystery_pool_empty", "mystery")?;
+        }
+    }
+
+    // ─── SISTEMA — last_backup_old ──────────────────────────────────
+    {
+        let last_backup: Option<i64> = conn
+            .query_row(
+                "SELECT MAX(created_at) FROM backups",
+                [],
+                |row| row.get::<_, Option<i64>>(0),
+            )
+            .unwrap_or(None);
+        let stale = match last_backup {
+            None => true, // never backed up
+            Some(ts) => chrono::Utc::now().timestamp() - ts > 7 * 86400,
+        };
+        if stale {
+            if upsert_event(
+                &conn,
+                "last_backup_old",
+                "sistema",
+                "important",
+                "Sin backup en > 7d",
+                Some("El último backup tiene > 7 días — crear nuevo manual o revisar cron"),
+                Some("BACKUPS"),
+                Some("/admin-web/sistema/operaciones"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "last_backup_old", "sistema")?;
+        }
+    }
+
+    // ─── SISTEMA — cron_job_failed ──────────────────────────────────
+    {
+        let failed: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM scheduled_jobs WHERE last_status='failed'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if failed > 0 {
+            let title = format!("{} cron job(s) fallaron", failed);
+            if upsert_event(
+                &conn,
+                "cron_job_failed",
+                "sistema",
+                "important",
+                &title,
+                Some("Revisar last_error en scheduled_jobs y volver a correr o fix"),
+                Some("OPS"),
+                Some("/admin-web/sistema/operaciones"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "cron_job_failed", "sistema")?;
+        }
+    }
+
+    // ─── COMUNIDAD — reviews_pending_moderation ─────────────────────
+    {
+        let pending_reviews: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM reviews WHERE status='pending'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if pending_reviews > 0 {
+            let title = format!("{} review(s) sin moderar", pending_reviews);
+            if upsert_event(
+                &conn,
+                "reviews_pending_moderation",
+                "site",
+                "info",
+                &title,
+                Some("Reviews esperando aprobación/rechazo"),
+                Some("MODERAR"),
+                Some("/admin-web/site/comunidad"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "reviews_pending_moderation", "site")?;
+        }
+    }
+
+    // Auto-expire: cualquier evento con expires_at vencido se resolve
+    let auto_expired = conn.execute(
+        "UPDATE inbox_events SET resolved_at = unixepoch()
+         WHERE expires_at IS NOT NULL AND expires_at < unixepoch()
+           AND dismissed_at IS NULL AND resolved_at IS NULL",
+        [],
+    )? as u64;
+
+    Ok(serde_json::json!({
+        "events_created": events_created,
+        "events_resolved": events_resolved + auto_expired,
+        "auto_expired": auto_expired
+    }))
+}
+
 #[tauri::command]
 fn dismiss_event(id: i64) -> Result<()> {
     let conn = open_db()?;
@@ -3620,12 +4010,13 @@ pub fn run() {
             cmd_update_expense,
             cmd_recent_expenses,
             cmd_set_cash_balance,
-            // Admin Web R7 (T3.1)
+            // Admin Web R7 (T3.1 + T3.5)
             get_admin_web_kpis,
             get_module_stats,
             list_inbox_events,
             dismiss_event,
             resolve_event,
+            detect_events_now,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
