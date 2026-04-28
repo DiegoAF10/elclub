@@ -27,7 +27,7 @@ import type {
 import { NotAvailableInBrowser } from './types';
 import type { Family } from '../data/types';
 import type { Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult } from '../data/comercial';
-import type { Import, ImportItem, ImportPulso, ImportFilter } from '../data/importaciones';
+import type { Import, ImportItem, ImportPulso } from '../data/importaciones';
 import { transformFamily } from './transform';
 
 // ─── Endpoints (definidos en vite/plugin-erp-dev.ts) ──────────────────
@@ -358,12 +358,12 @@ export const browserAdapter: Adapter = {
 	},
 
 	// ─── Importaciones R1 ──────────────────────────────────────
-	async listImports(_filter?: ImportFilter): Promise<Import[]> {
+	async listImports(): Promise<Import[]> {
 		return [];
 	},
 
 	async getImport(_importId: string): Promise<Import> {
-		throw new NotAvailableInBrowser('getImport requires Tauri (.exe)');
+		throw new NotAvailableInBrowser('getImport');
 	},
 
 	async getImportItems(_importId: string): Promise<ImportItem[]> {

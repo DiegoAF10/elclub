@@ -29,7 +29,7 @@ import type {
 	WatermarkResult
 } from './types';
 import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, CreateOrderItem, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult, UpdateSaleArgs } from '../data/comercial';
-import type { Import, ImportItem, ImportPulso, ImportFilter } from '../data/importaciones';
+import type { Import, ImportItem, ImportPulso } from '../data/importaciones';
 import type { Family } from '../data/types';
 import { transformFamily } from './transform';
 
@@ -510,8 +510,8 @@ export const tauriAdapter: Adapter = {
 	},
 
 	// ─── Importaciones R1 ──────────────────────────────────────
-	async listImports(filter?: ImportFilter): Promise<Import[]> {
-		return invoke<Import[]>('cmd_list_imports', { filter: filter ?? {} });
+	async listImports(): Promise<Import[]> {
+		return invoke<Import[]>('cmd_list_imports');
 	},
 
 	async getImport(importId: string): Promise<Import> {
