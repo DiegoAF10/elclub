@@ -3059,6 +3059,76 @@ async fn cmd_update_import(input: UpdateImportInput) -> Result<Import> {
     impl_update_import(input).await
 }
 
+/// Business logic for cancelling an import.
+/// Idempotent: re-cancelling already-cancelled is OK.
+/// Status guard: cannot cancel 'closed' (terminal state · use admin re-open).
+/// pub so integration tests can call directly.
+pub async fn impl_cancel_import(import_id: String) -> Result<Import> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    let status: String = tx.query_row(
+        "SELECT status FROM imports WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+        |row| row.get(0),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => ErpError::NotFound(format!("Import {}", import_id)),
+        other => other.into(),
+    })?;
+
+    // Cannot cancel closed (terminal opposite state)
+    // Idempotent: cancelling 'cancelled' is no-op
+    if status == "closed" {
+        tx.rollback()?;
+        return Err(ErpError::Other(
+            "cannot cancel import with status 'closed' (use admin re-open if needed)".into()
+        ));
+    }
+
+    if status != "cancelled" {
+        tx.execute(
+            "UPDATE imports SET status = 'cancelled' WHERE import_id = ?1",
+            rusqlite::params![&import_id],
+        )?;
+    }
+
+    tx.commit()?;
+
+    // Re-read using same conn (avoid WAL footgun)
+    conn.query_row(
+        "SELECT import_id, paid_at, arrived_at, supplier, bruto_usd, shipping_gtq,
+                COALESCE(fx, 7.73), total_landed_gtq, n_units, unit_cost,
+                status, notes, created_at,
+                tracking_code, COALESCE(carrier, 'DHL'), lead_time_days
+         FROM imports WHERE import_id = ?1",
+        rusqlite::params![import_id],
+        |row| Ok(Import {
+            import_id:        row.get(0)?,
+            paid_at:          row.get(1)?,
+            arrived_at:       row.get(2)?,
+            supplier:         row.get(3)?,
+            bruto_usd:        row.get(4)?,
+            shipping_gtq:     row.get(5)?,
+            fx:               row.get(6)?,
+            total_landed_gtq: row.get(7)?,
+            n_units:          row.get(8)?,
+            unit_cost:        row.get(9)?,
+            status:           row.get(10)?,
+            notes:            row.get(11)?,
+            created_at:       row.get(12)?,
+            tracking_code:    row.get(13)?,
+            carrier:          row.get(14)?,
+            lead_time_days:   row.get(15)?,
+        }),
+    ).map_err(ErpError::from)
+}
+
+/// Tauri command — delegates to impl_cancel_import.
+#[tauri::command]
+async fn cmd_cancel_import(import_id: String) -> Result<Import> {
+    impl_cancel_import(import_id).await
+}
+
 // ─── Finanzas (FIN-R1) — structs ─────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -5598,6 +5668,7 @@ pub fn run() {
             cmd_create_import,
             cmd_register_arrival,
             cmd_update_import,
+            cmd_cancel_import,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
