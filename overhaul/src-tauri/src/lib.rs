@@ -64,6 +64,16 @@ fn db_path() -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from(r"C:\Users\Diego\el-club\erp\elclub.db"))
 }
 
+/// Validates `IMP-YYYY-MM-DD` format with real date check.
+/// Cero dependencias nuevas — char check + chrono::NaiveDate parsing.
+fn is_valid_import_id(s: &str) -> bool {
+    if s.len() != 14 || !s.starts_with("IMP-") {
+        return false;
+    }
+    let date_part = &s[4..]; // "YYYY-MM-DD"
+    chrono::NaiveDate::parse_from_str(date_part, "%Y-%m-%d").is_ok()
+}
+
 fn catalog_repo_path() -> PathBuf {
     // Repo root de elclub-catalogo-priv (parent dir de data/catalog.json)
     std::env::var("ERP_CATALOG_REPO")
@@ -5293,4 +5303,28 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
+}
+
+#[cfg(test)]
+mod imp_r15_helper_tests {
+    use super::*;
+
+    #[test]
+    fn test_valid_import_id_format() {
+        assert!(is_valid_import_id("IMP-2026-04-28"));
+        assert!(is_valid_import_id("IMP-2025-12-31"));
+        assert!(is_valid_import_id("IMP-2026-01-01"));
+    }
+
+    #[test]
+    fn test_invalid_import_id_format() {
+        assert!(!is_valid_import_id(""));
+        assert!(!is_valid_import_id("IMP-2026-04-7"));     // single digit day
+        assert!(!is_valid_import_id("imp-2026-04-28"));   // lowercase
+        assert!(!is_valid_import_id("IMP-2026-13-01"));   // month 13 invalid
+        assert!(!is_valid_import_id("IMP-2026-02-30"));   // feb 30 invalid
+        assert!(!is_valid_import_id("IMP-2026-04-28-001")); // suffix
+        assert!(!is_valid_import_id("IMP-202X-04-28"));   // letter in year
+        assert!(!is_valid_import_id("IMP_2026_04_28"));   // underscores
+    }
 }
