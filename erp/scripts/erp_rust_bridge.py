@@ -1059,7 +1059,8 @@ def cmd_set_event_status(args):
 
 
 def cmd_get_order(args):
-    """Devuelve OrderForModal para una orden por su ref (CE-XXXX)."""
+    """Devuelve OrderForModal extendido (R15) para una orden por su ref (CE-XXXX | IMP*)."""
+    import json
     from db import get_conn
 
     ref = args.get("ref")
@@ -1068,12 +1069,13 @@ def cmd_get_order(args):
 
     conn = get_conn()
     try:
-        # NOTA: customers no tiene handle/platform en esta versión del schema.
-        # Defaults: handle=null, platform="web". Enriquecimiento desde leads en R6+.
         sale = conn.execute("""
-            SELECT s.sale_id, s.ref, s.fulfillment_status, s.occurred_at, s.shipped_at, s.total,
-                   s.payment_method, s.notes,
-                   c.name, c.phone
+            SELECT s.sale_id, s.ref, s.fulfillment_status, s.occurred_at, s.shipped_at,
+                   s.subtotal, s.shipping_fee, s.discount, s.total,
+                   s.payment_method, s.shipping_method, s.tracking_code,
+                   s.modality, s.origin, s.shipping_address, s.notes,
+                   s.source_vault_ref,
+                   c.customer_id, c.name, c.phone, c.email
             FROM sales s
             LEFT JOIN customers c ON c.customer_id = s.customer_id
             WHERE s.ref = ?
@@ -1084,36 +1086,77 @@ def cmd_get_order(args):
 
         sale_id = sale[0]
 
-        # Items
+        # Items con shape extendido
         items = conn.execute("""
-            SELECT family_id, jersey_id, size, unit_price, unit_cost, personalization_json
+            SELECT family_id, jersey_id, team, season, variant_label, version,
+                   size, personalization_json, unit_price, unit_cost, item_type
             FROM sale_items
             WHERE sale_id = ?
+            ORDER BY item_id ASC
         """, (sale_id,)).fetchall()
+
+        # Parse shipping_address JSON if present
+        shipping_address = None
+        if sale[14]:
+            try:
+                shipping_address = json.loads(sale[14])
+            except Exception:
+                shipping_address = None
+
+        # Derive platform from origin/source for back-compat with OrderForModal.customer.platform
+        origin = sale[13] or "web"
+        platform_map = {
+            "web": "web",
+            "instagram": "ig",
+            "messenger": "messenger",
+            "whatsapp": "wa",
+            "wa": "wa",
+            "ig": "ig",
+            "manual": "web",
+            "walk-in": "web",
+        }
+        platform = platform_map.get(origin.lower(), "web")
 
         order = {
             "ref": sale[1],
             "saleId": sale_id,
-            "status": sale[2] or "paid",
-            "paidAt": sale[3],          # occurred_at = momento del pago
-            "shippedAt": sale[4],        # shipped_at = null hasta marcar shipped
-            "totalGtq": sale[5],
-            "paymentMethod": sale[6] or "recurrente",
-            "notes": sale[7],
+            "status": sale[2] or "pending",
+            "paidAt": sale[3],
+            "shippedAt": sale[4],
+            # R15 NEW breakdown:
+            "subtotalGtq": sale[5] or 0,
+            "shippingFeeGtq": sale[6] or 0,
+            "discountGtq": sale[7] or 0,
+            "totalGtq": sale[8] or 0,
+            "paymentMethod": sale[9] or "transferencia",
+            "shippingMethod": sale[10],
+            "trackingCode": sale[11],
+            "modality": sale[12] or "stock",
+            "origin": origin,
+            "shippingAddress": shipping_address,
+            "notes": sale[15],
+            "sourceVaultRef": sale[16],
             "customer": {
-                "name": sale[8] or "(sin nombre)",
-                "phone": sale[9],
-                "handle": None,           # no existe en customers schema (R1)
-                "platform": "web",        # default; orden originada via vault/web
+                "customerId": sale[17],
+                "name": sale[18] or "(sin nombre)",
+                "phone": sale[19],
+                "email": sale[20],
+                "handle": None,
+                "platform": platform,
             },
             "items": [
                 {
                     "familyId": i[0],
-                    "jerseySku": i[1],     # jersey_id en DB; jerseySku en API
-                    "size": i[2],
-                    "unitPriceGtq": i[3],
-                    "unitCostGtq": i[4],
-                    "personalizationJson": i[5],
+                    "jerseySku": i[1],
+                    "team": i[2],
+                    "season": i[3],
+                    "variantLabel": i[4],
+                    "version": i[5],
+                    "size": i[6],
+                    "personalizationJson": i[7],
+                    "unitPriceGtq": i[8] or 0,
+                    "unitCostGtq": i[9],
+                    "itemType": i[10],
                 }
                 for i in items
             ],
@@ -2714,6 +2757,24 @@ def cmd_list_sales(args):
             WHERE {' AND '.join(where)}
         """, params[:-2]).fetchone()[0]
 
+        # Gather all item labels per sale in one query (more efficient than N+1)
+        sale_ids = [r[0] for r in rows]
+        items_labels_map: dict = {}
+        if sale_ids:
+            placeholders = ",".join("?" * len(sale_ids))
+            item_rows = conn.execute(
+                f"""SELECT sale_id,
+                           TRIM(COALESCE(team, '') || ' ' || COALESCE(variant_label, '') || ' ' || COALESCE(size, ''))
+                    FROM sale_items
+                    WHERE sale_id IN ({placeholders})
+                    ORDER BY sale_id, item_id ASC""",
+                sale_ids,
+            ).fetchall()
+            for sid, lbl in item_rows:
+                lbl = lbl.strip()
+                if lbl:
+                    items_labels_map.setdefault(sid, []).append(lbl)
+
         sales = [{
             "saleId": r[0],
             "ref": r[1],
@@ -2734,6 +2795,7 @@ def cmd_list_sales(args):
             "customerEmail": r[16],
             "itemsCount": r[17],
             "firstItemLabel": (r[18] or "").strip() or None,
+            "itemsAllLabels": items_labels_map.get(r[0], []),
         } for r in rows]
 
         # Aggregate KPIs over filter scope (without limit/offset)
