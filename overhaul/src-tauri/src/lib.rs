@@ -3171,6 +3171,2001 @@ async fn cmd_set_cash_balance(
     Ok(conn.last_insert_rowid())
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// ADMIN WEB R7 — Tauri commands para el modulo Admin Web
+// ═══════════════════════════════════════════════════════════════════════
+// Spec: overhaul/docs/superpowers/specs/admin-web/. Schema: 26 tablas
+// nuevas + 4 cols en audit_decisions (T1.1). Tipos TS: lib/data/admin-web.ts
+// + adapter/types.ts AdminWebTauriCommands. Estos commands son invocados via
+// adminWebTauri en lib/adapter/tauri.ts.
+//
+// Convencion: structs serializan/deserializan con default serde (snake_case)
+// porque el JS adapter envia args/recibe results en snake_case (el spec
+// AdminWebTauriCommands usa snake_case para campos).
+
+#[derive(Debug, Serialize)]
+pub struct HomeKpis {
+    pub publicados_total: i64,
+    pub stock_live: i64,
+    pub queue_count: i64,
+    pub scheduled_30d: i64,
+    pub activity_month: i64,
+    pub supplier_gaps: i64,
+    pub hours_since_last_scrap: i64,
+    pub dirty_count: i64,
+    pub sparklines: std::collections::HashMap<String, Vec<f64>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListInboxEventsArgs {
+    #[serde(default)]
+    pub include_dismissed: Option<bool>,
+    #[serde(default)]
+    pub severity_filter: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct InboxEventOut {
+    pub id: i64,
+    pub r#type: String,
+    pub severity: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub action_label: Option<String>,
+    pub action_target: Option<String>,
+    pub module: String,
+    pub metadata: Option<Value>,
+    pub created_at: i64,
+    pub dismissed_at: Option<i64>,
+    pub resolved_at: Option<i64>,
+    pub expires_at: Option<i64>,
+}
+
+fn count_supplier_gaps_in_catalog(catalog: &[Value]) -> i64 {
+    catalog
+        .iter()
+        .filter(|f| {
+            // status='deleted' zombies fuera
+            let status = f.get("status").and_then(|v| v.as_str()).unwrap_or("");
+            if status == "deleted" {
+                return false;
+            }
+            f.get("supplier_gap").and_then(|v| v.as_bool()).unwrap_or(false)
+        })
+        .count() as i64
+}
+
+fn load_sparklines(conn: &rusqlite::Connection) -> Result<std::collections::HashMap<String, Vec<f64>>> {
+    // Lee últimos 7 puntos de kpi_snapshots por kpi_key.
+    // Si no hay datos (la tabla está vacía hasta que el cron daily corra),
+    // devuelve vacío — la UI maneja el caso "sin sparkline".
+    let mut out = std::collections::HashMap::<String, Vec<f64>>::new();
+    let kpi_keys = [
+        "publicados_total",
+        "stock_live",
+        "queue_count",
+        "scheduled_30d",
+        "activity_month",
+        "supplier_gaps",
+        "hours_since_last_scrap",
+        "dirty_count",
+    ];
+    for key in kpi_keys {
+        let mut stmt = conn.prepare(
+            "SELECT value FROM kpi_snapshots WHERE kpi_key = ?1 ORDER BY date DESC LIMIT 7",
+        )?;
+        let rows = stmt.query_map([key], |row| row.get::<_, f64>(0))?;
+        let mut values: Vec<f64> = rows.filter_map(|r| r.ok()).collect();
+        values.reverse(); // chronological: oldest → newest
+        if !values.is_empty() {
+            out.insert(key.to_string(), values);
+        }
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+fn get_admin_web_kpis(state: tauri::State<AppState>) -> Result<HomeKpis> {
+    let conn = open_db()?;
+    let catalog = load_catalog(&state)?;
+
+    let publicados_total: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM audit_decisions WHERE status='verified' AND final_verified=1 AND archived_at IS NULL",
+        [],
+        |row| row.get(0),
+    )?;
+
+    let queue_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM audit_decisions WHERE status='pending'",
+        [],
+        |row| row.get(0),
+    )?;
+
+    let stock_live: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM v_stock_status WHERE computed_status='live'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let scheduled_30d: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM stock_overrides WHERE publish_at IS NOT NULL
+                AND publish_at > unixepoch()
+                AND publish_at < unixepoch() + 60*60*24*30",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let activity_month: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM system_audit_log
+                WHERE timestamp > unixepoch() - 60*60*24*30",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let dirty_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM audit_decisions WHERE dirty_flag=1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    // Last scrap: max(started_at) en scrap_history. Si no hay rows, 0 (=> 999h).
+    let last_scrap_at: Option<i64> = conn
+        .query_row(
+            "SELECT MAX(started_at) FROM scrap_history WHERE status='success'",
+            [],
+            |row| row.get::<_, Option<i64>>(0),
+        )
+        .unwrap_or(None);
+    let now = chrono::Utc::now().timestamp();
+    let hours_since_last_scrap = last_scrap_at
+        .map(|ts| (now - ts) / 3600)
+        .unwrap_or(999); // sin scrap registrado
+
+    let supplier_gaps = count_supplier_gaps_in_catalog(&catalog);
+
+    let sparklines = load_sparklines(&conn).unwrap_or_default();
+
+    Ok(HomeKpis {
+        publicados_total,
+        stock_live,
+        queue_count,
+        scheduled_30d,
+        activity_month,
+        supplier_gaps,
+        hours_since_last_scrap,
+        dirty_count,
+        sparklines,
+    })
+}
+
+#[tauri::command]
+fn get_module_stats(module: String) -> Result<Value> {
+    // Mini-stats por modulo para el sidebar/Home tiles. Devuelve JSON libre.
+    // No toma AppState hoy (todas las queries son SQLite directas) pero si en
+    // R7.1+ los stats requieren catalog.json, agregar tauri::State<AppState>.
+    let conn = open_db()?;
+    let mut stats = serde_json::Map::new();
+
+    match module.as_str() {
+        "vault" => {
+            let queue: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM audit_decisions WHERE status='pending'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            let publicados: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM audit_decisions WHERE status='verified' AND final_verified=1",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            stats.insert("queue".to_string(), Value::from(queue));
+            stats.insert("publicados".to_string(), Value::from(publicados));
+        }
+        "stock" => {
+            let live: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM v_stock_status WHERE computed_status='live'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            let scheduled: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM v_stock_status WHERE computed_status='scheduled'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            stats.insert("live".to_string(), Value::from(live));
+            stats.insert("scheduled".to_string(), Value::from(scheduled));
+        }
+        "mystery" => {
+            let live: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM v_mystery_status WHERE computed_status='live'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            let total: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM mystery_overrides",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            stats.insert("live".to_string(), Value::from(live));
+            stats.insert("total".to_string(), Value::from(total));
+        }
+        "site" => {
+            let pages: i64 = conn
+                .query_row("SELECT COUNT(*) FROM site_pages", [], |row| row.get(0))
+                .unwrap_or(0);
+            let live_pages: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM site_pages WHERE status='live'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            stats.insert("pages".to_string(), Value::from(pages));
+            stats.insert("live_pages".to_string(), Value::from(live_pages));
+        }
+        "sistema" => {
+            let jobs: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM scheduled_jobs WHERE enabled=1",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            let backups: i64 = conn
+                .query_row("SELECT COUNT(*) FROM backups", [], |row| row.get(0))
+                .unwrap_or(0);
+            stats.insert("jobs".to_string(), Value::from(jobs));
+            stats.insert("backups".to_string(), Value::from(backups));
+        }
+        _ => {
+            // Modulo desconocido — devuelvo vacio
+        }
+    }
+
+    Ok(Value::Object(stats))
+}
+
+#[tauri::command]
+fn list_inbox_events(args: Option<ListInboxEventsArgs>) -> Result<Vec<InboxEventOut>> {
+    let conn = open_db()?;
+    let args = args.unwrap_or(ListInboxEventsArgs {
+        include_dismissed: None,
+        severity_filter: None,
+    });
+
+    let include_dismissed = args.include_dismissed.unwrap_or(false);
+
+    let mut q = String::from(
+        "SELECT id, type, severity, title, description, action_label, action_target,
+                module, metadata, created_at, dismissed_at, resolved_at, expires_at
+         FROM inbox_events
+         WHERE resolved_at IS NULL
+           AND (expires_at IS NULL OR expires_at > unixepoch())",
+    );
+    if !include_dismissed {
+        q.push_str(" AND dismissed_at IS NULL");
+    }
+    if let Some(ref sevs) = args.severity_filter {
+        if !sevs.is_empty() {
+            let placeholders: Vec<String> = (0..sevs.len()).map(|_| "?".to_string()).collect();
+            q.push_str(&format!(" AND severity IN ({})", placeholders.join(",")));
+        }
+    }
+    q.push_str(" ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'important' THEN 1 ELSE 2 END, created_at DESC");
+
+    let mut stmt = conn.prepare(&q)?;
+
+    let params: Vec<&dyn rusqlite::ToSql> = if let Some(ref sevs) = args.severity_filter {
+        sevs.iter().map(|s| s as &dyn rusqlite::ToSql).collect()
+    } else {
+        vec![]
+    };
+
+    let rows = stmt.query_map(params.as_slice(), |row| {
+        let metadata_str: Option<String> = row.get("metadata")?;
+        let metadata: Option<Value> = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
+        Ok(InboxEventOut {
+            id: row.get("id")?,
+            r#type: row.get("type")?,
+            severity: row.get("severity")?,
+            title: row.get("title")?,
+            description: row.get("description").ok(),
+            action_label: row.get("action_label").ok(),
+            action_target: row.get("action_target").ok(),
+            module: row.get("module")?,
+            metadata,
+            created_at: row.get("created_at")?,
+            dismissed_at: row.get("dismissed_at").ok(),
+            resolved_at: row.get("resolved_at").ok(),
+            expires_at: row.get("expires_at").ok(),
+        })
+    })?;
+
+    let events: Vec<InboxEventOut> = rows.filter_map(|r| r.ok()).collect();
+    Ok(events)
+}
+
+// Auto-dismiss days por severity — match con AUTO_DISMISS_DAYS de TS.
+// None = no expira (critical persiste hasta resolverse manualmente).
+fn auto_dismiss_seconds(severity: &str) -> Option<i64> {
+    match severity {
+        "critical" => None,
+        "important" => Some(7 * 86400),
+        "info" => Some(3 * 86400),
+        _ => Some(7 * 86400),
+    }
+}
+
+// Insert un evento si no existe uno active del mismo type+module sin
+// dismiss/resolve. Si ya existe, hace UPDATE de title/description (refrescar
+// counts) en lugar de duplicar.
+fn upsert_event(
+    conn: &rusqlite::Connection,
+    event_type: &str,
+    module: &str,
+    severity: &str,
+    title: &str,
+    description: Option<&str>,
+    action_label: Option<&str>,
+    action_target: Option<&str>,
+) -> Result<bool> {
+    // Existe activo?
+    let existing_id: Option<i64> = conn
+        .query_row(
+            "SELECT id FROM inbox_events
+             WHERE type = ?1 AND module = ?2
+               AND dismissed_at IS NULL AND resolved_at IS NULL
+             LIMIT 1",
+            rusqlite::params![event_type, module],
+            |row| row.get(0),
+        )
+        .ok();
+
+    if let Some(id) = existing_id {
+        // Refresh título y descripción (los counts pueden cambiar)
+        conn.execute(
+            "UPDATE inbox_events SET title = ?1, description = ?2 WHERE id = ?3",
+            rusqlite::params![title, description, id],
+        )?;
+        return Ok(false); // no creó uno nuevo
+    }
+
+    // Insert nuevo
+    let expires_at = auto_dismiss_seconds(severity)
+        .map(|secs| chrono::Utc::now().timestamp() + secs);
+
+    conn.execute(
+        "INSERT INTO inbox_events
+            (type, severity, title, description, action_label, action_target,
+             module, expires_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        rusqlite::params![
+            event_type,
+            severity,
+            title,
+            description,
+            action_label,
+            action_target,
+            module,
+            expires_at
+        ],
+    )?;
+    Ok(true)
+}
+
+// Resolve cualquier evento active del type+module dado.
+fn resolve_events_of_type(
+    conn: &rusqlite::Connection,
+    event_type: &str,
+    module: &str,
+) -> Result<u64> {
+    let count = conn.execute(
+        "UPDATE inbox_events SET resolved_at = unixepoch()
+         WHERE type = ?1 AND module = ?2
+           AND dismissed_at IS NULL AND resolved_at IS NULL",
+        rusqlite::params![event_type, module],
+    )? as u64;
+    Ok(count)
+}
+
+#[tauri::command]
+fn detect_events_now(state: tauri::State<AppState>) -> Result<serde_json::Value> {
+    // T3.5: detector que corre los queries del catálogo y upsertea eventos.
+    // Implementa subset de los 36 eventos del spec — los más críticos para
+    // el día a día. El resto (banner_expires, ab_test_significant, nps_dropped,
+    // etc) requieren tablas/integraciones que viven en el worker (T7+) y se
+    // suman cuando estén disponibles.
+    let conn = open_db()?;
+    let mut events_created: u64 = 0;
+    let mut events_resolved: u64 = 0;
+
+    // ─── VAULT — queue_pending ──────────────────────────────────────
+    {
+        let queue_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM audit_decisions WHERE status='pending'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if queue_count > 0 {
+            let title = format!("{} jerseys esperando audit", queue_count);
+            let description = if queue_count >= 30 {
+                format!("Queue alto · {} pendientes", queue_count)
+            } else {
+                format!("{} pendientes en cola", queue_count)
+            };
+            let severity = if queue_count >= 30 { "critical" } else { "info" };
+            if upsert_event(
+                &conn,
+                "queue_pending",
+                "vault",
+                severity,
+                &title,
+                Some(&description),
+                Some("QUEUE"),
+                Some("/admin-web/vault/queue"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "queue_pending", "vault")?;
+        }
+    }
+
+    // ─── VAULT — dirty_detected ─────────────────────────────────────
+    {
+        let dirty_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM audit_decisions WHERE dirty_flag=1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if dirty_count > 0 {
+            let title = format!("{} jerseys con foto rota", dirty_count);
+            let severity = if dirty_count >= 10 { "critical" } else { "important" };
+            if upsert_event(
+                &conn,
+                "dirty_detected",
+                "vault",
+                severity,
+                &title,
+                Some("Detector encontró galleries rotas / CDN stale"),
+                Some("REVISAR"),
+                Some("/admin-web/vault/universo"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "dirty_detected", "vault")?;
+        }
+    }
+
+    // ─── VAULT — orphan_drafts ──────────────────────────────────────
+    // Drafts (status NOT pending/verified/deleted) sin actividad > 30d
+    {
+        let orphans: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM audit_decisions
+                 WHERE status NOT IN ('pending','verified','deleted')
+                   AND archived_at IS NULL
+                   AND (decided_at IS NULL OR decided_at < datetime('now', '-30 days'))",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if orphans > 5 {
+            let title = format!("{} drafts huérfanos > 30d", orphans);
+            if upsert_event(
+                &conn,
+                "orphan_drafts",
+                "vault",
+                "important",
+                &title,
+                Some("DRAFTs sin actividad reciente — revisar o archivar"),
+                Some("REVISAR"),
+                Some("/admin-web/vault/universo"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "orphan_drafts", "vault")?;
+        }
+    }
+
+    // ─── VAULT — supplier_gap (count en catalog.json) ───────────────
+    {
+        let catalog = load_catalog(&state).unwrap_or_default();
+        let gaps = count_supplier_gaps_in_catalog(&catalog);
+        if gaps >= 15 {
+            let title = format!("{} jerseys sin proveedor", gaps);
+            let severity = if gaps >= 50 { "critical" } else { "important" };
+            if upsert_event(
+                &conn,
+                "supplier_gap_new",
+                "vault",
+                severity,
+                &title,
+                Some("Catalog tiene supplier_gap=true sin resolver — escalar a Diego/HB"),
+                Some("VER"),
+                Some("/admin-web/vault/universo"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "supplier_gap_new", "vault")?;
+        }
+    }
+
+    // ─── STOCK — drop_starting_24h ──────────────────────────────────
+    {
+        let starting: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM stock_overrides
+                 WHERE publish_at IS NOT NULL
+                   AND publish_at > unixepoch()
+                   AND publish_at < unixepoch() + 86400",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if starting > 0 {
+            let title = format!("{} drop(s) Stock arrancan en 24h", starting);
+            if upsert_event(
+                &conn,
+                "stock_drop_starting_24h",
+                "stock",
+                "info",
+                &title,
+                None,
+                Some("CALENDARIO"),
+                Some("/admin-web/stock/calendario"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "stock_drop_starting_24h", "stock")?;
+        }
+    }
+
+    // ─── MYSTERY — pool_low ─────────────────────────────────────────
+    {
+        let pool: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM v_mystery_status WHERE computed_status='live'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if pool == 0 {
+            if upsert_event(
+                &conn,
+                "mystery_pool_empty",
+                "mystery",
+                "critical",
+                "Pool Mystery vacío",
+                Some("Sin jerseys live en pool — agregar urgente o pausar producto"),
+                Some("POOL"),
+                Some("/admin-web/mystery/pool"),
+            )? {
+                events_created += 1;
+            }
+            events_resolved += resolve_events_of_type(&conn, "mystery_pool_low", "mystery")?;
+        } else if pool < 5 {
+            let title = format!("Pool Mystery con solo {} jerseys", pool);
+            if upsert_event(
+                &conn,
+                "mystery_pool_low",
+                "mystery",
+                "important",
+                &title,
+                Some("Pool bajo — agregar más antes de que se quede en cero"),
+                Some("POOL"),
+                Some("/admin-web/mystery/pool"),
+            )? {
+                events_created += 1;
+            }
+            events_resolved += resolve_events_of_type(&conn, "mystery_pool_empty", "mystery")?;
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "mystery_pool_low", "mystery")?;
+            events_resolved += resolve_events_of_type(&conn, "mystery_pool_empty", "mystery")?;
+        }
+    }
+
+    // ─── SISTEMA — last_backup_old ──────────────────────────────────
+    {
+        let last_backup: Option<i64> = conn
+            .query_row(
+                "SELECT MAX(created_at) FROM backups",
+                [],
+                |row| row.get::<_, Option<i64>>(0),
+            )
+            .unwrap_or(None);
+        let stale = match last_backup {
+            None => true, // never backed up
+            Some(ts) => chrono::Utc::now().timestamp() - ts > 7 * 86400,
+        };
+        if stale {
+            if upsert_event(
+                &conn,
+                "last_backup_old",
+                "sistema",
+                "important",
+                "Sin backup en > 7d",
+                Some("El último backup tiene > 7 días — crear nuevo manual o revisar cron"),
+                Some("BACKUPS"),
+                Some("/admin-web/sistema/operaciones"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "last_backup_old", "sistema")?;
+        }
+    }
+
+    // ─── SISTEMA — cron_job_failed ──────────────────────────────────
+    {
+        let failed: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM scheduled_jobs WHERE last_status='failed'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if failed > 0 {
+            let title = format!("{} cron job(s) fallaron", failed);
+            if upsert_event(
+                &conn,
+                "cron_job_failed",
+                "sistema",
+                "important",
+                &title,
+                Some("Revisar last_error en scheduled_jobs y volver a correr o fix"),
+                Some("OPS"),
+                Some("/admin-web/sistema/operaciones"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "cron_job_failed", "sistema")?;
+        }
+    }
+
+    // ─── COMUNIDAD — reviews_pending_moderation ─────────────────────
+    {
+        let pending_reviews: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM reviews WHERE status='pending'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        if pending_reviews > 0 {
+            let title = format!("{} review(s) sin moderar", pending_reviews);
+            if upsert_event(
+                &conn,
+                "reviews_pending_moderation",
+                "site",
+                "info",
+                &title,
+                Some("Reviews esperando aprobación/rechazo"),
+                Some("MODERAR"),
+                Some("/admin-web/site/comunidad"),
+            )? {
+                events_created += 1;
+            }
+        } else {
+            events_resolved += resolve_events_of_type(&conn, "reviews_pending_moderation", "site")?;
+        }
+    }
+
+    // Auto-expire: cualquier evento con expires_at vencido se resolve
+    let auto_expired = conn.execute(
+        "UPDATE inbox_events SET resolved_at = unixepoch()
+         WHERE expires_at IS NOT NULL AND expires_at < unixepoch()
+           AND dismissed_at IS NULL AND resolved_at IS NULL",
+        [],
+    )? as u64;
+
+    Ok(serde_json::json!({
+        "events_created": events_created,
+        "events_resolved": events_resolved + auto_expired,
+        "auto_expired": auto_expired
+    }))
+}
+
+#[tauri::command]
+fn dismiss_event(id: i64) -> Result<()> {
+    let conn = open_db()?;
+    conn.execute(
+        "UPDATE inbox_events SET dismissed_at = unixepoch() WHERE id = ?1 AND dismissed_at IS NULL",
+        rusqlite::params![id],
+    )?;
+    Ok(())
+}
+
+#[tauri::command]
+fn resolve_event(id: i64) -> Result<()> {
+    let conn = open_db()?;
+    conn.execute(
+        "UPDATE inbox_events SET resolved_at = unixepoch() WHERE id = ?1 AND resolved_at IS NULL",
+        rusqlite::params![id],
+    )?;
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ADMIN WEB R7 — Vault Publicados (T4.3) + promote/archive/dirty
+// ═══════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+pub struct ListPublishedArgs {
+    /// 'all' | 'attention' | 'recent' | 'scheduled' | 'no_tags' | 'old'
+    pub filter: Option<String>,
+    pub pagination: Option<PaginationArgs>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct PaginationArgs {
+    pub page: Option<u32>,
+    pub per_page: Option<u32>,
+}
+
+#[tauri::command]
+fn list_published(
+    args: Option<ListPublishedArgs>,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Value>> {
+    let args = args.unwrap_or(ListPublishedArgs {
+        filter: None,
+        pagination: None,
+    });
+    let filter = args.filter.as_deref().unwrap_or("all");
+    let p = args.pagination.unwrap_or_default();
+    let per_page = p.per_page.unwrap_or(50).min(200) as i64;
+    let page = p.page.unwrap_or(1).max(1) as i64;
+    let offset = (page - 1) * per_page;
+
+    let conn = open_db()?;
+    let catalog = load_catalog(&state)?;
+
+    // Mapa family_id → catalog row para enriquecer.
+    let catalog_by_id: std::collections::HashMap<String, &Value> = catalog
+        .iter()
+        .filter_map(|f| {
+            f.get("family_id")
+                .and_then(|v| v.as_str())
+                .map(|id| (id.to_string(), f))
+        })
+        .collect();
+
+    // Filtros compartidos: PUBLISHED = verified+final_verified=1+archived_at IS NULL
+    // (excluye REJECTED status='deleted' y ARCHIVED via archived_at).
+    let base = "FROM audit_decisions ad
+                WHERE ad.status='verified' AND ad.final_verified=1 AND ad.archived_at IS NULL";
+
+    // Filtros derivados
+    let extra_where = match filter {
+        "attention" => " AND ad.dirty_flag=1",
+        "recent" => " AND ad.reviewed_at > datetime('now', '-7 days')",
+        "scheduled" => {
+            " AND ad.family_id IN (
+                SELECT family_id FROM stock_overrides
+                WHERE publish_at > unixepoch() AND publish_at < unixepoch() + 60*60*24*30
+                UNION
+                SELECT family_id FROM mystery_overrides
+                WHERE publish_at > unixepoch() AND publish_at < unixepoch() + 60*60*24*30
+            )"
+        }
+        "no_tags" => {
+            " AND ad.family_id NOT IN (SELECT DISTINCT family_id FROM jersey_tags)"
+        }
+        "old" => " AND (ad.reviewed_at IS NULL OR ad.reviewed_at < datetime('now', '-180 days'))",
+        _ => "", // 'all' default
+    };
+
+    let q = format!(
+        "SELECT ad.family_id, ad.tier, ad.dirty_flag, ad.dirty_reason,
+                ad.qa_priority, ad.archived_at,
+                ad.decided_at, ad.reviewed_at
+         {} {}
+         ORDER BY ad.reviewed_at DESC NULLS LAST, ad.family_id ASC
+         LIMIT ?1 OFFSET ?2",
+        base, extra_where
+    );
+
+    let mut stmt = conn.prepare(&q)?;
+    let rows = stmt.query_map(rusqlite::params![per_page, offset], |row| {
+        let family_id: String = row.get("family_id")?;
+        let tier: Option<String> = row.get("tier").ok();
+        let dirty_flag: i64 = row.get::<_, Option<i64>>("dirty_flag")?.unwrap_or(0);
+        let dirty_reason: Option<String> = row.get("dirty_reason").ok();
+        let qa_priority: i64 = row.get::<_, Option<i64>>("qa_priority")?.unwrap_or(0);
+        let archived_at: Option<i64> = row.get("archived_at").ok();
+        let decided_at: Option<String> = row.get("decided_at").ok();
+        let reviewed_at: Option<String> = row.get("reviewed_at").ok();
+        Ok((
+            family_id,
+            tier,
+            dirty_flag,
+            dirty_reason,
+            qa_priority,
+            archived_at,
+            decided_at,
+            reviewed_at,
+        ))
+    })?;
+
+    let mut out: Vec<Value> = vec![];
+    for row in rows.flatten() {
+        let (family_id, tier, dirty_flag, dirty_reason, qa_priority, archived_at, decided_at, reviewed_at) =
+            row;
+        let cat_row = catalog_by_id.get(&family_id);
+        let team = cat_row
+            .and_then(|f| f.get("team").and_then(|v| v.as_str()))
+            .unwrap_or("")
+            .to_string();
+        let season = cat_row
+            .and_then(|f| f.get("season").and_then(|v| v.as_str()))
+            .unwrap_or("")
+            .to_string();
+        let variant = cat_row
+            .and_then(|f| f.get("variant").and_then(|v| v.as_str()))
+            .unwrap_or("")
+            .to_string();
+        let hero = cat_row
+            .and_then(|f| f.get("hero_thumbnail").and_then(|v| v.as_str()))
+            .map(|s| s.to_string());
+        let gallery = cat_row
+            .and_then(|f| f.get("gallery"))
+            .cloned()
+            .unwrap_or(Value::Array(vec![]));
+        let sku = cat_row
+            .and_then(|f| f.get("sku").and_then(|v| v.as_str()))
+            .unwrap_or(family_id.as_str())
+            .to_string();
+
+        let mut o = serde_json::Map::new();
+        o.insert("family_id".into(), Value::from(family_id));
+        o.insert("sku".into(), Value::from(sku));
+        o.insert("team".into(), Value::from(team));
+        o.insert("season".into(), Value::from(season));
+        o.insert("variant".into(), Value::from(variant));
+        o.insert("hero_thumbnail".into(), hero.map(Value::from).unwrap_or(Value::Null));
+        o.insert("gallery".into(), gallery);
+        o.insert("tier".into(), tier.map(Value::from).unwrap_or(Value::Null));
+        o.insert("state".into(), Value::from("PUBLISHED"));
+        let mut flags = serde_json::Map::new();
+        flags.insert("dirty".into(), Value::from(dirty_flag == 1));
+        flags.insert("dirty_reason".into(), dirty_reason.map(Value::from).unwrap_or(Value::Null));
+        flags.insert("qa_priority".into(), Value::from(qa_priority));
+        o.insert("flags".into(), Value::Object(flags));
+        o.insert(
+            "archived_at".into(),
+            archived_at.map(Value::from).unwrap_or(Value::Null),
+        );
+        o.insert("decided_at".into(), decided_at.map(Value::from).unwrap_or(Value::Null));
+        o.insert(
+            "reviewed_at".into(),
+            reviewed_at.map(Value::from).unwrap_or(Value::Null),
+        );
+        out.push(Value::Object(o));
+    }
+
+    Ok(out)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ToggleDirtyFlagArgs {
+    pub family_id: String,
+    pub dirty: bool,
+    pub reason: Option<String>,
+}
+
+#[tauri::command]
+fn toggle_dirty_flag(args: ToggleDirtyFlagArgs) -> Result<()> {
+    let conn = open_db()?;
+    if args.dirty {
+        conn.execute(
+            "UPDATE audit_decisions
+             SET dirty_flag = 1, dirty_reason = ?1, dirty_detected_at = unixepoch()
+             WHERE family_id = ?2",
+            rusqlite::params![args.reason, args.family_id],
+        )?;
+    } else {
+        conn.execute(
+            "UPDATE audit_decisions
+             SET dirty_flag = 0, dirty_reason = NULL, dirty_detected_at = NULL
+             WHERE family_id = ?1",
+            rusqlite::params![args.family_id],
+        )?;
+    }
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ArchiveJerseyArgs {
+    pub family_id: String,
+}
+
+#[tauri::command]
+fn archive_jersey(args: ArchiveJerseyArgs) -> Result<()> {
+    let conn = open_db()?;
+    conn.execute(
+        "UPDATE audit_decisions SET archived_at = unixepoch()
+         WHERE family_id = ?1 AND archived_at IS NULL",
+        rusqlite::params![args.family_id],
+    )?;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReviveArchivedArgs {
+    pub family_id: String,
+    pub scheduled_at: Option<i64>,
+}
+
+#[tauri::command]
+fn revive_archived(args: ReviveArchivedArgs) -> Result<()> {
+    let conn = open_db()?;
+    conn.execute(
+        "UPDATE audit_decisions SET archived_at = NULL WHERE family_id = ?1",
+        rusqlite::params![args.family_id],
+    )?;
+    // Si scheduled_at: crear stock_override scheduled (asumimos Stock por default)
+    if let Some(ts) = args.scheduled_at {
+        conn.execute(
+            "INSERT INTO stock_overrides (family_id, publish_at, status, priority)
+             VALUES (?1, ?2, 'scheduled', 5)",
+            rusqlite::params![args.family_id, ts],
+        )?;
+    }
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PromoteOverridePayload {
+    pub publish_at: Option<i64>,
+    pub unpublish_at: Option<i64>,
+    pub price_override: Option<i64>,
+    pub badge: Option<String>,
+    pub copy_override: Option<String>,
+    pub priority: Option<i64>,
+    pub pool_weight: Option<f64>,
+}
+
+// JS pasa { family_id, override }. Rust necesita renombrar 'override' (palabra
+// reservada) → serde_rename = "override" para deserializar correctamente.
+#[derive(Debug, Deserialize)]
+pub struct PromoteToStockJsonArgs {
+    pub family_id: String,
+    #[serde(rename = "override")]
+    pub override_: PromoteOverridePayload,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PromoteToMysteryJsonArgs {
+    pub family_id: String,
+    #[serde(rename = "override")]
+    pub override_: PromoteOverridePayload,
+}
+
+#[tauri::command]
+fn promote_to_stock(args: PromoteToStockJsonArgs) -> Result<Value> {
+    let conn = open_db()?;
+    let o = &args.override_;
+    let priority = o.priority.unwrap_or(5).clamp(1, 10);
+    let status = if o.publish_at.is_none() {
+        "draft"
+    } else if o.publish_at.unwrap() > chrono::Utc::now().timestamp() {
+        "scheduled"
+    } else {
+        "live"
+    };
+    conn.execute(
+        "INSERT INTO stock_overrides
+            (family_id, publish_at, unpublish_at, price_override, badge,
+             copy_override, priority, status, created_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'diego')",
+        rusqlite::params![
+            args.family_id,
+            o.publish_at,
+            o.unpublish_at,
+            o.price_override,
+            o.badge,
+            o.copy_override,
+            priority,
+            status,
+        ],
+    )?;
+    let id = conn.last_insert_rowid();
+    Ok(serde_json::json!({
+        "id": id,
+        "family_id": args.family_id,
+        "publish_at": o.publish_at,
+        "unpublish_at": o.unpublish_at,
+        "price_override": o.price_override,
+        "badge": o.badge,
+        "copy_override": o.copy_override,
+        "priority": priority,
+        "status": status,
+        "computed_status": status,
+    }))
+}
+
+#[tauri::command]
+fn promote_to_mystery(args: PromoteToMysteryJsonArgs) -> Result<Value> {
+    let conn = open_db()?;
+    let o = &args.override_;
+    let pool_weight = o.pool_weight.unwrap_or(1.0);
+    let status = if o.publish_at.is_none() {
+        "draft"
+    } else if o.publish_at.unwrap() > chrono::Utc::now().timestamp() {
+        "scheduled"
+    } else {
+        "live"
+    };
+    conn.execute(
+        "INSERT INTO mystery_overrides
+            (family_id, publish_at, unpublish_at, pool_weight, status, created_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, 'diego')",
+        rusqlite::params![
+            args.family_id,
+            o.publish_at,
+            o.unpublish_at,
+            pool_weight,
+            status,
+        ],
+    )?;
+    let id = conn.last_insert_rowid();
+    Ok(serde_json::json!({
+        "id": id,
+        "family_id": args.family_id,
+        "publish_at": o.publish_at,
+        "unpublish_at": o.unpublish_at,
+        "pool_weight": pool_weight,
+        "status": status,
+        "computed_status": status,
+    }))
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ADMIN WEB R7 — Tags system (T5.1 + T5.2)
+// ═══════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Serialize)]
+pub struct TagTypeOut {
+    pub id: i64,
+    pub slug: String,
+    pub display_name: String,
+    pub icon: Option<String>,
+    pub cardinality: String,
+    pub display_order: i64,
+    pub conditional_rule: Option<Value>,
+    pub description: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TagOut {
+    pub id: i64,
+    pub type_id: i64,
+    pub type_slug: String,
+    pub slug: String,
+    pub display_name: String,
+    pub icon: Option<String>,
+    pub color: Option<String>,
+    pub is_auto_derived: bool,
+    pub derivation_rule: Option<Value>,
+    pub is_deleted: bool,
+    pub display_order: i64,
+    pub count: i64,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[tauri::command]
+fn list_tag_types() -> Result<Vec<TagTypeOut>> {
+    let conn = open_db()?;
+    let mut stmt = conn.prepare(
+        "SELECT id, slug, display_name, icon, cardinality, display_order,
+                conditional_rule, description, created_at, updated_at
+         FROM tag_types ORDER BY display_order ASC, display_name ASC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let conditional_rule_str: Option<String> = row.get("conditional_rule").ok();
+        let conditional_rule: Option<Value> =
+            conditional_rule_str.and_then(|s| serde_json::from_str(&s).ok());
+        Ok(TagTypeOut {
+            id: row.get("id")?,
+            slug: row.get("slug")?,
+            display_name: row.get("display_name")?,
+            icon: row.get("icon").ok(),
+            cardinality: row.get("cardinality")?,
+            display_order: row.get("display_order")?,
+            conditional_rule,
+            description: row.get("description").ok(),
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+        })
+    })?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct ListTagsArgs {
+    pub type_id: Option<i64>,
+    pub include_deleted: Option<bool>,
+}
+
+#[tauri::command]
+fn list_tags(args: Option<ListTagsArgs>) -> Result<Vec<TagOut>> {
+    let conn = open_db()?;
+    let args = args.unwrap_or_default();
+    let include_deleted = args.include_deleted.unwrap_or(false);
+
+    // LEFT JOIN para count + JOIN tag_types para slug
+    let mut q = String::from(
+        "SELECT t.id, t.type_id, tt.slug AS type_slug, t.slug, t.display_name,
+                t.icon, t.color, t.is_auto_derived, t.derivation_rule,
+                t.is_deleted, t.display_order,
+                COUNT(jt.tag_id) AS count, t.created_at, t.updated_at
+         FROM tags t
+         JOIN tag_types tt ON tt.id = t.type_id
+         LEFT JOIN jersey_tags jt ON jt.tag_id = t.id
+         WHERE 1=1",
+    );
+    if !include_deleted {
+        q.push_str(" AND t.is_deleted = 0");
+    }
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+    if let Some(tid) = args.type_id {
+        q.push_str(" AND t.type_id = ?");
+        params.push(Box::new(tid));
+    }
+    q.push_str(" GROUP BY t.id ORDER BY tt.display_order ASC, t.display_order ASC, t.display_name ASC");
+
+    let mut stmt = conn.prepare(&q)?;
+    let param_refs: Vec<&dyn rusqlite::ToSql> =
+        params.iter().map(|p| p.as_ref() as &dyn rusqlite::ToSql).collect();
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
+        let derivation_rule_str: Option<String> = row.get("derivation_rule").ok();
+        let derivation_rule: Option<Value> =
+            derivation_rule_str.and_then(|s| serde_json::from_str(&s).ok());
+        Ok(TagOut {
+            id: row.get("id")?,
+            type_id: row.get("type_id")?,
+            type_slug: row.get("type_slug")?,
+            slug: row.get("slug")?,
+            display_name: row.get("display_name")?,
+            icon: row.get("icon").ok(),
+            color: row.get("color").ok(),
+            is_auto_derived: row.get::<_, Option<i64>>("is_auto_derived")?.unwrap_or(0) == 1,
+            derivation_rule,
+            is_deleted: row.get::<_, Option<i64>>("is_deleted")?.unwrap_or(0) == 1,
+            display_order: row.get("display_order")?,
+            count: row.get("count")?,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+        })
+    })?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateTagArgs {
+    pub type_id: i64,
+    pub slug: String,
+    pub display_name: String,
+    pub icon: Option<String>,
+    pub color: Option<String>,
+}
+
+#[tauri::command]
+fn create_tag(args: CreateTagArgs) -> Result<TagOut> {
+    let conn = open_db()?;
+    conn.execute(
+        "INSERT INTO tags (type_id, slug, display_name, icon, color)
+         VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![args.type_id, args.slug, args.display_name, args.icon, args.color],
+    )?;
+    let id = conn.last_insert_rowid();
+    let type_slug: String = conn.query_row(
+        "SELECT slug FROM tag_types WHERE id = ?1",
+        rusqlite::params![args.type_id],
+        |row| row.get(0),
+    )?;
+    Ok(TagOut {
+        id,
+        type_id: args.type_id,
+        type_slug,
+        slug: args.slug,
+        display_name: args.display_name,
+        icon: args.icon,
+        color: args.color,
+        is_auto_derived: false,
+        derivation_rule: None,
+        is_deleted: false,
+        display_order: 0,
+        count: 0,
+        created_at: chrono::Utc::now().timestamp(),
+        updated_at: chrono::Utc::now().timestamp(),
+    })
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateTagArgs {
+    pub id: i64,
+    pub updates: Value, // partial Tag — solo se aplican campos conocidos
+}
+
+#[tauri::command]
+fn update_tag(args: UpdateTagArgs) -> Result<()> {
+    let conn = open_db()?;
+    // Build dynamic UPDATE based on present fields. Whitelist para seguridad.
+    let mut sets: Vec<String> = vec!["updated_at = unixepoch()".to_string()];
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+
+    let update_obj = args.updates.as_object().ok_or_else(|| {
+        ErpError::Other("updates must be an object".to_string())
+    })?;
+
+    let allowed = [
+        "display_name",
+        "icon",
+        "color",
+        "display_order",
+    ];
+    for key in allowed {
+        if let Some(v) = update_obj.get(key) {
+            sets.push(format!("{} = ?", key));
+            match v {
+                Value::String(s) => params.push(Box::new(s.clone())),
+                Value::Number(n) if n.is_i64() => params.push(Box::new(n.as_i64().unwrap())),
+                Value::Null => params.push(Box::new(Option::<String>::None)),
+                _ => return Err(ErpError::Other(format!("invalid value for {}", key))),
+            }
+        }
+    }
+    if sets.len() == 1 {
+        // solo updated_at, nada que hacer
+        return Ok(());
+    }
+    let q = format!("UPDATE tags SET {} WHERE id = ?", sets.join(", "));
+    params.push(Box::new(args.id));
+    let param_refs: Vec<&dyn rusqlite::ToSql> =
+        params.iter().map(|p| p.as_ref() as &dyn rusqlite::ToSql).collect();
+    conn.execute(&q, param_refs.as_slice())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn soft_delete_tag(id: i64) -> Result<()> {
+    let conn = open_db()?;
+    conn.execute(
+        "UPDATE tags SET is_deleted = 1, updated_at = unixepoch() WHERE id = ?1",
+        rusqlite::params![id],
+    )?;
+    Ok(())
+}
+
+// ─── Tag assignment (T5.2) ───────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ListJerseyTagsArgs {
+    pub family_id: String,
+}
+
+#[tauri::command]
+fn list_jersey_tags(args: ListJerseyTagsArgs) -> Result<Vec<TagOut>> {
+    let conn = open_db()?;
+    let mut stmt = conn.prepare(
+        "SELECT t.id, t.type_id, tt.slug AS type_slug, t.slug, t.display_name,
+                t.icon, t.color, t.is_auto_derived, t.derivation_rule,
+                t.is_deleted, t.display_order, 0 AS count,
+                t.created_at, t.updated_at
+         FROM jersey_tags jt
+         JOIN tags t ON t.id = jt.tag_id
+         JOIN tag_types tt ON tt.id = t.type_id
+         WHERE jt.family_id = ?1 AND t.is_deleted = 0
+         ORDER BY tt.display_order, t.display_name",
+    )?;
+    let rows = stmt.query_map([&args.family_id], |row| {
+        let derivation_rule_str: Option<String> = row.get("derivation_rule").ok();
+        let derivation_rule: Option<Value> =
+            derivation_rule_str.and_then(|s| serde_json::from_str(&s).ok());
+        Ok(TagOut {
+            id: row.get("id")?,
+            type_id: row.get("type_id")?,
+            type_slug: row.get("type_slug")?,
+            slug: row.get("slug")?,
+            display_name: row.get("display_name")?,
+            icon: row.get("icon").ok(),
+            color: row.get("color").ok(),
+            is_auto_derived: row.get::<_, Option<i64>>("is_auto_derived")?.unwrap_or(0) == 1,
+            derivation_rule,
+            is_deleted: row.get::<_, Option<i64>>("is_deleted")?.unwrap_or(0) == 1,
+            display_order: row.get("display_order")?,
+            count: 0,
+            created_at: row.get("created_at")?,
+            updated_at: row.get("updated_at")?,
+        })
+    })?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ValidateTagAssignmentArgs {
+    pub family_id: String,
+    pub tag_id: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TagAssignmentValidationOut {
+    pub valid: bool,
+    pub reason: Option<String>,
+    pub conflicting_tags: Option<Vec<TagOut>>,
+    pub message: Option<String>,
+}
+
+#[tauri::command]
+fn validate_tag_assignment(args: ValidateTagAssignmentArgs) -> Result<TagAssignmentValidationOut> {
+    let conn = open_db()?;
+
+    // Tag existe y no esta deleted?
+    let tag_info: Option<(i64, i64, String)> = conn
+        .query_row(
+            "SELECT t.id, t.type_id, tt.cardinality
+             FROM tags t JOIN tag_types tt ON tt.id = t.type_id
+             WHERE t.id = ?1 AND t.is_deleted = 0",
+            rusqlite::params![args.tag_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .ok();
+
+    if tag_info.is_none() {
+        return Ok(TagAssignmentValidationOut {
+            valid: false,
+            reason: Some("tag_deleted".into()),
+            conflicting_tags: None,
+            message: Some("El tag no existe o está soft-deleted".into()),
+        });
+    }
+    let (_tag_id, type_id, cardinality) = tag_info.unwrap();
+
+    // Cardinality 'one': si ya hay un tag de este type para esta jersey, conflict
+    if cardinality == "one" {
+        let mut stmt = conn.prepare(
+            "SELECT t.id, t.type_id, tt.slug AS type_slug, t.slug, t.display_name,
+                    t.icon, t.color, t.is_auto_derived, t.derivation_rule,
+                    t.is_deleted, t.display_order, 0 AS count,
+                    t.created_at, t.updated_at
+             FROM jersey_tags jt
+             JOIN tags t ON t.id = jt.tag_id
+             JOIN tag_types tt ON tt.id = t.type_id
+             WHERE jt.family_id = ?1 AND t.type_id = ?2 AND t.id != ?3
+               AND t.is_deleted = 0",
+        )?;
+        let rows = stmt.query_map(
+            rusqlite::params![args.family_id, type_id, args.tag_id],
+            |row| {
+                Ok(TagOut {
+                    id: row.get("id")?,
+                    type_id: row.get("type_id")?,
+                    type_slug: row.get("type_slug")?,
+                    slug: row.get("slug")?,
+                    display_name: row.get("display_name")?,
+                    icon: row.get("icon").ok(),
+                    color: row.get("color").ok(),
+                    is_auto_derived: row.get::<_, Option<i64>>("is_auto_derived")?.unwrap_or(0)
+                        == 1,
+                    derivation_rule: None,
+                    is_deleted: false,
+                    display_order: row.get("display_order")?,
+                    count: 0,
+                    created_at: row.get("created_at")?,
+                    updated_at: row.get("updated_at")?,
+                })
+            },
+        )?;
+        let conflicting: Vec<TagOut> = rows.filter_map(|r| r.ok()).collect();
+        if !conflicting.is_empty() {
+            return Ok(TagAssignmentValidationOut {
+                valid: false,
+                reason: Some("cardinality_violation".into()),
+                conflicting_tags: Some(conflicting),
+                message: Some(
+                    "Tipo cardinality 'one' — ya hay un tag de este tipo asignado".into(),
+                ),
+            });
+        }
+    }
+
+    Ok(TagAssignmentValidationOut {
+        valid: true,
+        reason: None,
+        conflicting_tags: None,
+        message: None,
+    })
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AssignTagArgs {
+    pub family_id: String,
+    pub tag_id: i64,
+    pub force_replace: Option<bool>,
+}
+
+#[tauri::command]
+fn assign_tag(args: AssignTagArgs) -> Result<()> {
+    let conn = open_db()?;
+    let validation = validate_tag_assignment(ValidateTagAssignmentArgs {
+        family_id: args.family_id.clone(),
+        tag_id: args.tag_id,
+    })?;
+    if !validation.valid {
+        if validation.reason.as_deref() == Some("cardinality_violation")
+            && args.force_replace.unwrap_or(false)
+        {
+            // Remover conflicting tags
+            if let Some(conflicting) = validation.conflicting_tags {
+                for ct in conflicting {
+                    conn.execute(
+                        "DELETE FROM jersey_tags WHERE family_id = ?1 AND tag_id = ?2",
+                        rusqlite::params![args.family_id, ct.id],
+                    )?;
+                }
+            }
+        } else {
+            return Err(ErpError::Other(
+                validation
+                    .message
+                    .unwrap_or_else(|| "validation failed".to_string()),
+            ));
+        }
+    }
+    conn.execute(
+        "INSERT OR IGNORE INTO jersey_tags (family_id, tag_id, assigned_by)
+         VALUES (?1, ?2, 'manual')",
+        rusqlite::params![args.family_id, args.tag_id],
+    )?;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RemoveTagArgs {
+    pub family_id: String,
+    pub tag_id: i64,
+}
+
+#[tauri::command]
+fn remove_tag(args: RemoveTagArgs) -> Result<()> {
+    let conn = open_db()?;
+    conn.execute(
+        "DELETE FROM jersey_tags WHERE family_id = ?1 AND tag_id = ?2",
+        rusqlite::params![args.family_id, args.tag_id],
+    )?;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListJerseysByTagArgs {
+    pub tag_id: i64,
+    pub pagination: Option<PaginationArgs>,
+}
+
+#[tauri::command]
+fn list_jerseys_by_tag(
+    args: ListJerseysByTagArgs,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Value>> {
+    let conn = open_db()?;
+    let p = args.pagination.unwrap_or_default();
+    let per_page = p.per_page.unwrap_or(50).min(200) as i64;
+    let page = p.page.unwrap_or(1).max(1) as i64;
+    let offset = (page - 1) * per_page;
+
+    let catalog = load_catalog(&state)?;
+    let catalog_by_id: std::collections::HashMap<String, &Value> = catalog
+        .iter()
+        .filter_map(|f| {
+            f.get("family_id")
+                .and_then(|v| v.as_str())
+                .map(|id| (id.to_string(), f))
+        })
+        .collect();
+
+    let mut stmt = conn.prepare(
+        "SELECT family_id FROM jersey_tags
+         WHERE tag_id = ?1
+         ORDER BY assigned_at DESC
+         LIMIT ?2 OFFSET ?3",
+    )?;
+    let rows = stmt.query_map(
+        rusqlite::params![args.tag_id, per_page, offset],
+        |row| {
+            let fid: String = row.get(0)?;
+            Ok(fid)
+        },
+    )?;
+
+    let mut out: Vec<Value> = vec![];
+    for fid_res in rows {
+        if let Ok(fid) = fid_res {
+            if let Some(catalog_row) = catalog_by_id.get(&fid) {
+                let mut o = serde_json::Map::new();
+                o.insert("family_id".into(), Value::from(fid.clone()));
+                o.insert(
+                    "sku".into(),
+                    catalog_row
+                        .get("sku")
+                        .cloned()
+                        .unwrap_or(Value::from(fid.clone())),
+                );
+                o.insert(
+                    "team".into(),
+                    catalog_row.get("team").cloned().unwrap_or(Value::Null),
+                );
+                o.insert(
+                    "season".into(),
+                    catalog_row.get("season").cloned().unwrap_or(Value::Null),
+                );
+                o.insert(
+                    "hero_thumbnail".into(),
+                    catalog_row
+                        .get("hero_thumbnail")
+                        .cloned()
+                        .unwrap_or(Value::Null),
+                );
+                out.push(Value::Object(o));
+            }
+        }
+    }
+    Ok(out)
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ADMIN WEB R7 — Vault Universo (T6.1) + bulk actions (T6.6)
+// ═══════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, Default)]
+pub struct UniversoFiltersArgs {
+    pub states: Option<Vec<String>>, // ['DRAFT','QUEUE','PUBLISHED','REJECTED','ARCHIVED']
+    pub flags: Option<Value>,        // partial Record<flag, bool>
+    pub tags: Option<Vec<i64>>,      // tag IDs
+    pub coverage_min: Option<i64>,
+    pub coverage_max: Option<i64>,
+    pub last_action: Option<String>, // 'today' | 'week' | 'month' | 'older'
+    pub search: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct SortConfigArgs {
+    pub column: Option<String>,
+    pub direction: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListUniversoArgs {
+    pub filters: Option<UniversoFiltersArgs>,
+    pub sort: Option<SortConfigArgs>,
+    pub pagination: PaginationArgs,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UniversoQueryResultOut {
+    pub rows: Vec<Value>,
+    pub total: i64,
+    pub filters_counts: Value,
+}
+
+#[tauri::command]
+fn list_universo(
+    args: ListUniversoArgs,
+    state: tauri::State<AppState>,
+) -> Result<UniversoQueryResultOut> {
+    let conn = open_db()?;
+    let f = args.filters.unwrap_or_default();
+    let p = args.pagination;
+    let per_page = p.per_page.unwrap_or(50).min(500) as i64;
+    let page = p.page.unwrap_or(1).max(1) as i64;
+    let offset = (page - 1) * per_page;
+
+    // Construir WHERE dinámico
+    let mut wheres: Vec<String> = vec!["1=1".to_string()];
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+
+    // States: usar v_jersey_state computed
+    if let Some(states) = &f.states {
+        if !states.is_empty() {
+            let placeholders: Vec<String> = (0..states.len()).map(|_| "?".to_string()).collect();
+            wheres.push(format!(
+                "vjs.state IN ({})",
+                placeholders.join(",")
+            ));
+            for s in states {
+                params.push(Box::new(s.clone()));
+            }
+        }
+    }
+
+    // Flags
+    if let Some(flags) = &f.flags {
+        if flags.is_object() {
+            if flags.get("dirty").and_then(|v| v.as_bool()) == Some(true) {
+                wheres.push("ad.dirty_flag = 1".into());
+            }
+            if flags.get("qa_priority").and_then(|v| v.as_bool()) == Some(true) {
+                wheres.push("ad.qa_priority = 1".into());
+            }
+        }
+    }
+
+    // Search: SKU o family_id contains
+    if let Some(search) = &f.search {
+        if !search.trim().is_empty() {
+            wheres.push("(ad.family_id LIKE ?)".into());
+            params.push(Box::new(format!("%{}%", search.trim())));
+        }
+    }
+
+    // Last action
+    if let Some(la) = &f.last_action {
+        let cutoff = match la.as_str() {
+            "today" => Some("-1 days"),
+            "week" => Some("-7 days"),
+            "month" => Some("-30 days"),
+            "older" => None,
+            _ => None,
+        };
+        if let Some(c) = cutoff {
+            wheres.push(format!("(ad.reviewed_at > datetime('now', '{}'))", c));
+        } else if la == "older" {
+            wheres.push("(ad.reviewed_at IS NULL OR ad.reviewed_at < datetime('now', '-30 days'))".into());
+        }
+    }
+
+    // Tags (any of)
+    if let Some(tag_ids) = &f.tags {
+        if !tag_ids.is_empty() {
+            let placeholders: Vec<String> = (0..tag_ids.len()).map(|_| "?".to_string()).collect();
+            wheres.push(format!(
+                "ad.family_id IN (SELECT family_id FROM jersey_tags WHERE tag_id IN ({}))",
+                placeholders.join(",")
+            ));
+            for id in tag_ids {
+                params.push(Box::new(*id));
+            }
+        }
+    }
+
+    let where_clause = wheres.join(" AND ");
+
+    // Total count first (para pagination)
+    let count_q = format!(
+        "SELECT COUNT(*) FROM audit_decisions ad
+         JOIN v_jersey_state vjs ON vjs.family_id = ad.family_id
+         WHERE {}",
+        where_clause
+    );
+    let param_refs: Vec<&dyn rusqlite::ToSql> =
+        params.iter().map(|p| p.as_ref() as &dyn rusqlite::ToSql).collect();
+    let total: i64 = conn.query_row(&count_q, param_refs.as_slice(), |row| row.get(0))?;
+
+    // Sort
+    let sort = args.sort.unwrap_or_default();
+    let sort_col = match sort.column.as_deref().unwrap_or("reviewed_at") {
+        "family_id" => "ad.family_id",
+        "tier" => "ad.tier",
+        "decided_at" => "ad.decided_at",
+        "reviewed_at" => "ad.reviewed_at",
+        "state" => "vjs.state",
+        _ => "ad.reviewed_at",
+    };
+    let sort_dir = match sort.direction.as_deref().unwrap_or("desc") {
+        "asc" => "ASC",
+        _ => "DESC",
+    };
+
+    // Main query
+    let main_q = format!(
+        "SELECT ad.family_id, ad.tier, ad.dirty_flag, ad.dirty_reason,
+                ad.qa_priority, ad.archived_at, ad.decided_at, ad.reviewed_at,
+                vjs.state
+         FROM audit_decisions ad
+         JOIN v_jersey_state vjs ON vjs.family_id = ad.family_id
+         WHERE {}
+         ORDER BY {} {} NULLS LAST
+         LIMIT ? OFFSET ?",
+        where_clause, sort_col, sort_dir
+    );
+    let mut stmt = conn.prepare(&main_q)?;
+    let mut all_params = params;
+    all_params.push(Box::new(per_page));
+    all_params.push(Box::new(offset));
+    let all_param_refs: Vec<&dyn rusqlite::ToSql> = all_params
+        .iter()
+        .map(|p| p.as_ref() as &dyn rusqlite::ToSql)
+        .collect();
+
+    let rows_iter = stmt.query_map(all_param_refs.as_slice(), |row| {
+        let family_id: String = row.get("family_id")?;
+        let tier: Option<String> = row.get("tier").ok();
+        let dirty_flag: i64 = row.get::<_, Option<i64>>("dirty_flag")?.unwrap_or(0);
+        let qa_priority: i64 = row.get::<_, Option<i64>>("qa_priority")?.unwrap_or(0);
+        let archived_at: Option<i64> = row.get("archived_at").ok();
+        let decided_at: Option<String> = row.get("decided_at").ok();
+        let reviewed_at: Option<String> = row.get("reviewed_at").ok();
+        let state: String = row.get("state")?;
+        Ok((
+            family_id,
+            tier,
+            dirty_flag,
+            qa_priority,
+            archived_at,
+            decided_at,
+            reviewed_at,
+            state,
+        ))
+    })?;
+
+    let catalog = load_catalog(&state)?;
+    let catalog_by_id: std::collections::HashMap<String, &Value> = catalog
+        .iter()
+        .filter_map(|cf| {
+            cf.get("family_id")
+                .and_then(|v| v.as_str())
+                .map(|id| (id.to_string(), cf))
+        })
+        .collect();
+
+    let mut rows: Vec<Value> = vec![];
+    for row_res in rows_iter {
+        let (family_id, tier, dirty_flag, qa_priority, archived_at, decided_at, reviewed_at, state_str) =
+            match row_res {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+        let cat = catalog_by_id.get(&family_id);
+        let mut o = serde_json::Map::new();
+        o.insert("family_id".into(), Value::from(family_id.clone()));
+        o.insert(
+            "sku".into(),
+            cat.and_then(|f| f.get("sku")).cloned().unwrap_or(Value::Null),
+        );
+        o.insert(
+            "team".into(),
+            cat.and_then(|f| f.get("team")).cloned().unwrap_or(Value::Null),
+        );
+        o.insert(
+            "season".into(),
+            cat.and_then(|f| f.get("season")).cloned().unwrap_or(Value::Null),
+        );
+        o.insert(
+            "variant".into(),
+            cat.and_then(|f| f.get("variant")).cloned().unwrap_or(Value::Null),
+        );
+        o.insert(
+            "hero_thumbnail".into(),
+            cat.and_then(|f| f.get("hero_thumbnail"))
+                .cloned()
+                .unwrap_or(Value::Null),
+        );
+        let coverage = cat
+            .and_then(|f| f.get("gallery"))
+            .and_then(|g| g.as_array())
+            .map(|a| a.len() as i64)
+            .unwrap_or(0);
+        o.insert("coverage".into(), Value::from(coverage));
+        o.insert("tier".into(), tier.map(Value::from).unwrap_or(Value::Null));
+        o.insert("state".into(), Value::from(state_str));
+        let mut flags = serde_json::Map::new();
+        flags.insert("dirty".into(), Value::from(dirty_flag == 1));
+        flags.insert("qa_priority".into(), Value::from(qa_priority));
+        o.insert("flags".into(), Value::Object(flags));
+        o.insert(
+            "archived_at".into(),
+            archived_at.map(Value::from).unwrap_or(Value::Null),
+        );
+        o.insert(
+            "decided_at".into(),
+            decided_at.map(Value::from).unwrap_or(Value::Null),
+        );
+        o.insert(
+            "reviewed_at".into(),
+            reviewed_at.map(Value::from).unwrap_or(Value::Null),
+        );
+        rows.push(Value::Object(o));
+    }
+
+    // Filter counts (state breakdown — útil para sidebar)
+    let mut state_counts = serde_json::Map::new();
+    let mut count_stmt = conn.prepare(
+        "SELECT state, COUNT(*) FROM v_jersey_state GROUP BY state",
+    )?;
+    let state_rows = count_stmt.query_map([], |row| {
+        let s: String = row.get(0)?;
+        let c: i64 = row.get(1)?;
+        Ok((s, c))
+    })?;
+    for r in state_rows.flatten() {
+        state_counts.insert(r.0, Value::from(r.1));
+    }
+
+    let filters_counts =
+        Value::Object({ let mut m = serde_json::Map::new(); m.insert("by_state".into(), Value::Object(state_counts)); m });
+
+    Ok(UniversoQueryResultOut {
+        rows,
+        total,
+        filters_counts,
+    })
+}
+
+// ─── Bulk actions (T6.6) ────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct BulkActionArgs {
+    pub family_ids: Vec<String>,
+    pub action: String, // 'tag' | 'archive' | 're_fetch' | 'delete'
+    pub payload: Option<Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BulkActionResult {
+    pub affected: i64,
+    pub errors: Vec<String>,
+}
+
+#[tauri::command]
+fn bulk_action(args: BulkActionArgs) -> Result<BulkActionResult> {
+    let conn = open_db()?;
+    let mut affected = 0i64;
+    let mut errors: Vec<String> = vec![];
+
+    match args.action.as_str() {
+        "archive" => {
+            for fid in &args.family_ids {
+                match conn.execute(
+                    "UPDATE audit_decisions SET archived_at = unixepoch()
+                     WHERE family_id = ?1 AND archived_at IS NULL",
+                    rusqlite::params![fid],
+                ) {
+                    Ok(n) => affected += n as i64,
+                    Err(e) => errors.push(format!("{}: {}", fid, e)),
+                }
+            }
+        }
+        "tag" => {
+            // payload: { tag_id: number }
+            let tag_id = args
+                .payload
+                .as_ref()
+                .and_then(|v| v.get("tag_id"))
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| ErpError::Other("payload.tag_id requerido para action='tag'".into()))?;
+            for fid in &args.family_ids {
+                match conn.execute(
+                    "INSERT OR IGNORE INTO jersey_tags (family_id, tag_id, assigned_by)
+                     VALUES (?1, ?2, 'bulk:diego')",
+                    rusqlite::params![fid, tag_id],
+                ) {
+                    Ok(n) => affected += n as i64,
+                    Err(e) => errors.push(format!("{}: {}", fid, e)),
+                }
+            }
+        }
+        "delete" => {
+            // Soft delete: status='deleted'
+            for fid in &args.family_ids {
+                match conn.execute(
+                    "UPDATE audit_decisions SET status='deleted' WHERE family_id = ?1",
+                    rusqlite::params![fid],
+                ) {
+                    Ok(n) => affected += n as i64,
+                    Err(e) => errors.push(format!("{}: {}", fid, e)),
+                }
+            }
+        }
+        "re_fetch" => {
+            // Marca dirty para que el detector lo recoja en el siguiente ciclo
+            for fid in &args.family_ids {
+                match conn.execute(
+                    "UPDATE audit_decisions SET dirty_flag = 1, dirty_reason = 're_fetch_requested',
+                                                 dirty_detected_at = unixepoch()
+                     WHERE family_id = ?1",
+                    rusqlite::params![fid],
+                ) {
+                    Ok(n) => affected += n as i64,
+                    Err(e) => errors.push(format!("{}: {}", fid, e)),
+                }
+            }
+        }
+        _ => {
+            return Err(ErpError::Other(format!("bulk action desconocida: {}", args.action)));
+        }
+    }
+
+    Ok(BulkActionResult { affected, errors })
+}
+
+// ─── Saved views (T6.4) ─────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ListSavedViewsArgs {
+    pub module: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SavedViewOut {
+    pub id: i64,
+    pub module: String,
+    pub slug: String,
+    pub display_name: String,
+    pub icon: Option<String>,
+    pub filters: Value,
+    pub sort: Option<Value>,
+    pub columns: Option<Value>,
+    pub is_factory: bool,
+    pub display_order: i64,
+    pub created_at: i64,
+}
+
+#[tauri::command]
+fn list_saved_views(args: ListSavedViewsArgs) -> Result<Vec<SavedViewOut>> {
+    let conn = open_db()?;
+    let mut stmt = conn.prepare(
+        "SELECT id, module, slug, display_name, icon, filters, sort, columns,
+                is_factory, display_order, created_at
+         FROM saved_views WHERE module = ?1
+         ORDER BY display_order ASC, display_name ASC",
+    )?;
+    let rows = stmt.query_map([&args.module], |row| {
+        let filters_str: String = row.get("filters")?;
+        let filters: Value = serde_json::from_str(&filters_str).unwrap_or(Value::Null);
+        let sort_str: Option<String> = row.get("sort").ok();
+        let sort: Option<Value> = sort_str.and_then(|s| serde_json::from_str(&s).ok());
+        let cols_str: Option<String> = row.get("columns").ok();
+        let columns: Option<Value> = cols_str.and_then(|s| serde_json::from_str(&s).ok());
+        Ok(SavedViewOut {
+            id: row.get("id")?,
+            module: row.get("module")?,
+            slug: row.get("slug")?,
+            display_name: row.get("display_name")?,
+            icon: row.get("icon").ok(),
+            filters,
+            sort,
+            columns,
+            is_factory: row.get::<_, Option<i64>>("is_factory")?.unwrap_or(0) == 1,
+            display_order: row.get("display_order")?,
+            created_at: row.get("created_at")?,
+        })
+    })?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -3266,6 +5261,35 @@ pub fn run() {
             cmd_update_expense,
             cmd_recent_expenses,
             cmd_set_cash_balance,
+            // Admin Web R7 (T3.1 + T3.5)
+            get_admin_web_kpis,
+            get_module_stats,
+            list_inbox_events,
+            dismiss_event,
+            resolve_event,
+            detect_events_now,
+            // Admin Web R7 (T4.3)
+            list_published,
+            toggle_dirty_flag,
+            archive_jersey,
+            revive_archived,
+            promote_to_stock,
+            promote_to_mystery,
+            // Admin Web R7 (T5.1 + T5.2) — Tags + Assignment
+            list_tag_types,
+            list_tags,
+            create_tag,
+            update_tag,
+            soft_delete_tag,
+            list_jersey_tags,
+            list_jerseys_by_tag,
+            validate_tag_assignment,
+            assign_tag,
+            remove_tag,
+            // Admin Web R7 (T6.1 + T6.4 + T6.6) — Universo + bulk + saved views
+            list_universo,
+            bulk_action,
+            list_saved_views,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");

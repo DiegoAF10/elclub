@@ -454,3 +454,250 @@ export function _invalidateBrowserCaches() {
 	decisionsCache = null;
 	decisionsByFamily = null;
 }
+
+// =============================================================================
+// Admin Web R7 (T1.4) — Browser stubs
+// =============================================================================
+// Patrón consistente con browserAdapter pre-existente:
+//   - reads (list_*, get_*): retornan arrays/objetos vacíos para que la UI
+//     renderice en `npm run dev` sin crashes (skeleton states funcionando)
+//   - writes (create/update/delete/dismiss/etc): throw NotAvailableInBrowser
+//
+// El plan T1.4 dice "los NotAvailableInBrowser correspondientes" — interpreto
+// "correspondientes" = donde aplique. En writes corresponde; en reads
+// preferimos degradación graceful para preservar el dev loop.
+
+import type { AdminWebTauriCommands } from './types';
+
+export const adminWebBrowser: AdminWebTauriCommands = {
+	// === HOME ===
+	get_admin_web_kpis: async () => ({
+		publicados_total: 0,
+		stock_live: 0,
+		queue_count: 0,
+		scheduled_30d: 0,
+		activity_month: 0,
+		supplier_gaps: 0,
+		hours_since_last_scrap: 0,
+		dirty_count: 0,
+		sparklines: {}
+	}),
+	get_module_stats: async () => ({}),
+
+	// === INBOX EVENTS ===
+	list_inbox_events: async () => [],
+	dismiss_event: async () => {
+		throw new NotAvailableInBrowser('dismiss_event');
+	},
+	resolve_event: async () => {
+		throw new NotAvailableInBrowser('resolve_event');
+	},
+	detect_events_now: async () => {
+		throw new NotAvailableInBrowser('detect_events_now');
+	},
+
+	// === VAULT — TAGS ===
+	list_tag_types: async () => [],
+	list_tags: async () => [],
+	create_tag: async () => {
+		throw new NotAvailableInBrowser('create_tag');
+	},
+	update_tag: async () => {
+		throw new NotAvailableInBrowser('update_tag');
+	},
+	soft_delete_tag: async () => {
+		throw new NotAvailableInBrowser('soft_delete_tag');
+	},
+	list_jersey_tags: async () => [],
+	list_jerseys_by_tag: async () => [],
+	validate_tag_assignment: async () => ({ valid: true }),
+	assign_tag: async () => {
+		throw new NotAvailableInBrowser('assign_tag');
+	},
+	remove_tag: async () => {
+		throw new NotAvailableInBrowser('remove_tag');
+	},
+
+	// === VAULT — PUBLICADOS ===
+	list_published: async () => [],
+	promote_to_stock: async () => {
+		throw new NotAvailableInBrowser('promote_to_stock');
+	},
+	promote_to_mystery: async () => {
+		throw new NotAvailableInBrowser('promote_to_mystery');
+	},
+	toggle_dirty_flag: async () => {
+		throw new NotAvailableInBrowser('toggle_dirty_flag');
+	},
+	archive_jersey: async () => {
+		throw new NotAvailableInBrowser('archive_jersey');
+	},
+	revive_archived: async () => {
+		throw new NotAvailableInBrowser('revive_archived');
+	},
+
+	// === VAULT — UNIVERSO ===
+	list_universo: async () => ({ rows: [], total: 0, filters_counts: {} }),
+	bulk_action: async () => {
+		throw new NotAvailableInBrowser('bulk_action');
+	},
+
+	// === SAVED VIEWS ===
+	list_saved_views: async () => [],
+	save_view: async () => {
+		throw new NotAvailableInBrowser('save_view');
+	},
+	delete_view: async () => {
+		throw new NotAvailableInBrowser('delete_view');
+	},
+
+	// === STOCK ===
+	list_stock_overrides: async () => [],
+	create_stock_override: async () => {
+		throw new NotAvailableInBrowser('create_stock_override');
+	},
+	update_stock_override: async () => {
+		throw new NotAvailableInBrowser('update_stock_override');
+	},
+	delete_stock_override: async () => {
+		throw new NotAvailableInBrowser('delete_stock_override');
+	},
+	pause_stock_override: async () => {
+		throw new NotAvailableInBrowser('pause_stock_override');
+	},
+	list_stock_calendar: async () => [],
+
+	// === MYSTERY ===
+	list_mystery_overrides: async () => [],
+	create_mystery_override: async () => {
+		throw new NotAvailableInBrowser('create_mystery_override');
+	},
+	update_mystery_override: async () => {
+		throw new NotAvailableInBrowser('update_mystery_override');
+	},
+	delete_mystery_override: async () => {
+		throw new NotAvailableInBrowser('delete_mystery_override');
+	},
+	list_mystery_calendar: async () => [],
+	get_mystery_rules: async () => ({}),
+	update_mystery_rules: async () => {
+		throw new NotAvailableInBrowser('update_mystery_rules');
+	},
+
+	// === SITE — PAGES ===
+	list_pages: async () => [],
+	get_page: async () => {
+		throw new NotAvailableInBrowser('get_page');
+	},
+	create_page: async () => {
+		throw new NotAvailableInBrowser('create_page');
+	},
+	update_page: async () => {
+		throw new NotAvailableInBrowser('update_page');
+	},
+	delete_page: async () => {
+		throw new NotAvailableInBrowser('delete_page');
+	},
+	publish_page: async () => {
+		throw new NotAvailableInBrowser('publish_page');
+	},
+
+	// === SITE — COMPONENTS ===
+	list_components: async () => [],
+	update_component: async () => {
+		throw new NotAvailableInBrowser('update_component');
+	},
+	toggle_component: async () => {
+		throw new NotAvailableInBrowser('toggle_component');
+	},
+
+	// === SITE — BRANDING ===
+	list_branding: async () => [],
+	set_branding: async () => {
+		throw new NotAvailableInBrowser('set_branding');
+	},
+	apply_branding_changes: async () => {
+		throw new NotAvailableInBrowser('apply_branding_changes');
+	},
+
+	// === SITE — COMMUNICATION ===
+	list_templates: async () => [],
+	create_template: async () => {
+		throw new NotAvailableInBrowser('create_template');
+	},
+	update_template: async () => {
+		throw new NotAvailableInBrowser('update_template');
+	},
+	list_subscribers: async () => [],
+	list_workflows: async () => [],
+	toggle_workflow: async () => {
+		throw new NotAvailableInBrowser('toggle_workflow');
+	},
+
+	// === SITE — COMMUNITY ===
+	list_reviews: async () => [],
+	moderate_review: async () => {
+		throw new NotAvailableInBrowser('moderate_review');
+	},
+	list_surveys: async () => [],
+	list_survey_responses: async () => [],
+
+	// === SISTEMA ===
+	get_health_snapshot: async () => ({
+		worker_uptime_pct: 0,
+		worker_latency_p50_ms: 0,
+		worker_latency_p95_ms: 0,
+		error_rate_pct: 0,
+		cdn_cache_hit_pct: 0,
+		r2_storage_gb: 0,
+		kv_ops_per_min: 0,
+		firecrawl_credits_remaining: 0,
+		firecrawl_credits_total: 0,
+		last_scrap_at: 0,
+		db_size_mb: 0,
+		active_sessions: 0,
+		active_alerts: []
+	}),
+	get_health_history: async () => [],
+	list_scrap_history: async () => [],
+	trigger_scrap: async () => {
+		throw new NotAvailableInBrowser('trigger_scrap');
+	},
+	list_deploy_history: async () => [],
+	trigger_deploy: async () => {
+		throw new NotAvailableInBrowser('trigger_deploy');
+	},
+	rollback_deploy: async () => {
+		throw new NotAvailableInBrowser('rollback_deploy');
+	},
+	list_jobs: async () => [],
+	toggle_job: async () => {
+		throw new NotAvailableInBrowser('toggle_job');
+	},
+	run_job_now: async () => {
+		throw new NotAvailableInBrowser('run_job_now');
+	},
+	list_backups: async () => [],
+	create_backup_now: async () => {
+		throw new NotAvailableInBrowser('create_backup_now');
+	},
+	restore_from_backup: async () => {
+		throw new NotAvailableInBrowser('restore_from_backup');
+	},
+	stream_logs: async () => '',
+	list_audit_log: async () => [],
+	export_audit_log_csv: async () => {
+		throw new NotAvailableInBrowser('export_audit_log_csv');
+	},
+	get_admin_config: async () => ({}),
+	set_admin_config: async () => {
+		throw new NotAvailableInBrowser('set_admin_config');
+	},
+	list_api_connections: async () => [],
+	test_api_connection: async () => {
+		throw new NotAvailableInBrowser('test_api_connection');
+	},
+	rotate_secret: async () => {
+		throw new NotAvailableInBrowser('rotate_secret');
+	}
+};

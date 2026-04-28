@@ -12,7 +12,7 @@
 	import type { PageData } from './+page';
 	import { adapter, NotAvailableInBrowser } from '$lib/adapter';
 	import type { AuditStatus } from '$lib/adapter';
-	import { invalidateAll } from '$app/navigation';
+	import { invalidateAll, goto } from '$app/navigation';
 
 	let { data }: { data: PageData } = $props();
 
@@ -58,6 +58,12 @@
 	function handleSidebarSelect(id: string) {
 		if (id === 'mundial') {
 			mundialModalOpen = true;
+			return;
+		}
+		if (id === 'admin-web') {
+			// Admin Web vive en URL space separado (/admin-web/*) con su propio
+			// chrome (AdminWebShell). Navegamos en lugar de mutar sidebarActive.
+			void goto('/admin-web');
 			return;
 		}
 		sidebarActive = id;
