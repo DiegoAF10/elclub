@@ -2520,8 +2520,8 @@ async fn cmd_get_import_items(_app: tauri::AppHandle, import_id: String) -> Resu
          WHERE i.import_id = ?1
          UNION ALL
          SELECT 'jerseys' as source_table, j.rowid as source_id, j.import_id,
-                j.family_id, j.jersey_id, j.size,
-                NULL as player_name, NULL as player_number, NULL as patch, NULL as version,
+                j.jersey_id as family_id, j.jersey_id, j.size,
+                j.player_name, j.player_number, j.patches as patch, j.variant as version,
                 j.unit_cost_usd, j.cost as unit_cost,
                 NULL as customer_id, NULL as customer_name,
                 0 as is_free_unit
