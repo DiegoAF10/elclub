@@ -15,8 +15,10 @@
 
   const STORAGE_KEY = 'imp.activeTab';
 
+  const VALID_TABS: TabId[] = ['pedidos', 'wishlist', 'margen', 'free', 'supplier', 'settings'];
+  const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
   let activeTab = $state<TabId>(
-    (typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEY) as TabId) || 'pedidos'
+    VALID_TABS.includes(stored as TabId) ? (stored as TabId) : 'pedidos'
   );
   let pulso = $state<ImportPulso | null>(null);
 
