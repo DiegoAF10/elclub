@@ -1,13 +1,7 @@
 <script lang="ts">
 	import {
-		Inbox,
-		Search,
-		Trophy,
-		Rocket,
 		BarChart3,
-		Package,
 		DollarSign,
-		Truck,
 		Ship,
 		LineChart,
 		Command,
@@ -26,7 +20,7 @@
 	interface NavItem {
 		id: string;
 		label: string;
-		icon: typeof Inbox;
+		icon: typeof BarChart3;
 		badge?: number | string;
 		section?: string;
 	}
@@ -38,7 +32,7 @@
 		criticalEventsCount?: number;
 	}
 
-	let { active = 'audit', onSelect = () => {}, onPushResult = () => {}, criticalEventsCount = 0 }: Props = $props();
+	let { active = 'dashboard', onSelect = () => {}, onPushResult = () => {}, criticalEventsCount = 0 }: Props = $props();
 
 	// Git status polling — reads on mount + refresh post-push
 	let gitStatus = $state<GitStatusInfo | null>(null);
@@ -137,29 +131,22 @@
 		}
 	}
 
+	// Sidebar global slim — post reorg arquitectural 2026-04-28 (Iteración Continuous):
+	//   - WORKFLOW section eliminada · Audit/Mundial mudados a Admin Web > Workflow
+	//     (Queue/Publicados ya existían en Admin Web > Vault como sub-tabs)
+	//   - Inventario movido a Admin Web (D1=c reemplaza Stock)
+	//   - Órdenes eliminado (redundante con IMP/COM per Diego)
+	//   - Dashboard queda como hub principal (cascarón hasta DASH-R1)
 	const ITEMS: NavItem[] = [
-		{ id: 'queue', label: 'Queue', icon: Inbox, section: 'workflow' },
-		{ id: 'audit', label: 'Audit', icon: Search, section: 'workflow' },
-		{
-			id: 'mundial',
-			label: 'Mundial 2026',
-			icon: Trophy,
-			section: 'workflow'
-			// TODO: badge dinámico "N/96" calculando families Mundial 2026 verified
-		},
-		{ id: 'publicados', label: 'Publicados', icon: Rocket, section: 'workflow' },
 		{ id: 'dashboard', label: 'Dashboard', icon: BarChart3, section: 'data' },
-		{ id: 'inventory', label: 'Inventario', icon: Package, section: 'data' },
 		{ id: 'comercial', label: 'Comercial', icon: DollarSign, section: 'data' },
 		{ id: 'importaciones', label: 'Importaciones', icon: Ship, section: 'data' },
 		{ id: 'finanzas', label: 'Finanzas', icon: LineChart, section: 'data' },
-		{ id: 'orders', label: 'Órdenes', icon: Truck, section: 'data' },
-		// Admin Web R7 — abre URL space disjunto (/admin-web), maneja en parent
+		// Admin Web — abre URL space disjunto (/admin-web), maneja en parent
 		// con goto en lugar de set sidebarActive. Ver +page.svelte handleSidebarSelect.
 		{ id: 'admin-web', label: 'Admin Web', icon: LayoutDashboard, section: 'data' }
 	];
 
-	const workflow = ITEMS.filter((i) => i.section === 'workflow');
 	const data = ITEMS.filter((i) => i.section === 'data');
 </script>
 
@@ -181,39 +168,8 @@
 		</div>
 	</div>
 
-	<!-- Nav -->
+	<!-- Nav · sin section WORKFLOW post-reorg (Audit/Mundial/Queue/Publicados viven en Admin Web) -->
 	<nav class="flex-1 overflow-y-auto px-2 py-3">
-		<div class="mb-4">
-			<div class="text-display mb-1.5 px-2 text-[9.5px] text-[var(--color-text-tertiary)]">
-				Workflow
-			</div>
-			{#each workflow as item (item.id)}
-				{@const Icon = item.icon}
-				<button
-					type="button"
-					class="group flex w-full items-center justify-between rounded-[3px] px-2 py-1.5 text-[12.5px] transition-all"
-					class:bg-[var(--color-surface-2)]={active === item.id}
-					class:text-[var(--color-text-primary)]={active === item.id}
-					class:text-[var(--color-text-secondary)]={active !== item.id}
-					class:hover:bg-[var(--color-surface-2)]={active !== item.id}
-					class:hover:text-[var(--color-text-primary)]={active !== item.id}
-					onclick={() => onSelect(item.id)}
-				>
-					<span class="flex items-center gap-2.5">
-						<Icon size={14} strokeWidth={1.8} />
-						<span class="font-medium">{item.label}</span>
-					</span>
-					{#if item.badge}
-						<span
-							class="text-mono rounded-[3px] bg-[var(--color-surface-3)] px-1.5 py-0.5 text-[9.5px] font-semibold text-[var(--color-terminal)] tabular-nums"
-						>
-							{item.badge}
-						</span>
-					{/if}
-				</button>
-			{/each}
-		</div>
-
 		<div>
 			<div class="text-display mb-1.5 px-2 text-[9.5px] text-[var(--color-text-tertiary)]">
 				Data

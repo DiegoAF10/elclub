@@ -1,33 +1,22 @@
-// Page data loader — corre en el cliente (ssr=false en +layout.ts).
-// Llama al adapter para traer las families y las hace disponibles via `data` prop.
+// /  — Page data loader · post sidebar reorg (Iteración Continuous · 2026-04-28).
+//
+// Antes cargaba families para el Audit interface (que vivía en este +page.svelte).
+// Audit se mudó a /admin-web/audit · su propio +page.ts carga families ahí.
+//
+// Este page raíz ahora es un dispatcher de shells (Dashboard/Comercial/IMP/FIN).
+// No requiere data del adapter — los shells de cada módulo cargan su propia
+// data on-mount via adapter calls. Devolvemos solo metadata mínima por compat
+// con el sistema de SvelteKit (al menos el load function existe para SSR=false).
 
 import type { PageLoad } from './$types';
 import { adapter } from '$lib/adapter';
-import type { Family } from '$lib/data/types';
 
 export interface PageData {
-	families: Family[];
-	loadError?: string;
 	adapterPlatform: 'browser' | 'tauri';
 }
 
 export const load: PageLoad = async (): Promise<PageData> => {
-	try {
-		// Cargamos TODAS las families del catálogo — el ListPane agrupa por grupo
-		// Mundial A-L primero (lo relevante pre-scrape/audit), y el resto queda en
-		// "—" para cuando empiece a llenarse el catálogo entero.
-		const families = await adapter.listFamilies();
-		return {
-			families,
-			adapterPlatform: adapter.capabilities.platform
-		};
-	} catch (err) {
-		// Non-fatal: devolvemos error + families=[] para que la UI muestre un state legible
-		// en vez de romperse con un 500 page blank.
-		return {
-			families: [],
-			loadError: err instanceof Error ? err.message : String(err),
-			adapterPlatform: adapter.capabilities.platform
-		};
-	}
+	return {
+		adapterPlatform: adapter.capabilities.platform
+	};
 };
