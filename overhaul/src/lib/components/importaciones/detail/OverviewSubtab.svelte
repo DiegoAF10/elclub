@@ -116,7 +116,7 @@
         <tbody>
           {#each items.slice(0, 5) as item}
             <tr class="border-b border-[var(--color-surface-2)] hover:bg-[var(--color-surface-1)]">
-              <td class="py-1.5 px-2.5 text-mono text-[var(--color-text-primary)]">{item.family_id}{item.is_free_unit ? ' 🎁' : ''}</td>
+              <td class="py-1.5 px-2.5 text-mono text-[var(--color-text-primary)]">{item.family_id ?? item.jersey_id ?? '—'}{item.is_free_unit ? ' 🎁' : ''}</td>
               <td class="py-1.5 px-2.5 text-[var(--color-text-secondary)]">
                 {item.size ?? ''} · {item.player_name ?? '—'}{item.player_number ? ` ${item.player_number}` : ''}
               </td>

@@ -9,7 +9,7 @@
 
   let sorted = $derived([...items].sort((a, b) => {
     let cmp = 0;
-    if (sortBy === 'sku') cmp = a.family_id.localeCompare(b.family_id);
+    if (sortBy === 'sku') cmp = (a.family_id ?? '').localeCompare(b.family_id ?? '');
     else if (sortBy === 'usd') cmp = (a.unit_cost_usd ?? 0) - (b.unit_cost_usd ?? 0);
     else if (sortBy === 'landed') cmp = (a.unit_cost ?? 0) - (b.unit_cost ?? 0);
     else if (sortBy === 'customer') cmp = (a.customer_name ?? '').localeCompare(b.customer_name ?? '');
@@ -54,7 +54,7 @@
       {#each sorted as item (item.source_table + ':' + item.source_id)}
         <tr class="border-b border-[var(--color-surface-2)] hover:bg-[var(--color-surface-1)]">
           <td class="py-1.5 px-2.5 text-mono text-[var(--color-text-primary)]">
-            {item.family_id}
+            {item.family_id ?? item.jersey_id ?? '—'}
             {#if item.is_free_unit}
               <span class="ml-1 text-mono text-[9px] px-1.5 py-0.5 bg-[rgba(167,243,208,0.12)] text-[var(--color-ready)] rounded-[2px]">FREE</span>
             {/if}

@@ -4,7 +4,6 @@
   interface Props { imp: Import; items: ImportItem[]; }
   let { imp, items }: Props = $props();
 
-  let totalUsd = $derived(items.reduce((s, i) => s + (i.unit_cost_usd ?? 0), 0));
   let payPalFee = $derived(imp.bruto_usd ? imp.bruto_usd * 0.044 : 0);
   let totalLanded = $derived(imp.total_landed_gtq ?? (imp.bruto_usd && imp.fx ? imp.bruto_usd * imp.fx + (imp.shipping_gtq ?? 0) : null));
 

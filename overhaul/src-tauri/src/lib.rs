@@ -145,7 +145,7 @@ pub struct ImportItem {
     pub source_table: String,
     pub source_id: i64,
     pub import_id: String,
-    pub family_id: String,
+    pub family_id: Option<String>,
     pub jersey_id: Option<String>,
     pub size: Option<String>,
     pub player_name: Option<String>,

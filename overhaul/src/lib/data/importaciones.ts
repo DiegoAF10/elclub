@@ -29,7 +29,7 @@ export interface ImportItem {
   source_table: 'sale_items' | 'jerseys';
   source_id: number;
   import_id: string;
-  family_id: string;
+  family_id: string | null;
   jersey_id: string | null;
   size: string | null;
   player_name: string | null;
