@@ -388,5 +388,29 @@ export interface CatalogModeloRow {
 export type { Import, ImportStatus, ImportItem, ImportPulso, ImportFilter, CloseImportResult } from '../data/importaciones';
 export { STATUS_LABELS as IMPORT_STATUS_LABELS, STATUS_PROGRESS as IMPORT_STATUS_PROGRESS } from '../data/importaciones';
 
+// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────
+export type {
+  Expense,
+  ExpenseInput,
+  ExpenseCategory,
+  ExpenseSource,
+  PaymentMethod,
+  Currency,
+  Period,
+  PeriodRange,
+  ProfitSnapshot,
+  HomeSnapshot,
+  RecentExpense,
+  InboxSeverity,
+  FinanzasInboxEvent,
+} from '$lib/data/finanzas';
+
+export {
+  CATEGORY_LABELS as FIN_CATEGORY_LABELS,
+  CATEGORY_PILL_CLASS as FIN_CATEGORY_PILL,
+  PAYMENT_METHOD_ICON as FIN_PAYMENT_ICON,
+  PAYMENT_METHOD_LABEL as FIN_PAYMENT_LABEL,
+} from '$lib/data/finanzas';
+
 // Re-export para conveniencia
 export type { Family, Status };
