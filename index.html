@@ -153,20 +153,24 @@
            - Desktop (1916x821, ratio 2.33): leyendas wide alrededor del trofeo
            - Mobile (941x1672, ratio 0.56): pirámide vertical (top: CR7+leyendas, bottom: Pelé+trofeo+Maradona)
          Overlay también responsive: desktop diagonal (copy left), mobile vertical bottom-up (copy bottom). -->
-    <section class="relative min-h-[80vh] md:min-h-[88vh] flex items-end md:items-center overflow-hidden bg-midnight">
-      <!-- Background image (responsive composiciones distintas) -->
+    <section class="relative min-h-[100svh] md:min-h-[88vh] flex items-end md:items-center overflow-hidden bg-midnight">
+      <!-- Background image (responsive — desktop usa cover, mobile usa contain con object-top
+           para respetar el espacio negro intencional que Diego diseñó abajo del trofeo).
+           El bg-midnight del section cubre lo que queda fuera de contain → continuidad
+           visual perfecta porque la imagen termina en negro abajo. -->
       <picture class="absolute inset-0 z-0">
         <source media="(max-width: 768px)" srcset="/assets/img/hero/mundial-2026-mobile.jpg">
         <img src="/assets/img/hero/mundial-2026-desktop.jpg"
              alt="Mundial 2026 — Leyendas alrededor del trofeo"
-             class="w-full h-full object-cover object-center"
+             class="w-full h-full md:object-cover object-contain object-top"
              fetchpriority="high">
       </picture>
 
-      <!-- Overlay desktop: diagonal izq→der, copy queda sobre lado oscuro -->
+      <!-- Overlay desktop ONLY: diagonal izq→der, copy queda sobre lado oscuro.
+           Mobile NO necesita overlay — la imagen ya tiene su espacio negro nativo
+           abajo del trofeo donde va el copy. Pintarle overlay encima oscurecía a
+           los jugadores innecesariamente. -->
       <div class="absolute inset-0 z-[1] hidden md:block bg-gradient-to-r from-midnight/95 via-midnight/65 to-midnight/20"></div>
-      <!-- Overlay mobile: vertical bottom→top, copy queda abajo sobre fade dark, leyendas arriba sin matar -->
-      <div class="absolute inset-0 z-[1] md:hidden bg-gradient-to-t from-midnight via-midnight/85 via-30% to-midnight/15"></div>
 
       <!-- Copy -->
       <div class="relative z-10 max-w-6xl mx-auto px-4 w-full py-16 md:py-0">
