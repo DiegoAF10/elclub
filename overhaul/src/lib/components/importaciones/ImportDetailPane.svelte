@@ -2,6 +2,8 @@
   import ImportDetailHead from './ImportDetailHead.svelte';
   import ImportDetailSubtabs from './ImportDetailSubtabs.svelte';
   import OverviewSubtab from './detail/OverviewSubtab.svelte';
+  import ItemsSubtab from './detail/ItemsSubtab.svelte';
+  import CostosSubtab from './detail/CostosSubtab.svelte';
   import { adapter } from '$lib/adapter';
   import type { Import, ImportItem } from '$lib/data/importaciones';
 
@@ -56,10 +58,9 @@
       {#if activeSubtab === 'overview'}
         <OverviewSubtab {imp} {items} />
       {:else if activeSubtab === 'items'}
-        <!-- Task 12 lo llena -->
-        <div class="p-6 text-[var(--color-text-tertiary)]">Items table viene en Task 12</div>
+        <ItemsSubtab {items} />
       {:else if activeSubtab === 'costos'}
-        <div class="p-6 text-[var(--color-text-tertiary)]">Cost flow detallado viene en Task 12</div>
+        <CostosSubtab {imp} {items} />
       {:else if activeSubtab === 'pagos'}
         <div class="p-6 text-[var(--color-text-tertiary)]">Lista de pagos viene en R1.x</div>
       {:else if activeSubtab === 'timeline'}
