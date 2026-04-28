@@ -2727,6 +2727,37 @@ async fn cmd_close_import_proportional(
     })
 }
 
+/// Re-reads canonical Import row by ID. Used by all impl_X commands after tx.commit().
+/// Caller must pass the still-open `conn` (post-commit) to avoid WAL footgun.
+fn read_import_by_id(conn: &rusqlite::Connection, import_id: &str) -> Result<Import> {
+    conn.query_row(
+        "SELECT import_id, paid_at, arrived_at, supplier, bruto_usd, shipping_gtq,
+                COALESCE(fx, 7.73), total_landed_gtq, n_units, unit_cost,
+                status, notes, created_at,
+                tracking_code, COALESCE(carrier, 'DHL'), lead_time_days
+         FROM imports WHERE import_id = ?1",
+        rusqlite::params![import_id],
+        |row| Ok(Import {
+            import_id:        row.get(0)?,
+            paid_at:          row.get(1)?,
+            arrived_at:       row.get(2)?,
+            supplier:         row.get(3)?,
+            bruto_usd:        row.get(4)?,
+            shipping_gtq:     row.get(5)?,
+            fx:               row.get(6)?,
+            total_landed_gtq: row.get(7)?,
+            n_units:          row.get(8)?,
+            unit_cost:        row.get(9)?,
+            status:           row.get(10)?,
+            notes:            row.get(11)?,
+            created_at:       row.get(12)?,
+            tracking_code:    row.get(13)?,
+            carrier:          row.get(14)?,
+            lead_time_days:   row.get(15)?,
+        }),
+    ).map_err(ErpError::from)
+}
+
 // ─── R1.5 Completion: Create / Register Arrival / Update / Cancel ────
 //
 // Convention for IMP-R1.5 commands that need integration testing:
@@ -2835,34 +2866,8 @@ pub async fn impl_create_import(input: CreateImportInput) -> Result<Import> {
 
     tx.commit()?;
 
-    // Re-read to return canonical Import
-    let conn = open_db()?;
-    conn.query_row(
-        "SELECT import_id, paid_at, arrived_at, supplier, bruto_usd, shipping_gtq,
-                COALESCE(fx, 7.73), total_landed_gtq, n_units, unit_cost,
-                status, notes, created_at,
-                tracking_code, COALESCE(carrier, 'DHL'), lead_time_days
-         FROM imports WHERE import_id = ?1",
-        rusqlite::params![input.import_id],
-        |row| Ok(Import {
-            import_id:        row.get(0)?,
-            paid_at:          row.get(1)?,
-            arrived_at:       row.get(2)?,
-            supplier:         row.get(3)?,
-            bruto_usd:        row.get(4)?,
-            shipping_gtq:     row.get(5)?,
-            fx:               row.get(6)?,
-            total_landed_gtq: row.get(7)?,
-            n_units:          row.get(8)?,
-            unit_cost:        row.get(9)?,
-            status:           row.get(10)?,
-            notes:            row.get(11)?,
-            created_at:       row.get(12)?,
-            tracking_code:    row.get(13)?,
-            carrier:          row.get(14)?,
-            lead_time_days:   row.get(15)?,
-        }),
-    ).map_err(|e| e.into())
+    // Re-read to return canonical Import (using same conn — WAL footgun avoided)
+    read_import_by_id(&conn, &input.import_id)
 }
 
 /// Tauri command — delegates to impl_create_import.
@@ -2897,10 +2902,10 @@ pub async fn impl_register_arrival(input: RegisterArrivalInput) -> Result<Import
     let mut conn = open_db()?;
     let tx = conn.transaction()?;
 
-    let (status, paid_at): (String, Option<String>) = tx.query_row(
-        "SELECT status, paid_at FROM imports WHERE import_id = ?1",
+    let (status, paid_at, existing_lead_time): (String, Option<String>, Option<i64>) = tx.query_row(
+        "SELECT status, paid_at, lead_time_days FROM imports WHERE import_id = ?1",
         rusqlite::params![&input.import_id],
-        |row| Ok((row.get(0)?, row.get(1)?)),
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
     ).map_err(|e| match e {
         rusqlite::Error::QueryReturnedNoRows => ErpError::NotFound(format!("Import {}", input.import_id)),
         other => other.into(),
@@ -2914,12 +2919,29 @@ pub async fn impl_register_arrival(input: RegisterArrivalInput) -> Result<Import
         )));
     }
 
-    // Auto-calc lead_time_days from paid_at to arrived_at
-    let lead_time_days = paid_at.as_ref().and_then(|p| {
-        let pd = chrono::NaiveDate::parse_from_str(p, "%Y-%m-%d").ok()?;
-        let ad = chrono::NaiveDate::parse_from_str(&input.arrived_at, "%Y-%m-%d").ok()?;
-        Some((ad - pd).num_days() as i64)
-    });
+    // Auto-calc lead_time_days from paid_at to arrived_at.
+    // Idempotency: preserve existing lead_time_days when re-registering on 'arrived' status
+    // (otherwise editing arrived_at later silently mutates the derived metric).
+    let lead_time_days = if status == "arrived" {
+        existing_lead_time
+    } else {
+        paid_at.as_ref().and_then(|p| {
+            let pd = chrono::NaiveDate::parse_from_str(p, "%Y-%m-%d").ok()?;
+            let ad = chrono::NaiveDate::parse_from_str(&input.arrived_at, "%Y-%m-%d").ok()?;
+            Some((ad - pd).num_days() as i64)
+        })
+    };
+
+    // Guard: reject negative lead_time_days (arrived_at before paid_at means data error)
+    if let Some(days) = lead_time_days {
+        if days < 0 {
+            tx.rollback()?;
+            return Err(ErpError::Other(format!(
+                "arrived_at ({}) is before paid_at ({}) · refusing negative lead_time_days",
+                input.arrived_at, paid_at.as_deref().unwrap_or("")
+            )));
+        }
+    }
 
     tx.execute(
         "UPDATE imports
@@ -2941,32 +2963,7 @@ pub async fn impl_register_arrival(input: RegisterArrivalInput) -> Result<Import
     tx.commit()?;
 
     // Re-read canonical Import using same connection (avoid WAL footgun)
-    conn.query_row(
-        "SELECT import_id, paid_at, arrived_at, supplier, bruto_usd, shipping_gtq,
-                COALESCE(fx, 7.73), total_landed_gtq, n_units, unit_cost,
-                status, notes, created_at,
-                tracking_code, COALESCE(carrier, 'DHL'), lead_time_days
-         FROM imports WHERE import_id = ?1",
-        rusqlite::params![input.import_id],
-        |row| Ok(Import {
-            import_id:        row.get(0)?,
-            paid_at:          row.get(1)?,
-            arrived_at:       row.get(2)?,
-            supplier:         row.get(3)?,
-            bruto_usd:        row.get(4)?,
-            shipping_gtq:     row.get(5)?,
-            fx:               row.get(6)?,
-            total_landed_gtq: row.get(7)?,
-            n_units:          row.get(8)?,
-            unit_cost:        row.get(9)?,
-            status:           row.get(10)?,
-            notes:            row.get(11)?,
-            created_at:       row.get(12)?,
-            tracking_code:    row.get(13)?,
-            carrier:          row.get(14)?,
-            lead_time_days:   row.get(15)?,
-        }),
-    ).map_err(ErpError::from)
+    read_import_by_id(&conn, &input.import_id)
 }
 
 /// Tauri command — delegates to impl_register_arrival.
@@ -3025,32 +3022,7 @@ pub async fn impl_update_import(input: UpdateImportInput) -> Result<Import> {
     tx.commit()?;
 
     // Re-read using same conn (avoid WAL footgun)
-    conn.query_row(
-        "SELECT import_id, paid_at, arrived_at, supplier, bruto_usd, shipping_gtq,
-                COALESCE(fx, 7.73), total_landed_gtq, n_units, unit_cost,
-                status, notes, created_at,
-                tracking_code, COALESCE(carrier, 'DHL'), lead_time_days
-         FROM imports WHERE import_id = ?1",
-        rusqlite::params![input.import_id],
-        |row| Ok(Import {
-            import_id:        row.get(0)?,
-            paid_at:          row.get(1)?,
-            arrived_at:       row.get(2)?,
-            supplier:         row.get(3)?,
-            bruto_usd:        row.get(4)?,
-            shipping_gtq:     row.get(5)?,
-            fx:               row.get(6)?,
-            total_landed_gtq: row.get(7)?,
-            n_units:          row.get(8)?,
-            unit_cost:        row.get(9)?,
-            status:           row.get(10)?,
-            notes:            row.get(11)?,
-            created_at:       row.get(12)?,
-            tracking_code:    row.get(13)?,
-            carrier:          row.get(14)?,
-            lead_time_days:   row.get(15)?,
-        }),
-    ).map_err(ErpError::from)
+    read_import_by_id(&conn, &input.import_id)
 }
 
 /// Tauri command — delegates to impl_update_import.
@@ -3095,32 +3067,7 @@ pub async fn impl_cancel_import(import_id: String) -> Result<Import> {
     tx.commit()?;
 
     // Re-read using same conn (avoid WAL footgun)
-    conn.query_row(
-        "SELECT import_id, paid_at, arrived_at, supplier, bruto_usd, shipping_gtq,
-                COALESCE(fx, 7.73), total_landed_gtq, n_units, unit_cost,
-                status, notes, created_at,
-                tracking_code, COALESCE(carrier, 'DHL'), lead_time_days
-         FROM imports WHERE import_id = ?1",
-        rusqlite::params![import_id],
-        |row| Ok(Import {
-            import_id:        row.get(0)?,
-            paid_at:          row.get(1)?,
-            arrived_at:       row.get(2)?,
-            supplier:         row.get(3)?,
-            bruto_usd:        row.get(4)?,
-            shipping_gtq:     row.get(5)?,
-            fx:               row.get(6)?,
-            total_landed_gtq: row.get(7)?,
-            n_units:          row.get(8)?,
-            unit_cost:        row.get(9)?,
-            status:           row.get(10)?,
-            notes:            row.get(11)?,
-            created_at:       row.get(12)?,
-            tracking_code:    row.get(13)?,
-            carrier:          row.get(14)?,
-            lead_time_days:   row.get(15)?,
-        }),
-    ).map_err(ErpError::from)
+    read_import_by_id(&conn, &import_id)
 }
 
 /// Tauri command — delegates to impl_cancel_import.

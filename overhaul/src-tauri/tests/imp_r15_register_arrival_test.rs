@@ -90,3 +90,52 @@ async fn test_register_arrival_idempotent() {
     let result = impl_register_arrival(input).await;
     assert!(result.is_ok(), "second register should succeed (idempotent)");
 }
+
+#[tokio::test]
+async fn test_register_arrival_negative_lead_time_rejected() {
+    let _guard = DB_LOCK.lock().unwrap();
+    let _path = setup_with_paid_import("negative_lead");
+    use el_club_erp_lib::*;
+
+    // arrived_at is BEFORE paid_at (paid_at='2026-04-20' from fixture)
+    let input = RegisterArrivalInput {
+        import_id: "IMP-2026-04-28".to_string(),
+        arrived_at: "2026-04-15".to_string(),  // 5 days before paid_at
+        shipping_gtq: 522.67,
+        tracking_code: None,
+    };
+
+    let result = impl_register_arrival(input).await;
+    assert!(result.is_err());
+    let err_msg = format!("{:?}", result.unwrap_err());
+    assert!(err_msg.contains("negative lead_time_days") || err_msg.contains("before paid_at"));
+}
+
+#[tokio::test]
+async fn test_register_arrival_idempotent_preserves_lead_time() {
+    let _guard = DB_LOCK.lock().unwrap();
+    let _path = setup_with_paid_import("preserve_lead");
+    use el_club_erp_lib::*;
+
+    // First register: arrived 8 days after paid
+    let first = impl_register_arrival(RegisterArrivalInput {
+        import_id: "IMP-2026-04-28".to_string(),
+        arrived_at: "2026-04-28".to_string(),
+        shipping_gtq: 522.67,
+        tracking_code: None,
+    }).await.unwrap();
+    assert_eq!(first.lead_time_days, Some(8));
+
+    // Second register: change arrived_at to 15 days after paid → should NOT recompute
+    let second = impl_register_arrival(RegisterArrivalInput {
+        import_id: "IMP-2026-04-28".to_string(),
+        arrived_at: "2026-05-05".to_string(),
+        shipping_gtq: 522.67,
+        tracking_code: None,
+    }).await.unwrap();
+
+    // lead_time_days preserved from first registration (8 · NOT 15)
+    assert_eq!(second.lead_time_days, Some(8), "lead_time should be preserved on idempotent re-register");
+    // But arrived_at IS updated to the new value
+    assert_eq!(second.arrived_at.as_deref(), Some("2026-05-05"));
+}
