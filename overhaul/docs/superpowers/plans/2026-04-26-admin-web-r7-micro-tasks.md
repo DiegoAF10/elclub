@@ -19,38 +19,42 @@
 
 ## FASE 1 — Schema + Types base (día 1, ~6h)
 
-### T1.1 — DB Migration (~30 min)
-- [ ] Cargar `schema-migration.sql` y validar idempotencia con DB de prueba
-- [ ] Adaptar a `audit_db.py:_ensure_schema()` reproduciendo cada `CREATE TABLE IF NOT EXISTS`
-- [ ] Wrapping de los `ALTER TABLE` de `audit_decisions` con check de columna previo (SQLite no soporta `IF NOT EXISTS`)
-- [ ] Ejecutar manualmente sobre `elclub.db` real
-- [ ] Verify: `sqlite3 elclub.db ".tables"` muestra las 18 tablas nuevas + las existentes
-- [ ] Verify: `sqlite3 elclub.db "PRAGMA table_info(audit_decisions);"` muestra `archived_at`, `dirty_flag`, `dirty_reason`, `dirty_detected_at`
+### T1.1 — DB Migration (~30 min) ✅ commit 18dfb57
+- [x] Cargar `schema-migration.sql` y validar idempotencia con DB de prueba
+- [x] Adaptar a `audit_db.py:init_audit_schema()` (NO `_ensure_schema()` — el nombre real en codebase) reproduciendo cada `CREATE TABLE IF NOT EXISTS`
+- [x] Wrapping de los `ALTER TABLE` de `audit_decisions` con check de columna previo (SQLite no soporta `IF NOT EXISTS`)
+- [x] Ejecutar manualmente sobre `elclub.db` real
+- [x] Verify: `.tables` muestra **26** tablas nuevas (no 18 como decía el spec; el conteo real fue mayor) + las existentes. Total post-migration: 57 tables, 12 views.
+- [x] Verify: `PRAGMA table_info(audit_decisions)` muestra `archived_at`, `dirty_flag`, `dirty_reason`, `dirty_detected_at` ✓
+- [x] Idempotencia probada: 2da ejecución no errored
+- [x] Vista `v_jersey_state` devuelve 520 rows reales clasificadas
 
-### T1.2 — Seed inicial (~20 min)
-- [ ] Cargar `tags-seed.json` y crear `seed_admin_web.py` que itera tag_types primero, después tags por type_slug
-- [ ] Insertar también seed factory de `saved_views` para `vault.universo` (Default, Queue del día, Publicados con foto rota, Retros sin Era, Drops próximos 7d, DRAFT con scrap_fail, Latam Mundial 2026)
-- [ ] Insertar seed inicial de `scheduled_jobs` (detect-inbox-events hourly, kpi-snapshot daily, dirty-detector every 4h)
-- [ ] Insertar seed inicial de `site_components` con configs default (header, footer, banner_top off, cookie_consent on)
-- [ ] Verify: `sqlite3 elclub.db "SELECT COUNT(*) FROM tags;"` → 110
+### T1.2 — Seed inicial (~20 min) ✅ commit f2e1ede
+- [x] Cargar `tags-seed.json` y crear `seed_admin_web.py` que itera tag_types primero, después tags por type_slug
+- [x] Insertar también seed factory de `saved_views` para `vault.universo` (los 7 presets pedidos)
+- [x] Insertar seed inicial de `scheduled_jobs` (detect-inbox-events hourly, kpi-snapshot daily, dirty-detector every 4h)
+- [x] Insertar seed inicial de `site_components` con configs default (header, footer, banner_top off, cookie_consent on)
+- [x] Verify: `SELECT COUNT(*) FROM tags` → **122** (NO 110 como decía el spec; el _meta del JSON estaba desactualizado, los datos del archivo son consistentes con sí mismos a 122)
+- [x] Idempotencia probada: 2da ejecución insertó 0 filas en todas las tablas
 
-### T1.3 — TypeScript types (~30 min)
-- [ ] Copiar `specs/admin-web/types.ts` a 5 archivos:
-  - `overhaul/src/lib/data/admin-web.ts` (HomeKpis, ModuleSlug, AuditAction, etc.)
-  - `overhaul/src/lib/data/jersey-states.ts` (JerseyState, VALID_TRANSITIONS, JerseyFlags, Jersey, JerseyModelo)
-  - `overhaul/src/lib/data/tags.ts` (TagType, Tag, JerseyTag, TagAssignmentValidation, AutoDerivationRule)
-  - `overhaul/src/lib/data/overrides.ts` (StockOverride, MysteryOverride, OverrideStatus)
-  - `overhaul/src/lib/data/inbox-events.ts` (EventType, EventSeverity, InboxEvent, AUTO_DISMISS_DAYS)
-- [ ] Extender `overhaul/src/lib/adapter/types.ts` agregando AdminWebTauriCommands interface
-- [ ] `npm run check` pasa
-- [ ] Smoke: `import { JerseyState } from '$lib/data/jersey-states'` desde un componente test
+### T1.3 — TypeScript types (~30 min) ✅ commit f5fac6b
+- [x] Copiar `specs/admin-web/types.ts` a 5 archivos:
+  - `overhaul/src/lib/data/admin-web.ts` (HomeKpis, KpiSnapshot, SavedView, all Site types, all Sistema types, HealthSnapshot, CommandPalette, UniversoFilters, etc.)
+  - `overhaul/src/lib/data/jersey-states.ts` (JerseyState, VALID_TRANSITIONS, canTransition, JerseyFlags, Jersey, JerseyModelo)
+  - `overhaul/src/lib/data/tags.ts` (TagCardinality, TagTypeSlug, ConditionalRule, TagType, Tag, AutoDerivationRule, JerseyTag, TagAssignmentValidation)
+  - `overhaul/src/lib/data/overrides.ts` (OverrideStatus, StockOverride, MysteryOverride)
+  - `overhaul/src/lib/data/inbox-events.ts` (ModuleSlug, EventSeverity, EventType, InboxEvent, AUTO_DISMISS_DAYS) — NOTA: ModuleSlug se mudó acá desde admin-web.ts para preservar dirección única de imports y evitar ciclo (admin-web.ts ← inbox-events.ts)
+- [x] Extender `overhaul/src/lib/adapter/types.ts` agregando AdminWebTauriCommands interface (60+ commands)
+- [x] `npm run check` pasa con 0 errors (37 warnings pre-existentes a11y en componentes no relacionados)
+- [ ] ~~Smoke: `import { JerseyState } from '$lib/data/jersey-states'` desde un componente test~~ — implícito: svelte-check valida grafo completo y pasó
 
-### T1.4 — Adapter scaffolding (~45 min)
-- [ ] Agregar a `overhaul/src/lib/adapter/tauri.ts` funciones wrapper para los 60+ commands de `AdminWebTauriCommands`
-- [ ] Cada wrapper: `async function listInboxEvents(args) { return invoke('list_inbox_events', args); }`
-- [ ] Por ahora son stubs — el implementación Rust viene en T2.X
-- [ ] Agregar a `overhaul/src/lib/adapter/browser.ts` los `NotAvailableInBrowser` correspondientes
-- [ ] `npm run check` pasa
+### T1.4 — Adapter scaffolding (~45 min) ✅ commit e0e511d
+- [x] Agregar a `overhaul/src/lib/adapter/tauri.ts` funciones wrapper para los 60+ commands de `AdminWebTauriCommands` (object literal `adminWebTauri`)
+- [x] Cada wrapper: `(args) => invoke<T>('command_name', args)` — formato compacto. `args ?? {}` para opcionales (evita `undefined` que algunos handlers Rust no toleran)
+- [x] Por ahora son stubs — la implementación Rust viene en T2.X+. Tauri devuelve UNHANDLED si se invocan ahora.
+- [x] Agregar a `overhaul/src/lib/adapter/browser.ts` stubs degradados (reads → arrays/objects vacíos para que las shells rendericen, writes → `NotAvailableInBrowser`)
+- [x] Wire up `adminWeb` Proxy en `lib/adapter/index.ts` con el mismo patrón lazy-init
+- [x] `npm run check` pasa con 0 errors
 
 ---
 
