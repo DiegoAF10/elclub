@@ -2744,7 +2744,7 @@ pub struct CreateImportInput {
 }
 
 /// Business logic for creating an import — pub so integration tests can call directly.
-pub async fn cmd_create_import(input: CreateImportInput) -> Result<Import> {
+pub async fn impl_create_import(input: CreateImportInput) -> Result<Import> {
     // Validation
     if !is_valid_import_id(&input.import_id) {
         return Err(ErpError::Other(format!(
@@ -2846,10 +2846,10 @@ pub async fn cmd_create_import(input: CreateImportInput) -> Result<Import> {
     ).map_err(|e| e.into())
 }
 
-/// Tauri command wrapper — thin shim that delegates to cmd_create_import.
+/// Tauri command — delegates to impl_create_import.
 #[tauri::command]
-async fn tauri_cmd_create_import(input: CreateImportInput) -> Result<Import> {
-    cmd_create_import(input).await
+async fn cmd_create_import(input: CreateImportInput) -> Result<Import> {
+    impl_create_import(input).await
 }
 
 // ─── Finanzas (FIN-R1) — structs ─────────────────────────────────────
@@ -5388,7 +5388,7 @@ pub fn run() {
             cmd_get_import_pulso,
             cmd_close_import_proportional,
             // Importaciones R1.5
-            tauri_cmd_create_import,
+            cmd_create_import,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,

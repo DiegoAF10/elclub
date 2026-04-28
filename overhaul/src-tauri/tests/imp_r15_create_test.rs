@@ -1,4 +1,5 @@
-// Integration test for cmd_create_import — uses temp DB via ERP_DB_PATH override
+// Integration test for impl_create_import — uses temp DB via ERP_DB_PATH override
+// (cmd_create_import is the Tauri wrapper; impl_create_import is the pub async fn)
 use std::path::PathBuf;
 use std::env;
 use std::sync::Mutex;
@@ -56,7 +57,7 @@ async fn test_create_import_happy_path() {
         carrier: None,
     };
 
-    let result = cmd_create_import(input).await;
+    let result = impl_create_import(input).await;
     assert!(result.is_ok(), "expected Ok, got {:?}", result);
     let imp = result.unwrap();
     assert_eq!(imp.import_id, "IMP-2026-04-28");
@@ -84,7 +85,7 @@ async fn test_create_import_invalid_id_rejected() {
         carrier: None,
     };
 
-    let result = cmd_create_import(input).await;
+    let result = impl_create_import(input).await;
     assert!(result.is_err());
     assert!(format!("{:?}", result.unwrap_err()).contains("import_id format"));
 }
@@ -103,8 +104,8 @@ async fn test_create_import_duplicate_rejected() {
         notes: None, tracking_code: None, carrier: None,
     };
 
-    cmd_create_import(input1.clone()).await.unwrap();
-    let result = cmd_create_import(input1).await;
+    impl_create_import(input1.clone()).await.unwrap();
+    let result = impl_create_import(input1).await;
     assert!(result.is_err());
     assert!(format!("{:?}", result.unwrap_err()).contains("already exists"));
 }
@@ -124,7 +125,7 @@ async fn test_create_import_negative_bruto_rejected() {
         notes: None, tracking_code: None, carrier: None,
     };
 
-    let result = cmd_create_import(input).await;
+    let result = impl_create_import(input).await;
     assert!(result.is_err());
     assert!(format!("{:?}", result.unwrap_err()).contains("bruto_usd"));
 }
