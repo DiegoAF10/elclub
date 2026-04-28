@@ -25,6 +25,8 @@
   // R1.5: NewImportModal state
   let showNewModal = $state(false);
   let exportingCsv = $state(false);
+  // Bumped on handleImportCreated · PedidosTab listens via $effect to force re-fetch
+  let pedidosRefreshTrigger = $state(0);
 
   $effect(() => {
     if (typeof localStorage !== 'undefined') {
@@ -43,7 +45,7 @@
   function handleImportCreated(_imp: Import) {
     refreshPulso();
     activeTab = 'pedidos';
-    // PedidosTab refreshes via the tab switch + onPulsoRefresh prop wiring it already has
+    pedidosRefreshTrigger++;
   }
 
   async function handleExportCsv() {
@@ -113,7 +115,7 @@
   <!-- Body -->
   <div class="flex flex-1 min-h-0">
     {#if activeTab === 'pedidos'}
-      <PedidosTab onPulsoRefresh={refreshPulso} />
+      <PedidosTab onPulsoRefresh={refreshPulso} refreshTrigger={pedidosRefreshTrigger} />
     {:else if activeTab === 'wishlist'}
       <WishlistTab />
     {:else if activeTab === 'margen'}
