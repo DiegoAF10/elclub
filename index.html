@@ -147,25 +147,26 @@
   <main class="pt-20">
 
     <!-- ── HERO MUNDIAL 2026 ─────────────────────── -->
-    <!-- 2026-04-27: hero pivoteado de Mystery Box-generic a Mundial 2026.
+    <!-- 2026-04-27: hero pivoteado de Mystery Box-generic a Mundial 2026 (panteón leyendas + trofeo).
          CTA principal traslada al Vault donde está el catálogo Mundial.
-         Imagen full-bleed con responsive (desktop + mobile separados via <picture>).
-         Overlay dark izquierda → derecha para legibilidad del copy. -->
-    <section class="relative min-h-[70vh] md:min-h-[88vh] flex items-center overflow-hidden">
-      <!-- Background image (responsive) -->
+         Imagen full-bleed con composiciones SEPARADAS por viewport via <picture>:
+           - Desktop (1916x821, ratio 2.33): leyendas wide alrededor del trofeo
+           - Mobile (941x1672, ratio 0.56): pirámide vertical (top: CR7+leyendas, bottom: Pelé+trofeo+Maradona)
+         Overlay también responsive: desktop diagonal (copy left), mobile vertical bottom-up (copy bottom). -->
+    <section class="relative min-h-[80vh] md:min-h-[88vh] flex items-end md:items-center overflow-hidden bg-midnight">
+      <!-- Background image (responsive composiciones distintas) -->
       <picture class="absolute inset-0 z-0">
         <source media="(max-width: 768px)" srcset="/assets/img/hero/mundial-2026-mobile.jpg">
         <img src="/assets/img/hero/mundial-2026-desktop.jpg"
-             alt="Mundial 2026 — USA · México · Canadá"
-             class="w-full h-full object-cover"
+             alt="Mundial 2026 — Leyendas alrededor del trofeo"
+             class="w-full h-full object-cover object-center"
              fetchpriority="high">
       </picture>
 
-      <!-- Dark overlay: gradiente diagonal para destacar copy del lado izquierdo
-           sin matar la imagen del lado derecho. Más oscuro abajo para evitar
-           que el copy compita con el hero stock count strip. -->
-      <div class="absolute inset-0 z-[1] bg-gradient-to-r from-midnight/95 via-midnight/70 to-midnight/30"></div>
-      <div class="absolute inset-0 z-[1] bg-gradient-to-t from-midnight/60 via-transparent to-transparent"></div>
+      <!-- Overlay desktop: diagonal izq→der, copy queda sobre lado oscuro -->
+      <div class="absolute inset-0 z-[1] hidden md:block bg-gradient-to-r from-midnight/95 via-midnight/65 to-midnight/20"></div>
+      <!-- Overlay mobile: vertical bottom→top, copy queda abajo sobre fade dark, leyendas arriba sin matar -->
+      <div class="absolute inset-0 z-[1] md:hidden bg-gradient-to-t from-midnight via-midnight/85 via-30% to-midnight/15"></div>
 
       <!-- Copy -->
       <div class="relative z-10 max-w-6xl mx-auto px-4 w-full py-16 md:py-0">
