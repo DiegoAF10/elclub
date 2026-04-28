@@ -78,7 +78,16 @@
 	}
 
 	$effect(() => {
+		// Initial load + auto-refresh cada 60s. El detector real corre via
+		// InboxFeed on-mount (HomeView), así que dejamos un delay corto en el
+		// primer refresh para capturar los events que el detector recién creó.
 		void loadCounts();
+		const initial = setTimeout(() => void loadCounts(), 1500);
+		const interval = setInterval(() => void loadCounts(), 60_000);
+		return () => {
+			clearTimeout(initial);
+			clearInterval(interval);
+		};
 	});
 
 	function navigate(id: string) {
