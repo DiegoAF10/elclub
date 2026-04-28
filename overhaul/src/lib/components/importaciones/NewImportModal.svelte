@@ -24,6 +24,11 @@
   let submitting = $state(false);
   let errorMsg = $state<string | null>(null);
 
+  // Self-clean: reset all form state whenever modal transitions to closed
+  $effect(() => {
+    if (!open) reset();
+  });
+
   // Client-side regex enforcement (matches server-side is_valid_import_id)
   const idPattern = /^IMP-\d{4}-\d{2}-\d{2}$/;
   let idValid = $derived(idPattern.test(importId));
@@ -54,7 +59,6 @@
         carrier: carrier.trim() || undefined,
       });
       onCreated(imp);
-      reset();
       onClose();
     } catch (e) {
       errorMsg = e instanceof Error ? e.message : String(e);
@@ -174,7 +178,7 @@
 
         <!-- Actions -->
         <div class="flex justify-end gap-2 pt-2 border-t border-[var(--color-surface-2)]">
-          <button type="button" onclick={() => { if (!submitting) { reset(); onClose(); } }} disabled={submitting} class="text-mono text-[11px] px-4 py-1.5 rounded-[3px] bg-transparent border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]">
+          <button type="button" onclick={() => { if (!submitting) onClose(); }} disabled={submitting} class="text-mono text-[11px] px-4 py-1.5 rounded-[3px] bg-transparent border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]">
             Cancelar
           </button>
           <button type="submit" disabled={!canSubmit} class="text-mono text-[11px] px-4 py-1.5 rounded-[3px] font-semibold transition-colors"
