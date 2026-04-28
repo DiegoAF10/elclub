@@ -209,6 +209,35 @@ export class SagradoViolation extends Error {
 	}
 }
 
+// ─── IMP-R1.5 input interfaces ──────────────────────────────────────
+// camelCase field names match Rust serde rename — transparent translation
+
+export interface CreateImportInput {
+	importId: string;       // regex IMP-YYYY-MM-DD enforced server-side
+	paidAt: string;         // YYYY-MM-DD
+	supplier: string;       // default 'Bond Soccer Jersey' if empty
+	brutoUsd: number;       // > 0
+	fx: number;             // > 0 · default 7.73 cliente
+	nUnits: number;         // > 0
+	notes?: string;
+	trackingCode?: string;
+	carrier?: string;       // default 'DHL' server-side
+}
+
+export interface RegisterArrivalInput {
+	importId: string;
+	arrivedAt: string;      // YYYY-MM-DD
+	shippingGtq: number;    // >= 0
+	trackingCode?: string;
+}
+
+export interface UpdateImportInput {
+	importId: string;
+	notes?: string;
+	trackingCode?: string;
+	carrier?: string;
+}
+
 // ─── Capabilities — lo que cada adapter puede hacer ──────────────────
 export interface AdapterCapabilities {
 	reads: boolean;
@@ -334,6 +363,13 @@ export interface Adapter {
 	getImportItems(importId: string): Promise<ImportItem[]>;
 	getImportPulso(): Promise<ImportPulso>;
 	closeImportProportional(import_id: string): Promise<CloseImportResult>;
+
+	// R1.5 additions
+	createImport(input: CreateImportInput): Promise<Import>;
+	registerArrival(input: RegisterArrivalInput): Promise<Import>;
+	updateImport(input: UpdateImportInput): Promise<Import>;
+	cancelImport(importId: string): Promise<Import>;
+	exportImportsCsv(): Promise<string>;
 
 	// ─── Finanzas (FIN-R1) ──────────────────────────────────────
 	computeProfitSnapshot(

@@ -7,8 +7,9 @@
 
   interface Props {
     onPulsoRefresh: () => void;
+    refreshTrigger?: number;
   }
-  let { onPulsoRefresh }: Props = $props();
+  let { onPulsoRefresh, refreshTrigger = 0 }: Props = $props();
 
   let imports = $state<Import[]>([]);
   let activeId = $state<string | null>(null);
@@ -16,6 +17,13 @@
   let loading = $state(true);
 
   onMount(load);
+
+  // Re-fetch when parent bumps the trigger (e.g., after creating a new import)
+  $effect(() => {
+    if (refreshTrigger > 0) {
+      load();
+    }
+  });
 
   async function load() {
     loading = true;

@@ -7,12 +7,14 @@
     onRegisterArrival: () => void;
     onClose: () => void;
     onCancel: () => void;
+    onEdit: () => void;
   }
 
-  let { imp, onRegisterArrival, onClose, onCancel }: Props = $props();
+  let { imp, onRegisterArrival, onClose, onCancel, onEdit }: Props = $props();
 
   let leadDays = $derived(computeLeadDays(imp));
   let canClose = $derived(imp.arrived_at !== null && imp.shipping_gtq !== null && imp.status !== 'closed');
+  let canEdit = $derived(imp.status !== 'closed' && imp.status !== 'cancelled');
 
   function computeLeadDays(i: Import): number | null {
     if (!i.paid_at) return null;
@@ -67,13 +69,28 @@
     <button class="text-mono text-[11px] px-3 py-1.5 rounded-[3px] bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-3)]" onclick={onRegisterArrival}>
       📥 Registrar arrival
     </button>
-    <button class="text-mono text-[11px] px-3 py-1.5 rounded-[3px] bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-3)]">
+    <button
+      disabled
+      title="PayPal invoice viewer diferido a IMP-R5+ · upload manual via Notes por ahora"
+      class="text-mono text-[11px] px-3 py-1.5 rounded-[3px] bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-text-tertiary)] cursor-not-allowed opacity-60"
+    >
       📋 Ver invoice PayPal
     </button>
-    <button class="text-mono text-[11px] px-3 py-1.5 rounded-[3px] bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-3)]">
+    <button
+      disabled
+      title="DHL tracking auto-sync diferido a IMP-R5+ · pegar tracking_code en Editar por ahora"
+      class="text-mono text-[11px] px-3 py-1.5 rounded-[3px] bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-text-tertiary)] cursor-not-allowed opacity-60"
+    >
       📋 Ver tracking DHL
     </button>
-    <button class="text-mono text-[11px] px-3 py-1.5 rounded-[3px] bg-transparent border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]">
+    <button
+      onclick={onEdit}
+      disabled={!canEdit}
+      title={canEdit ? 'Editar notes/tracking/carrier' : 'No editable en status closed o cancelled'}
+      class="text-mono text-[11px] px-3 py-1.5 rounded-[3px] bg-transparent border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)]"
+      class:cursor-not-allowed={!canEdit}
+      class:opacity-60={!canEdit}
+    >
       📝 Editar
     </button>
     <span class="flex-1"></span>

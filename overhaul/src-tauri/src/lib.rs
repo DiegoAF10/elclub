@@ -64,6 +64,16 @@ fn db_path() -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from(r"C:\Users\Diego\el-club\erp\elclub.db"))
 }
 
+/// Validates `IMP-YYYY-MM-DD` format with real date check.
+/// Cero dependencias nuevas — char check + chrono::NaiveDate parsing.
+fn is_valid_import_id(s: &str) -> bool {
+    if s.len() != 14 || !s.starts_with("IMP-") {
+        return false;
+    }
+    let date_part = &s[4..]; // "YYYY-MM-DD"
+    chrono::NaiveDate::parse_from_str(date_part, "%Y-%m-%d").is_ok()
+}
+
 fn catalog_repo_path() -> PathBuf {
     // Repo root de elclub-catalogo-priv (parent dir de data/catalog.json)
     std::env::var("ERP_CATALOG_REPO")
@@ -2717,6 +2727,410 @@ async fn cmd_close_import_proportional(
     })
 }
 
+/// Re-reads canonical Import row by ID. Used by all impl_X commands after tx.commit().
+/// Caller must pass the still-open `conn` (post-commit) to avoid WAL footgun.
+fn read_import_by_id(conn: &rusqlite::Connection, import_id: &str) -> Result<Import> {
+    conn.query_row(
+        "SELECT import_id, paid_at, arrived_at, supplier, bruto_usd, shipping_gtq,
+                COALESCE(fx, 7.73), total_landed_gtq, n_units, unit_cost,
+                status, notes, created_at,
+                tracking_code, COALESCE(carrier, 'DHL'), lead_time_days
+         FROM imports WHERE import_id = ?1",
+        rusqlite::params![import_id],
+        |row| Ok(Import {
+            import_id:        row.get(0)?,
+            paid_at:          row.get(1)?,
+            arrived_at:       row.get(2)?,
+            supplier:         row.get(3)?,
+            bruto_usd:        row.get(4)?,
+            shipping_gtq:     row.get(5)?,
+            fx:               row.get(6)?,
+            total_landed_gtq: row.get(7)?,
+            n_units:          row.get(8)?,
+            unit_cost:        row.get(9)?,
+            status:           row.get(10)?,
+            notes:            row.get(11)?,
+            created_at:       row.get(12)?,
+            tracking_code:    row.get(13)?,
+            carrier:          row.get(14)?,
+            lead_time_days:   row.get(15)?,
+        }),
+    ).map_err(ErpError::from)
+}
+
+// ─── R1.5 Completion: Create / Register Arrival / Update / Cancel ────
+//
+// Convention for IMP-R1.5 commands that need integration testing:
+//   pub async fn impl_X(...) — business logic, callable from tests/*.rs binaries
+//   #[tauri::command] async fn cmd_X(...) — thin shim, registered in invoke_handler!
+//
+// Why split: existing convention is `#[tauri::command] async fn` (private to crate).
+// Integration tests in tests/*.rs are separate binaries · need pub access.
+// The split keeps the registered command name (cmd_X) aligned with adapter contract.
+//
+// Tasks 3 (cmd_register_arrival), 4 (cmd_update_import), 5 (cmd_cancel_import)
+// will reuse this pattern. Tasks 6 (cmd_export_imports_csv) does NOT need impl_X
+// split because it has no integration test (smoke-only via SQL script).
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateImportInput {
+    pub import_id: String,
+    pub paid_at: String,
+    pub supplier: String,
+    pub bruto_usd: f64,
+    pub fx: f64,
+    pub n_units: i64,
+    pub notes: Option<String>,
+    pub tracking_code: Option<String>,
+    pub carrier: Option<String>,
+}
+
+/// Business logic for creating an import — pub so integration tests can call directly.
+pub async fn impl_create_import(input: CreateImportInput) -> Result<Import> {
+    // Validation
+    if !is_valid_import_id(&input.import_id) {
+        return Err(ErpError::Other(format!(
+            "import_id format inválido: '{}' · esperado IMP-YYYY-MM-DD",
+            input.import_id
+        )));
+    }
+    if input.bruto_usd <= 0.0 {
+        return Err(ErpError::Other(format!(
+            "bruto_usd debe ser > 0 · recibido {}",
+            input.bruto_usd
+        )));
+    }
+    if input.fx <= 0.0 {
+        return Err(ErpError::Other(format!(
+            "fx debe ser > 0 · recibido {}",
+            input.fx
+        )));
+    }
+    if input.n_units <= 0 {
+        return Err(ErpError::Other(format!(
+            "n_units debe ser > 0 · recibido {}",
+            input.n_units
+        )));
+    }
+    if chrono::NaiveDate::parse_from_str(&input.paid_at, "%Y-%m-%d").is_err() {
+        return Err(ErpError::Other(format!(
+            "paid_at format inválido: '{}' · esperado YYYY-MM-DD",
+            input.paid_at
+        )));
+    }
+
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    // Duplicate guard
+    let exists: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM imports WHERE import_id = ?1)",
+        rusqlite::params![&input.import_id],
+        |row| row.get::<_, i64>(0).map(|n| n != 0),
+    )?;
+    if exists {
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "Import {} already exists",
+            input.import_id
+        )));
+    }
+
+    let supplier = if input.supplier.trim().is_empty() {
+        "Bond Soccer Jersey".to_string()
+    } else {
+        input.supplier.clone()
+    };
+    let carrier = input.carrier.clone().unwrap_or_else(|| "DHL".to_string());
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+    tx.execute(
+        "INSERT INTO imports
+         (import_id, paid_at, supplier, bruto_usd, fx, n_units, notes,
+          tracking_code, carrier, status, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'paid', ?10)",
+        rusqlite::params![
+            input.import_id,
+            input.paid_at,
+            supplier,
+            input.bruto_usd,
+            input.fx,
+            input.n_units,
+            input.notes,
+            input.tracking_code,
+            carrier,
+            now,
+        ],
+    )?;
+
+    tx.commit()?;
+
+    // Re-read to return canonical Import (using same conn — WAL footgun avoided)
+    read_import_by_id(&conn, &input.import_id)
+}
+
+/// Tauri command — delegates to impl_create_import.
+#[tauri::command]
+async fn cmd_create_import(input: CreateImportInput) -> Result<Import> {
+    impl_create_import(input).await
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RegisterArrivalInput {
+    pub import_id: String,
+    pub arrived_at: String,
+    pub shipping_gtq: f64,
+    pub tracking_code: Option<String>,
+}
+
+/// Business logic for registering arrival on an existing import.
+/// pub so integration tests can call directly.
+pub async fn impl_register_arrival(input: RegisterArrivalInput) -> Result<Import> {
+    if input.shipping_gtq < 0.0 {
+        return Err(ErpError::Other("shipping_gtq cannot be negative".into()));
+    }
+    // Validate arrived_at format
+    if chrono::NaiveDate::parse_from_str(&input.arrived_at, "%Y-%m-%d").is_err() {
+        return Err(ErpError::Other(format!(
+            "arrived_at format inválido: '{}' · esperado YYYY-MM-DD",
+            input.arrived_at
+        )));
+    }
+
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    let (status, paid_at, existing_lead_time): (String, Option<String>, Option<i64>) = tx.query_row(
+        "SELECT status, paid_at, lead_time_days FROM imports WHERE import_id = ?1",
+        rusqlite::params![&input.import_id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => ErpError::NotFound(format!("Import {}", input.import_id)),
+        other => other.into(),
+    })?;
+
+    if status == "closed" || status == "cancelled" {
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "cannot register arrival on import with status '{}'",
+            status
+        )));
+    }
+
+    // Auto-calc lead_time_days from paid_at to arrived_at.
+    // Idempotency: preserve existing lead_time_days when re-registering on 'arrived' status
+    // (otherwise editing arrived_at later silently mutates the derived metric).
+    let lead_time_days = if status == "arrived" {
+        existing_lead_time
+    } else {
+        paid_at.as_ref().and_then(|p| {
+            let pd = chrono::NaiveDate::parse_from_str(p, "%Y-%m-%d").ok()?;
+            let ad = chrono::NaiveDate::parse_from_str(&input.arrived_at, "%Y-%m-%d").ok()?;
+            Some((ad - pd).num_days() as i64)
+        })
+    };
+
+    // Guard: reject negative lead_time_days (arrived_at before paid_at means data error)
+    if let Some(days) = lead_time_days {
+        if days < 0 {
+            tx.rollback()?;
+            return Err(ErpError::Other(format!(
+                "arrived_at ({}) is before paid_at ({}) · refusing negative lead_time_days",
+                input.arrived_at, paid_at.as_deref().unwrap_or("")
+            )));
+        }
+    }
+
+    tx.execute(
+        "UPDATE imports
+         SET arrived_at = ?1,
+             shipping_gtq = ?2,
+             tracking_code = COALESCE(?3, tracking_code),
+             lead_time_days = ?4,
+             status = 'arrived'
+         WHERE import_id = ?5",
+        rusqlite::params![
+            input.arrived_at,
+            input.shipping_gtq,
+            input.tracking_code,
+            lead_time_days,
+            input.import_id,
+        ],
+    )?;
+
+    tx.commit()?;
+
+    // Re-read canonical Import using same connection (avoid WAL footgun)
+    read_import_by_id(&conn, &input.import_id)
+}
+
+/// Tauri command — delegates to impl_register_arrival.
+#[tauri::command]
+async fn cmd_register_arrival(input: RegisterArrivalInput) -> Result<Import> {
+    impl_register_arrival(input).await
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateImportInput {
+    pub import_id: String,
+    pub notes: Option<String>,
+    pub tracking_code: Option<String>,
+    pub carrier: Option<String>,
+}
+
+/// Business logic for editing notes/tracking_code/carrier on an existing import.
+/// Status guard: cannot update if status='closed' or 'cancelled'.
+/// pub so integration tests can call directly (Task 4 has smoke-only · this future-proofs).
+pub async fn impl_update_import(input: UpdateImportInput) -> Result<Import> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    let status: String = tx.query_row(
+        "SELECT status FROM imports WHERE import_id = ?1",
+        rusqlite::params![&input.import_id],
+        |row| row.get(0),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => ErpError::NotFound(format!("Import {}", input.import_id)),
+        other => other.into(),
+    })?;
+
+    if status == "closed" || status == "cancelled" {
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "cannot update import with status '{}'",
+            status
+        )));
+    }
+
+    tx.execute(
+        "UPDATE imports
+         SET notes = COALESCE(?1, notes),
+             tracking_code = COALESCE(?2, tracking_code),
+             carrier = COALESCE(?3, carrier)
+         WHERE import_id = ?4",
+        rusqlite::params![
+            input.notes,
+            input.tracking_code,
+            input.carrier,
+            input.import_id,
+        ],
+    )?;
+
+    tx.commit()?;
+
+    // Re-read using same conn (avoid WAL footgun)
+    read_import_by_id(&conn, &input.import_id)
+}
+
+/// Tauri command — delegates to impl_update_import.
+#[tauri::command]
+async fn cmd_update_import(input: UpdateImportInput) -> Result<Import> {
+    impl_update_import(input).await
+}
+
+/// Business logic for cancelling an import.
+/// Idempotent: re-cancelling already-cancelled is OK.
+/// Status guard: cannot cancel 'closed' (terminal state · use admin re-open).
+/// pub so integration tests can call directly.
+pub async fn impl_cancel_import(import_id: String) -> Result<Import> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    let status: String = tx.query_row(
+        "SELECT status FROM imports WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+        |row| row.get(0),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => ErpError::NotFound(format!("Import {}", import_id)),
+        other => other.into(),
+    })?;
+
+    // Cannot cancel closed (terminal opposite state)
+    // Idempotent: cancelling 'cancelled' is no-op
+    if status == "closed" {
+        tx.rollback()?;
+        return Err(ErpError::Other(
+            "cannot cancel import with status 'closed' (use admin re-open if needed)".into()
+        ));
+    }
+
+    if status != "cancelled" {
+        tx.execute(
+            "UPDATE imports SET status = 'cancelled' WHERE import_id = ?1",
+            rusqlite::params![&import_id],
+        )?;
+    }
+
+    tx.commit()?;
+
+    // Re-read using same conn (avoid WAL footgun)
+    read_import_by_id(&conn, &import_id)
+}
+
+/// Tauri command — delegates to impl_cancel_import.
+#[tauri::command]
+async fn cmd_cancel_import(import_id: String) -> Result<Import> {
+    impl_cancel_import(import_id).await
+}
+
+#[tauri::command]
+async fn cmd_export_imports_csv() -> Result<String> {
+    let conn = open_db()?;
+    let mut stmt = conn.prepare(
+        "SELECT import_id, paid_at, arrived_at, supplier, bruto_usd, shipping_gtq,
+                fx, total_landed_gtq, n_units, unit_cost, status,
+                tracking_code, carrier, lead_time_days, notes, created_at
+         FROM imports ORDER BY paid_at IS NULL, paid_at DESC, created_at DESC"
+    )?;
+
+    // UTF-8 BOM for Excel auto-detection of charset (Spanish accents in notes/supplier survive)
+    // CRLF line endings per RFC 4180 §2.1
+    let mut csv = String::from(
+        "\u{FEFF}import_id,paid_at,arrived_at,supplier,bruto_usd,shipping_gtq,fx,total_landed_gtq,n_units,unit_cost,status,tracking_code,carrier,lead_time_days,notes,created_at\r\n"
+    );
+
+    let rows = stmt.query_map([], |row| {
+        Ok(format!(
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            csv_escape(&row.get::<_, String>(0)?),
+            csv_escape(&row.get::<_, Option<String>>(1)?.unwrap_or_default()),
+            csv_escape(&row.get::<_, Option<String>>(2)?.unwrap_or_default()),
+            csv_escape(&row.get::<_, String>(3)?),
+            row.get::<_, Option<f64>>(4)?.map(|v| v.to_string()).unwrap_or_default(),
+            row.get::<_, Option<f64>>(5)?.map(|v| v.to_string()).unwrap_or_default(),
+            row.get::<_, Option<f64>>(6)?.map(|v| v.to_string()).unwrap_or_default(),
+            row.get::<_, Option<f64>>(7)?.map(|v| v.to_string()).unwrap_or_default(),
+            row.get::<_, Option<i64>>(8)?.map(|v| v.to_string()).unwrap_or_default(),
+            row.get::<_, Option<f64>>(9)?.map(|v| v.to_string()).unwrap_or_default(),
+            csv_escape(&row.get::<_, String>(10)?),
+            csv_escape(&row.get::<_, Option<String>>(11)?.unwrap_or_default()),
+            csv_escape(&row.get::<_, Option<String>>(12)?.unwrap_or_else(|| "DHL".into())),
+            row.get::<_, Option<i64>>(13)?.map(|v| v.to_string()).unwrap_or_default(),
+            csv_escape(&row.get::<_, Option<String>>(14)?.unwrap_or_default()),
+            csv_escape(&row.get::<_, String>(15)?),
+        ))
+    })?;
+
+    for row in rows {
+        csv.push_str(&row?);
+        csv.push_str("\r\n");
+    }
+
+    Ok(csv)
+}
+
+/// Escape a CSV cell · quotes the field if it contains commas, quotes, or newlines.
+fn csv_escape(s: &str) -> String {
+    if s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
+
 // ─── Finanzas (FIN-R1) — structs ─────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -5252,6 +5666,12 @@ pub fn run() {
             cmd_get_import_items,
             cmd_get_import_pulso,
             cmd_close_import_proportional,
+            // Importaciones R1.5
+            cmd_create_import,
+            cmd_register_arrival,
+            cmd_update_import,
+            cmd_cancel_import,
+            cmd_export_imports_csv,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
@@ -5293,4 +5713,50 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
+}
+
+#[cfg(test)]
+mod imp_r15_helper_tests {
+    use super::*;
+
+    #[test]
+    fn test_valid_import_id_format() {
+        assert!(is_valid_import_id("IMP-2026-04-28"));
+        assert!(is_valid_import_id("IMP-2025-12-31"));
+        assert!(is_valid_import_id("IMP-2026-01-01"));
+    }
+
+    #[test]
+    fn test_invalid_import_id_format() {
+        assert!(!is_valid_import_id(""));
+        assert!(!is_valid_import_id("IMP-2026-04-7"));     // single digit day
+        assert!(!is_valid_import_id("imp-2026-04-28"));   // lowercase
+        assert!(!is_valid_import_id("IMP-2026-13-01"));   // month 13 invalid
+        assert!(!is_valid_import_id("IMP-2026-02-30"));   // feb 30 invalid
+        assert!(!is_valid_import_id("IMP-2026-04-28-001")); // suffix
+        assert!(!is_valid_import_id("IMP-202X-04-28"));   // letter in year
+        assert!(!is_valid_import_id("IMP_2026_04_28"));   // underscores
+    }
+
+    #[test]
+    fn test_csv_escape_plain() {
+        assert_eq!(csv_escape("hello"), "hello");
+        assert_eq!(csv_escape(""), "");
+    }
+
+    #[test]
+    fn test_csv_escape_with_comma() {
+        assert_eq!(csv_escape("a,b,c"), "\"a,b,c\"");
+    }
+
+    #[test]
+    fn test_csv_escape_with_quote() {
+        assert_eq!(csv_escape("say \"hi\""), "\"say \"\"hi\"\"\"");
+    }
+
+    #[test]
+    fn test_csv_escape_with_newline() {
+        assert_eq!(csv_escape("line1\nline2"), "\"line1\nline2\"");
+        assert_eq!(csv_escape("crlf\r\n"), "\"crlf\r\n\"");
+    }
 }
