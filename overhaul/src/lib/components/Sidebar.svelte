@@ -16,7 +16,8 @@
 		CheckCircle2,
 		AlertTriangle,
 		RefreshCw,
-		Download
+		Download,
+		LayoutDashboard
 	} from 'lucide-svelte';
 	import { adapter, NotAvailableInBrowser, isTauri } from '$lib/adapter';
 	import type { GitStatusInfo } from '$lib/adapter';
@@ -152,7 +153,10 @@
 		{ id: 'comercial', label: 'Comercial', icon: DollarSign, section: 'data' },
 		{ id: 'importaciones', label: 'Importaciones', icon: Ship, section: 'data' },
 		{ id: 'finanzas', label: 'Finanzas', icon: LineChart, section: 'data' },
-		{ id: 'orders', label: 'Órdenes', icon: Truck, section: 'data' }
+		{ id: 'orders', label: 'Órdenes', icon: Truck, section: 'data' },
+		// Admin Web R7 — abre URL space disjunto (/admin-web), maneja en parent
+		// con goto en lugar de set sidebarActive. Ver +page.svelte handleSidebarSelect.
+		{ id: 'admin-web', label: 'Admin Web', icon: LayoutDashboard, section: 'data' }
 	];
 
 	const workflow = ITEMS.filter((i) => i.section === 'workflow');
