@@ -16,15 +16,20 @@
   let carrier = $state('DHL');
   let submitting = $state(false);
   let errorMsg = $state<string | null>(null);
+  // Tracks which import_id we last pre-filled for · prevents clobbering user
+  // edits if parent passes a new imp prop while modal is still open.
+  let lastOpenedFor = $state<string | null>(null);
 
-  // Pre-fill from imp when modal opens · self-clean errors when modal closes
+  // Pre-fill from imp ONLY when transitioning open OR switching to a different imp.
   $effect(() => {
-    if (open && imp) {
+    if (open && imp && imp.import_id !== lastOpenedFor) {
       notes = imp.notes ?? '';
       trackingCode = imp.tracking_code ?? '';
       carrier = imp.carrier ?? 'DHL';
       errorMsg = null;
+      lastOpenedFor = imp.import_id;
     } else if (!open) {
+      lastOpenedFor = null;
       errorMsg = null;
     }
   });
