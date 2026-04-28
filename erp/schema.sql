@@ -338,3 +338,13 @@ CREATE INDEX IF NOT EXISTS idx_imports_paid_at ON imports(paid_at);
 -- );
 -- CREATE INDEX IF NOT EXISTS idx_free_unit_import       ON import_free_unit(import_id);
 -- CREATE INDEX IF NOT EXISTS idx_free_unit_destination  ON import_free_unit(destination);
+
+-- ═══════════════════════════════════════
+-- FIN-R1 schema additions (2026-04-27)
+-- Aplicado vía scripts/apply_finanzas_schema.py (idempotente)
+-- ═══════════════════════════════════════
+
+-- 5 tables: expenses, recurring_expenses, cash_balance_history, shareholder_loan_movements, owner_draws
+-- 2 views: v_monthly_profit, v_shareholder_loan_balance
+-- 7 indexes
+-- See scripts/apply_finanzas_schema.py for full DDL.

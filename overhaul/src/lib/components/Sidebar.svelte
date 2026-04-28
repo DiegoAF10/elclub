@@ -9,6 +9,7 @@
 		DollarSign,
 		Truck,
 		Ship,
+		LineChart,
 		Command,
 		Upload,
 		Loader2,
@@ -150,6 +151,7 @@
 		{ id: 'inventory', label: 'Inventario', icon: Package, section: 'data' },
 		{ id: 'comercial', label: 'Comercial', icon: DollarSign, section: 'data' },
 		{ id: 'importaciones', label: 'Importaciones', icon: Ship, section: 'data' },
+		{ id: 'finanzas', label: 'Finanzas', icon: LineChart, section: 'data' },
 		{ id: 'orders', label: 'Órdenes', icon: Truck, section: 'data' }
 	];
 

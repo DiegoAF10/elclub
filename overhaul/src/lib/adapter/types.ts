@@ -3,6 +3,7 @@
 
 import type { Family, Status } from '../data/types';
 import type { Import, ImportItem, ImportPulso, CloseImportResult } from '../data/importaciones';
+import type { Expense, ExpenseInput, ProfitSnapshot, HomeSnapshot, RecentExpense } from '../data/finanzas';
 import type {
 	ComercialEvent,
 	DetectedEvent,
@@ -333,6 +334,34 @@ export interface Adapter {
 	getImportItems(importId: string): Promise<ImportItem[]>;
 	getImportPulso(): Promise<ImportPulso>;
 	closeImportProportional(import_id: string): Promise<CloseImportResult>;
+
+	// ─── Finanzas (FIN-R1) ──────────────────────────────────────
+	computeProfitSnapshot(
+		periodStart: string,
+		periodEnd: string,
+		periodLabel: string,
+		prevStart?: string,
+		prevEnd?: string,
+	): Promise<ProfitSnapshot>;
+	getHomeSnapshot(
+		periodStart: string,
+		periodEnd: string,
+		periodLabel: string,
+		prevStart?: string,
+		prevEnd?: string,
+	): Promise<HomeSnapshot>;
+	createExpense(input: ExpenseInput): Promise<number>;
+	listExpenses(filters?: {
+		periodStart?: string;
+		periodEnd?: string;
+		category?: string;
+		paymentMethod?: string;
+		limit?: number;
+	}): Promise<Expense[]>;
+	deleteExpense(expenseId: number): Promise<void>;
+	updateExpense(expenseId: number, input: ExpenseInput): Promise<void>;
+	recentExpenses(limit?: number): Promise<RecentExpense[]>;
+	setCashBalance(balanceGtq: number, source: string, notes?: string): Promise<number>;
 }
 
 // ─── Error para operaciones no disponibles en dev ────────────────────
@@ -387,6 +416,30 @@ export interface CatalogModeloRow {
 // ─── IMP-R1 ──────────────────────────────────────────────────────────
 export type { Import, ImportStatus, ImportItem, ImportPulso, ImportFilter, CloseImportResult } from '../data/importaciones';
 export { STATUS_LABELS as IMPORT_STATUS_LABELS, STATUS_PROGRESS as IMPORT_STATUS_PROGRESS } from '../data/importaciones';
+
+// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────
+export type {
+  Expense,
+  ExpenseInput,
+  ExpenseCategory,
+  ExpenseSource,
+  PaymentMethod,
+  Currency,
+  Period,
+  PeriodRange,
+  ProfitSnapshot,
+  HomeSnapshot,
+  RecentExpense,
+  InboxSeverity,
+  FinanzasInboxEvent,
+} from '$lib/data/finanzas';
+
+export {
+  CATEGORY_LABELS as FIN_CATEGORY_LABELS,
+  CATEGORY_PILL_CLASS as FIN_CATEGORY_PILL,
+  PAYMENT_METHOD_ICON as FIN_PAYMENT_ICON,
+  PAYMENT_METHOD_LABEL as FIN_PAYMENT_LABEL,
+} from '$lib/data/finanzas';
 
 // Re-export para conveniencia
 export type { Family, Status };

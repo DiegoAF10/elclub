@@ -5,6 +5,7 @@
 	import FamilyPdpPane from '$lib/components/FamilyPdpPane.svelte';
 	import ComercialShell from '$lib/components/comercial/ComercialShell.svelte';
 	import ImportShell from '$lib/components/importaciones/ImportShell.svelte';
+	import FinanzasShell from '$lib/components/finanzas/FinanzasShell.svelte';
 	import CommandPalette from '$lib/components/CommandPalette.svelte';
 	import MundialCoverageModal from '$lib/components/MundialCoverageModal.svelte';
 	import { familiesByGroup, allSkus } from '$lib/data/source';
@@ -221,6 +222,10 @@
 		{:else if sidebarActive === 'importaciones'}
 			<div class="flex-1 overflow-hidden">
 				<ImportShell />
+			</div>
+		{:else if sidebarActive === 'finanzas'}
+			<div class="flex-1 overflow-hidden">
+				<FinanzasShell />
 			</div>
 		{:else}
 			<ListPane
