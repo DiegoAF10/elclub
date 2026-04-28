@@ -1,4 +1,6 @@
 // Importaciones — types para el módulo IMP (batches de jerseys desde proveedor).
+// Convention: snake_case fields mirror SQL column names exactly (serde default).
+// This differs from comercial.ts which uses camelCase for runtime-computed shapes.
 
 export type ImportStatus = 'draft' | 'paid' | 'in_transit' | 'arrived' | 'closed' | 'cancelled';
 
@@ -65,11 +67,11 @@ export const STATUS_LABELS: Record<ImportStatus, string> = {
   cancelled:  'CANCELLED',
 };
 
-export const STATUS_PROGRESS: Record<ImportStatus, number> = {
+export const STATUS_PROGRESS: Record<ImportStatus, number | null> = {
   draft:      1,
   paid:       2,
   in_transit: 3,
   arrived:    4,
   closed:     5,
-  cancelled:  0,  // off-ramp
+  cancelled:  null,  // off-ramp — render as cancelled badge, not as step-0 progress
 };
