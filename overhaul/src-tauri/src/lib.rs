@@ -118,6 +118,57 @@ pub struct PhotoAction {
     pub decided_at: Option<String>,
 }
 
+// ─── Importaciones (IMP-R1) ────────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct Import {
+    pub import_id: String,
+    pub paid_at: Option<String>,
+    pub arrived_at: Option<String>,
+    pub supplier: String,
+    pub bruto_usd: Option<f64>,
+    pub shipping_gtq: Option<f64>,
+    pub fx: f64,
+    pub total_landed_gtq: Option<f64>,
+    pub n_units: Option<i64>,
+    pub unit_cost: Option<f64>,
+    pub status: String,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub tracking_code: Option<String>,
+    pub carrier: String,
+    pub lead_time_days: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ImportItem {
+    pub source_table: String,
+    pub source_id: i64,
+    pub import_id: String,
+    pub family_id: String,
+    pub jersey_id: Option<String>,
+    pub size: Option<String>,
+    pub player_name: Option<String>,
+    pub player_number: Option<i64>,
+    pub patch: Option<String>,
+    pub version: Option<String>,
+    pub unit_cost_usd: Option<f64>,
+    pub unit_cost: Option<f64>,
+    pub customer_id: Option<String>,
+    pub customer_name: Option<String>,
+    pub is_free_unit: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ImportPulso {
+    pub capital_amarrado_gtq: f64,
+    pub closed_ytd_landed_gtq: f64,
+    pub avg_landed_unit: Option<f64>,
+    pub lead_time_avg_days: Option<f64>,
+    pub wishlist_count: i64,
+    pub free_units_unassigned: i64,
+}
+
 // ─── App state — cacheamos el catalog en memoria (se re-lee al mutate) ─
 
 pub struct AppState {
@@ -2376,6 +2427,179 @@ async fn comercial_replace_sale_items(args: ReplaceSaleItemsArgs) -> Result<Valu
         .map_err(|e| ErpError::Other(format!("spawn_blocking join: {}", e)))?
 }
 
+// ─── Importaciones commands (IMP-R1) ─────────────────────────────────
+
+#[tauri::command]
+async fn cmd_list_imports(_app: tauri::AppHandle) -> Result<Vec<Import>> {
+    let conn = rusqlite::Connection::open(db_path())?;
+    let mut stmt = conn.prepare(
+        "SELECT import_id, paid_at, arrived_at, supplier, bruto_usd, shipping_gtq,
+                COALESCE(fx, 7.73) as fx, total_landed_gtq, n_units, unit_cost,
+                status, notes, created_at,
+                tracking_code, COALESCE(carrier, 'DHL') as carrier, lead_time_days
+         FROM imports
+         ORDER BY paid_at IS NULL, paid_at DESC, created_at DESC"
+    )?;
+
+    let rows = stmt.query_map([], |row| {
+        Ok(Import {
+            import_id:        row.get(0)?,
+            paid_at:          row.get(1)?,
+            arrived_at:       row.get(2)?,
+            supplier:         row.get(3)?,
+            bruto_usd:        row.get(4)?,
+            shipping_gtq:     row.get(5)?,
+            fx:               row.get(6)?,
+            total_landed_gtq: row.get(7)?,
+            n_units:          row.get(8)?,
+            unit_cost:        row.get(9)?,
+            status:           row.get(10)?,
+            notes:            row.get(11)?,
+            created_at:       row.get(12)?,
+            tracking_code:    row.get(13)?,
+            carrier:          row.get(14)?,
+            lead_time_days:   row.get(15)?,
+        })
+    })?;
+
+    Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+}
+
+#[tauri::command]
+async fn cmd_get_import(_app: tauri::AppHandle, import_id: String) -> Result<Import> {
+    let conn = rusqlite::Connection::open(db_path())?;
+    let imp = conn.query_row(
+        "SELECT import_id, paid_at, arrived_at, supplier, bruto_usd, shipping_gtq,
+                COALESCE(fx, 7.73), total_landed_gtq, n_units, unit_cost,
+                status, notes, created_at,
+                tracking_code, COALESCE(carrier, 'DHL'), lead_time_days
+         FROM imports WHERE import_id = ?1",
+        rusqlite::params![import_id],
+        |row| Ok(Import {
+            import_id:        row.get(0)?,
+            paid_at:          row.get(1)?,
+            arrived_at:       row.get(2)?,
+            supplier:         row.get(3)?,
+            bruto_usd:        row.get(4)?,
+            shipping_gtq:     row.get(5)?,
+            fx:               row.get(6)?,
+            total_landed_gtq: row.get(7)?,
+            n_units:          row.get(8)?,
+            unit_cost:        row.get(9)?,
+            status:           row.get(10)?,
+            notes:            row.get(11)?,
+            created_at:       row.get(12)?,
+            tracking_code:    row.get(13)?,
+            carrier:          row.get(14)?,
+            lead_time_days:   row.get(15)?,
+        }),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => ErpError::NotFound(format!("Import {}", import_id)),
+        other => other.into(),
+    })?;
+    Ok(imp)
+}
+
+#[tauri::command]
+async fn cmd_get_import_items(_app: tauri::AppHandle, import_id: String) -> Result<Vec<ImportItem>> {
+    let conn = rusqlite::Connection::open(db_path())?;
+
+    let mut stmt = conn.prepare(
+        "SELECT 'sale_items' as source_table, i.item_id as source_id, i.import_id,
+                i.family_id, i.jersey_id, i.size,
+                json_extract(i.personalization_json, '$.name') as player_name,
+                CAST(json_extract(i.personalization_json, '$.number') AS INTEGER) as player_number,
+                json_extract(i.personalization_json, '$.patch') as patch,
+                i.version,
+                i.unit_cost_usd, i.unit_cost,
+                s.customer_id, c.name as customer_name,
+                CASE WHEN i.unit_cost_usd = 0 OR i.unit_cost = 0 THEN 1 ELSE 0 END as is_free_unit
+         FROM sale_items i
+         LEFT JOIN sales s ON s.sale_id = i.sale_id
+         LEFT JOIN customers c ON c.customer_id = s.customer_id
+         WHERE i.import_id = ?1
+         UNION ALL
+         SELECT 'jerseys' as source_table, j.rowid as source_id, j.import_id,
+                j.family_id, j.jersey_id, j.size,
+                NULL as player_name, NULL as player_number, NULL as patch, NULL as version,
+                j.unit_cost_usd, j.cost as unit_cost,
+                NULL as customer_id, NULL as customer_name,
+                0 as is_free_unit
+         FROM jerseys j
+         WHERE j.import_id = ?1"
+    )?;
+
+    let rows = stmt.query_map(rusqlite::params![import_id], |row| {
+        Ok(ImportItem {
+            source_table:   row.get(0)?,
+            source_id:      row.get(1)?,
+            import_id:      row.get(2)?,
+            family_id:      row.get(3)?,
+            jersey_id:      row.get(4)?,
+            size:           row.get(5)?,
+            player_name:    row.get(6)?,
+            player_number:  row.get(7)?,
+            patch:          row.get(8)?,
+            version:        row.get(9)?,
+            unit_cost_usd:  row.get(10)?,
+            unit_cost:      row.get(11)?,
+            customer_id:    row.get(12)?,
+            customer_name:  row.get(13)?,
+            is_free_unit:   row.get::<_, i64>(14)? != 0,
+        })
+    })?;
+
+    Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+}
+
+#[tauri::command]
+async fn cmd_get_import_pulso(_app: tauri::AppHandle) -> Result<ImportPulso> {
+    let conn = rusqlite::Connection::open(db_path())?;
+
+    let capital: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(total_landed_gtq), 0) FROM imports
+         WHERE status IN ('paid', 'in_transit', 'arrived')",
+        [], |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    let closed_ytd: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(total_landed_gtq), 0) FROM imports
+         WHERE status = 'closed'
+           AND substr(arrived_at, 1, 4) = strftime('%Y', 'now', 'localtime')",
+        [], |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    let avg_landed: Option<f64> = conn.query_row(
+        "SELECT AVG(unit_cost) FROM imports WHERE status = 'closed' AND unit_cost IS NOT NULL",
+        [], |r| r.get(0),
+    ).ok().flatten();
+
+    let lead_avg: Option<f64> = conn.query_row(
+        "SELECT AVG(lead_time_days) FROM imports
+         WHERE status = 'closed' AND lead_time_days IS NOT NULL",
+        [], |r| r.get(0),
+    ).ok().flatten();
+
+    let wishlist: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM import_wishlist WHERE status = 'active'",
+        [], |r| r.get(0),
+    ).unwrap_or(0);
+
+    let free_unassigned: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM import_free_unit WHERE destination = 'unassigned'",
+        [], |r| r.get(0),
+    ).unwrap_or(0);
+
+    Ok(ImportPulso {
+        capital_amarrado_gtq: capital,
+        closed_ytd_landed_gtq: closed_ytd,
+        avg_landed_unit: avg_landed,
+        lead_time_avg_days: lead_avg,
+        wishlist_count: wishlist,
+        free_units_unassigned: free_unassigned,
+    })
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -2456,6 +2680,11 @@ pub fn run() {
             comercial_update_sale,
             // Comercial R11
             comercial_replace_sale_items,
+            // Importaciones R1
+            cmd_list_imports,
+            cmd_get_import,
+            cmd_get_import_items,
+            cmd_get_import_pulso,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
