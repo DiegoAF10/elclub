@@ -1,10 +1,16 @@
+#!/usr/bin/env python3
 # C:/Users/Diego/el-club/erp/scripts/apply_imports_schema.py
 """IMP-R1 schema additions. Idempotente — re-runnable sin error."""
 import sqlite3
 import sys
 from pathlib import Path
 
-DB_PATH = Path(r"C:\Users\Diego\el-club\erp\elclub.db")
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try: sys.stdout.reconfigure(encoding="utf-8")
+    except Exception: pass
+
+ERP_DIR = Path(__file__).resolve().parent.parent  # erp/
+DB_PATH = ERP_DIR / "elclub.db"
 
 ALTERS = [
     # imports
@@ -64,7 +70,7 @@ CREATE_INDEXES = [
 
 def column_exists(cur, table: str, col: str) -> bool:
     cur.execute(f"PRAGMA table_info({table})")
-    return any(row[1] == col for row in cur.fetchall())
+    return any(row[1].lower() == col.lower() for row in cur.fetchall())
 
 
 def main():
@@ -97,6 +103,8 @@ def main():
         cur.execute(sql)
     print(f"  ✓ created/verified {len(CREATE_TABLES)} tables + {len(CREATE_INDEXES)} indexes")
 
+    # SQLite auto-commits DDL implicitly; this commit() is a safeguard
+    # in case future code adds DML (UPDATE/INSERT) to this script.
     conn.commit()
     conn.close()
 

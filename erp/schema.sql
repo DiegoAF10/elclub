@@ -303,4 +303,38 @@ CREATE INDEX IF NOT EXISTS idx_imports_paid_at ON imports(paid_at);
 -- ALTER TABLE sale_items ADD COLUMN unit_cost_usd REAL;
 -- ALTER TABLE jerseys ADD COLUMN unit_cost_usd REAL;
 
--- (CREATE TABLE statements para import_wishlist y import_free_unit — ver scripts/apply_imports_schema.py)
+-- CREATE TABLE IF NOT EXISTS import_wishlist (
+--     wishlist_item_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+--     family_id             TEXT NOT NULL,
+--     jersey_id             TEXT,
+--     size                  TEXT,
+--     player_name           TEXT,
+--     player_number         INTEGER,
+--     patch                 TEXT,
+--     version               TEXT,
+--     customer_id           TEXT,
+--     expected_usd          REAL,
+--     status                TEXT DEFAULT 'active'
+--                           CHECK(status IN ('active','promoted','cancelled')),
+--     promoted_to_import_id TEXT,
+--     created_at            TEXT DEFAULT (datetime('now', 'localtime')),
+--     notes                 TEXT
+-- );
+-- CREATE INDEX IF NOT EXISTS idx_wishlist_status   ON import_wishlist(status);
+-- CREATE INDEX IF NOT EXISTS idx_wishlist_customer ON import_wishlist(customer_id);
+
+-- CREATE TABLE IF NOT EXISTS import_free_unit (
+--     free_unit_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+--     import_id         TEXT NOT NULL,
+--     family_id         TEXT,
+--     jersey_id         TEXT,
+--     destination       TEXT
+--                       CHECK(destination IN ('unassigned','vip','mystery','garantizada','personal')),
+--     destination_ref   TEXT,
+--     assigned_at       TEXT,
+--     assigned_by       TEXT,
+--     notes             TEXT,
+--     created_at        TEXT DEFAULT (datetime('now', 'localtime'))
+-- );
+-- CREATE INDEX IF NOT EXISTS idx_free_unit_import       ON import_free_unit(import_id);
+-- CREATE INDEX IF NOT EXISTS idx_free_unit_destination  ON import_free_unit(destination);
