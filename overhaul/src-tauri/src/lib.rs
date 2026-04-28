@@ -3086,8 +3086,10 @@ async fn cmd_export_imports_csv() -> Result<String> {
          FROM imports ORDER BY paid_at IS NULL, paid_at DESC, created_at DESC"
     )?;
 
+    // UTF-8 BOM for Excel auto-detection of charset (Spanish accents in notes/supplier survive)
+    // CRLF line endings per RFC 4180 §2.1
     let mut csv = String::from(
-        "import_id,paid_at,arrived_at,supplier,bruto_usd,shipping_gtq,fx,total_landed_gtq,n_units,unit_cost,status,tracking_code,carrier,lead_time_days,notes,created_at\n"
+        "\u{FEFF}import_id,paid_at,arrived_at,supplier,bruto_usd,shipping_gtq,fx,total_landed_gtq,n_units,unit_cost,status,tracking_code,carrier,lead_time_days,notes,created_at\r\n"
     );
 
     let rows = stmt.query_map([], |row| {
@@ -3114,7 +3116,7 @@ async fn cmd_export_imports_csv() -> Result<String> {
 
     for row in rows {
         csv.push_str(&row?);
-        csv.push('\n');
+        csv.push_str("\r\n");
     }
 
     Ok(csv)
@@ -3122,7 +3124,7 @@ async fn cmd_export_imports_csv() -> Result<String> {
 
 /// Escape a CSV cell · quotes the field if it contains commas, quotes, or newlines.
 fn csv_escape(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') {
+    if s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r') {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
         s.to_string()
@@ -5734,5 +5736,27 @@ mod imp_r15_helper_tests {
         assert!(!is_valid_import_id("IMP-2026-04-28-001")); // suffix
         assert!(!is_valid_import_id("IMP-202X-04-28"));   // letter in year
         assert!(!is_valid_import_id("IMP_2026_04_28"));   // underscores
+    }
+
+    #[test]
+    fn test_csv_escape_plain() {
+        assert_eq!(csv_escape("hello"), "hello");
+        assert_eq!(csv_escape(""), "");
+    }
+
+    #[test]
+    fn test_csv_escape_with_comma() {
+        assert_eq!(csv_escape("a,b,c"), "\"a,b,c\"");
+    }
+
+    #[test]
+    fn test_csv_escape_with_quote() {
+        assert_eq!(csv_escape("say \"hi\""), "\"say \"\"hi\"\"\"");
+    }
+
+    #[test]
+    fn test_csv_escape_with_newline() {
+        assert_eq!(csv_escape("line1\nline2"), "\"line1\nline2\"");
+        assert_eq!(csv_escape("crlf\r\n"), "\"crlf\r\n\"");
     }
 }
