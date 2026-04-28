@@ -1,7 +1,17 @@
-<!-- TODO: T2.5 — redirect a /admin-web/mystery/pool -->
+<!-- /admin-web/mystery → redirect a last-tab o default 'pool'. -->
 <script lang="ts">
 	import { goto } from '$app/navigation';
+
 	$effect(() => {
-		void goto('/admin-web/mystery/pool', { replaceState: true });
+		let target = 'pool';
+		if (typeof localStorage !== 'undefined') {
+			try {
+				const last = localStorage.getItem('admin-web:lastTab:mystery');
+				if (last) target = last;
+			} catch {
+				/* fallback */
+			}
+		}
+		void goto(`/admin-web/mystery/${target}`, { replaceState: true });
 	});
 </script>
