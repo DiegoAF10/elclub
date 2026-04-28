@@ -3171,6 +3171,360 @@ async fn cmd_set_cash_balance(
     Ok(conn.last_insert_rowid())
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// ADMIN WEB R7 — Tauri commands para el modulo Admin Web
+// ═══════════════════════════════════════════════════════════════════════
+// Spec: overhaul/docs/superpowers/specs/admin-web/. Schema: 26 tablas
+// nuevas + 4 cols en audit_decisions (T1.1). Tipos TS: lib/data/admin-web.ts
+// + adapter/types.ts AdminWebTauriCommands. Estos commands son invocados via
+// adminWebTauri en lib/adapter/tauri.ts.
+//
+// Convencion: structs serializan/deserializan con default serde (snake_case)
+// porque el JS adapter envia args/recibe results en snake_case (el spec
+// AdminWebTauriCommands usa snake_case para campos).
+
+#[derive(Debug, Serialize)]
+pub struct HomeKpis {
+    pub publicados_total: i64,
+    pub stock_live: i64,
+    pub queue_count: i64,
+    pub scheduled_30d: i64,
+    pub activity_month: i64,
+    pub supplier_gaps: i64,
+    pub hours_since_last_scrap: i64,
+    pub dirty_count: i64,
+    pub sparklines: std::collections::HashMap<String, Vec<f64>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListInboxEventsArgs {
+    #[serde(default)]
+    pub include_dismissed: Option<bool>,
+    #[serde(default)]
+    pub severity_filter: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct InboxEventOut {
+    pub id: i64,
+    pub r#type: String,
+    pub severity: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub action_label: Option<String>,
+    pub action_target: Option<String>,
+    pub module: String,
+    pub metadata: Option<Value>,
+    pub created_at: i64,
+    pub dismissed_at: Option<i64>,
+    pub resolved_at: Option<i64>,
+    pub expires_at: Option<i64>,
+}
+
+fn count_supplier_gaps_in_catalog(catalog: &[Value]) -> i64 {
+    catalog
+        .iter()
+        .filter(|f| {
+            // status='deleted' zombies fuera
+            let status = f.get("status").and_then(|v| v.as_str()).unwrap_or("");
+            if status == "deleted" {
+                return false;
+            }
+            f.get("supplier_gap").and_then(|v| v.as_bool()).unwrap_or(false)
+        })
+        .count() as i64
+}
+
+fn load_sparklines(conn: &rusqlite::Connection) -> Result<std::collections::HashMap<String, Vec<f64>>> {
+    // Lee últimos 7 puntos de kpi_snapshots por kpi_key.
+    // Si no hay datos (la tabla está vacía hasta que el cron daily corra),
+    // devuelve vacío — la UI maneja el caso "sin sparkline".
+    let mut out = std::collections::HashMap::<String, Vec<f64>>::new();
+    let kpi_keys = [
+        "publicados_total",
+        "stock_live",
+        "queue_count",
+        "scheduled_30d",
+        "activity_month",
+        "supplier_gaps",
+        "hours_since_last_scrap",
+        "dirty_count",
+    ];
+    for key in kpi_keys {
+        let mut stmt = conn.prepare(
+            "SELECT value FROM kpi_snapshots WHERE kpi_key = ?1 ORDER BY date DESC LIMIT 7",
+        )?;
+        let rows = stmt.query_map([key], |row| row.get::<_, f64>(0))?;
+        let mut values: Vec<f64> = rows.filter_map(|r| r.ok()).collect();
+        values.reverse(); // chronological: oldest → newest
+        if !values.is_empty() {
+            out.insert(key.to_string(), values);
+        }
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+fn get_admin_web_kpis(state: tauri::State<AppState>) -> Result<HomeKpis> {
+    let conn = open_db()?;
+    let catalog = load_catalog(&state)?;
+
+    let publicados_total: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM audit_decisions WHERE status='verified' AND final_verified=1 AND archived_at IS NULL",
+        [],
+        |row| row.get(0),
+    )?;
+
+    let queue_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM audit_decisions WHERE status='pending'",
+        [],
+        |row| row.get(0),
+    )?;
+
+    let stock_live: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM v_stock_status WHERE computed_status='live'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let scheduled_30d: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM stock_overrides WHERE publish_at IS NOT NULL
+                AND publish_at > unixepoch()
+                AND publish_at < unixepoch() + 60*60*24*30",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let activity_month: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM system_audit_log
+                WHERE timestamp > unixepoch() - 60*60*24*30",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let dirty_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM audit_decisions WHERE dirty_flag=1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    // Last scrap: max(started_at) en scrap_history. Si no hay rows, 0 (=> 999h).
+    let last_scrap_at: Option<i64> = conn
+        .query_row(
+            "SELECT MAX(started_at) FROM scrap_history WHERE status='success'",
+            [],
+            |row| row.get::<_, Option<i64>>(0),
+        )
+        .unwrap_or(None);
+    let now = chrono::Utc::now().timestamp();
+    let hours_since_last_scrap = last_scrap_at
+        .map(|ts| (now - ts) / 3600)
+        .unwrap_or(999); // sin scrap registrado
+
+    let supplier_gaps = count_supplier_gaps_in_catalog(&catalog);
+
+    let sparklines = load_sparklines(&conn).unwrap_or_default();
+
+    Ok(HomeKpis {
+        publicados_total,
+        stock_live,
+        queue_count,
+        scheduled_30d,
+        activity_month,
+        supplier_gaps,
+        hours_since_last_scrap,
+        dirty_count,
+        sparklines,
+    })
+}
+
+#[tauri::command]
+fn get_module_stats(module: String) -> Result<Value> {
+    // Mini-stats por modulo para el sidebar/Home tiles. Devuelve JSON libre.
+    // No toma AppState hoy (todas las queries son SQLite directas) pero si en
+    // R7.1+ los stats requieren catalog.json, agregar tauri::State<AppState>.
+    let conn = open_db()?;
+    let mut stats = serde_json::Map::new();
+
+    match module.as_str() {
+        "vault" => {
+            let queue: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM audit_decisions WHERE status='pending'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            let publicados: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM audit_decisions WHERE status='verified' AND final_verified=1",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            stats.insert("queue".to_string(), Value::from(queue));
+            stats.insert("publicados".to_string(), Value::from(publicados));
+        }
+        "stock" => {
+            let live: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM v_stock_status WHERE computed_status='live'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            let scheduled: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM v_stock_status WHERE computed_status='scheduled'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            stats.insert("live".to_string(), Value::from(live));
+            stats.insert("scheduled".to_string(), Value::from(scheduled));
+        }
+        "mystery" => {
+            let live: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM v_mystery_status WHERE computed_status='live'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            let total: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM mystery_overrides",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            stats.insert("live".to_string(), Value::from(live));
+            stats.insert("total".to_string(), Value::from(total));
+        }
+        "site" => {
+            let pages: i64 = conn
+                .query_row("SELECT COUNT(*) FROM site_pages", [], |row| row.get(0))
+                .unwrap_or(0);
+            let live_pages: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM site_pages WHERE status='live'",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            stats.insert("pages".to_string(), Value::from(pages));
+            stats.insert("live_pages".to_string(), Value::from(live_pages));
+        }
+        "sistema" => {
+            let jobs: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM scheduled_jobs WHERE enabled=1",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            let backups: i64 = conn
+                .query_row("SELECT COUNT(*) FROM backups", [], |row| row.get(0))
+                .unwrap_or(0);
+            stats.insert("jobs".to_string(), Value::from(jobs));
+            stats.insert("backups".to_string(), Value::from(backups));
+        }
+        _ => {
+            // Modulo desconocido — devuelvo vacio
+        }
+    }
+
+    Ok(Value::Object(stats))
+}
+
+#[tauri::command]
+fn list_inbox_events(args: Option<ListInboxEventsArgs>) -> Result<Vec<InboxEventOut>> {
+    let conn = open_db()?;
+    let args = args.unwrap_or(ListInboxEventsArgs {
+        include_dismissed: None,
+        severity_filter: None,
+    });
+
+    let include_dismissed = args.include_dismissed.unwrap_or(false);
+
+    let mut q = String::from(
+        "SELECT id, type, severity, title, description, action_label, action_target,
+                module, metadata, created_at, dismissed_at, resolved_at, expires_at
+         FROM inbox_events
+         WHERE resolved_at IS NULL
+           AND (expires_at IS NULL OR expires_at > unixepoch())",
+    );
+    if !include_dismissed {
+        q.push_str(" AND dismissed_at IS NULL");
+    }
+    if let Some(ref sevs) = args.severity_filter {
+        if !sevs.is_empty() {
+            let placeholders: Vec<String> = (0..sevs.len()).map(|_| "?".to_string()).collect();
+            q.push_str(&format!(" AND severity IN ({})", placeholders.join(",")));
+        }
+    }
+    q.push_str(" ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'important' THEN 1 ELSE 2 END, created_at DESC");
+
+    let mut stmt = conn.prepare(&q)?;
+
+    let params: Vec<&dyn rusqlite::ToSql> = if let Some(ref sevs) = args.severity_filter {
+        sevs.iter().map(|s| s as &dyn rusqlite::ToSql).collect()
+    } else {
+        vec![]
+    };
+
+    let rows = stmt.query_map(params.as_slice(), |row| {
+        let metadata_str: Option<String> = row.get("metadata")?;
+        let metadata: Option<Value> = metadata_str.and_then(|s| serde_json::from_str(&s).ok());
+        Ok(InboxEventOut {
+            id: row.get("id")?,
+            r#type: row.get("type")?,
+            severity: row.get("severity")?,
+            title: row.get("title")?,
+            description: row.get("description").ok(),
+            action_label: row.get("action_label").ok(),
+            action_target: row.get("action_target").ok(),
+            module: row.get("module")?,
+            metadata,
+            created_at: row.get("created_at")?,
+            dismissed_at: row.get("dismissed_at").ok(),
+            resolved_at: row.get("resolved_at").ok(),
+            expires_at: row.get("expires_at").ok(),
+        })
+    })?;
+
+    let events: Vec<InboxEventOut> = rows.filter_map(|r| r.ok()).collect();
+    Ok(events)
+}
+
+#[tauri::command]
+fn dismiss_event(id: i64) -> Result<()> {
+    let conn = open_db()?;
+    conn.execute(
+        "UPDATE inbox_events SET dismissed_at = unixepoch() WHERE id = ?1 AND dismissed_at IS NULL",
+        rusqlite::params![id],
+    )?;
+    Ok(())
+}
+
+#[tauri::command]
+fn resolve_event(id: i64) -> Result<()> {
+    let conn = open_db()?;
+    conn.execute(
+        "UPDATE inbox_events SET resolved_at = unixepoch() WHERE id = ?1 AND resolved_at IS NULL",
+        rusqlite::params![id],
+    )?;
+    Ok(())
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -3266,6 +3620,12 @@ pub fn run() {
             cmd_update_expense,
             cmd_recent_expenses,
             cmd_set_cash_balance,
+            // Admin Web R7 (T3.1)
+            get_admin_web_kpis,
+            get_module_stats,
+            list_inbox_events,
+            dismiss_event,
+            resolve_event,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
