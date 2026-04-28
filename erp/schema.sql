@@ -291,3 +291,16 @@ CREATE TABLE IF NOT EXISTS imports (
 
 CREATE INDEX IF NOT EXISTS idx_imports_status ON imports(status);
 CREATE INDEX IF NOT EXISTS idx_imports_paid_at ON imports(paid_at);
+
+-- ═══════════════════════════════════════
+-- IMP-R1 schema additions (2026-04-27)
+-- Aplicado vía scripts/apply_imports_schema.py (idempotente)
+-- ═══════════════════════════════════════
+
+-- ALTER TABLE imports ADD COLUMN tracking_code TEXT;
+-- ALTER TABLE imports ADD COLUMN carrier TEXT DEFAULT 'DHL';
+-- ALTER TABLE imports ADD COLUMN lead_time_days INTEGER;
+-- ALTER TABLE sale_items ADD COLUMN unit_cost_usd REAL;
+-- ALTER TABLE jerseys ADD COLUMN unit_cost_usd REAL;
+
+-- (CREATE TABLE statements para import_wishlist y import_free_unit — ver scripts/apply_imports_schema.py)
