@@ -107,6 +107,22 @@
     return map[p] ?? p;
   }
 
+  function parseAddress(raw: string | null): { zone?: string; municipality?: string; department?: string } | null {
+    if (!raw) return null;
+    try {
+      const obj = JSON.parse(raw);
+      return obj && typeof obj === 'object' ? obj : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function joinItems(labels: string[] | null, max = 3): string {
+    if (!labels || labels.length === 0) return '';
+    const head = labels.slice(0, max).join(' · ');
+    return labels.length > max ? `${head} · +${labels.length - max} más` : head;
+  }
+
   function modalityLabel(m: string): string {
     if (m === 'mystery') return 'MYS';
     if (m === 'stock') return 'DROP';
@@ -255,7 +271,7 @@
             <div class="text-mono text-[9.5px] text-[var(--color-text-muted)]">{fmtDate(s.occurredAt)}</div>
           </div>
 
-          <!-- CENTER: cliente + item -->
+          <!-- CENTER: cliente + items + address -->
           <div class="flex-1 min-w-0">
             <div class="flex items-baseline gap-1.5 truncate">
               <span class="truncate text-[11.5px] font-medium text-[var(--color-text-primary)]">{s.customerName ?? '—'}</span>
@@ -263,12 +279,24 @@
                 <span class="text-mono flex-shrink-0 text-[9.5px] text-[var(--color-text-muted)]">{s.customerPhone}</span>
               {/if}
             </div>
-            {#if s.firstItemLabel}
+            {#if s.itemsAllLabels && s.itemsAllLabels.length > 0}
+              <div class="truncate text-[10.5px] text-[var(--color-text-tertiary)]">
+                {joinItems(s.itemsAllLabels)}
+              </div>
+            {:else if s.firstItemLabel}
               <div class="truncate text-[10.5px] text-[var(--color-text-tertiary)]">
                 {s.firstItemLabel}{#if s.itemsCount > 1}<span class="text-[var(--color-text-muted)]"> · +{s.itemsCount - 1} más</span>{/if}
               </div>
             {:else}
               <div class="text-[10px] text-[var(--color-text-muted)] italic">sin items</div>
+            {/if}
+            {#if s.shippingAddress}
+              {@const addr = parseAddress(s.shippingAddress)}
+              {#if addr && (addr.zone || addr.municipality)}
+                <div class="text-[9.5px] text-[var(--color-text-muted)] truncate">
+                  📍 {[addr.zone ? `Zona ${addr.zone}` : null, addr.municipality, addr.department].filter(Boolean).join(' · ')}
+                </div>
+              {/if}
             {/if}
           </div>
 
