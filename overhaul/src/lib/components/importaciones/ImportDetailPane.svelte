@@ -33,11 +33,17 @@
     alert('Registrar arrival viene en R1.x — flow: input arrived_at + shipping_gtq');
   }
 
-  function handleClose() {
+  async function handleClose() {
     if (!imp) return;
-    if (!confirm(`Cerrar batch ${imp.import_id}?\nEsto aplica prorrateo proporcional D2=B a ${items.length} items.`)) return;
-    // Implementar en Task 13
-    alert('Close batch viene en Task 13 (close_import_proportional)');
+    if (!confirm(`Cerrar batch ${imp.import_id}?\nProrrateo D2=B aplicado a ${items.length} items.`)) return;
+
+    try {
+      const res = await adapter.closeImportProportional(imp.import_id);
+      alert(`Batch cerrado · ${res.n_items_updated} sale_items + ${res.n_jerseys_updated} jerseys actualizados\nLanded total: Q${Math.round(res.total_landed_gtq)} · Avg/u: Q${Math.round(res.avg_unit_cost)}`);
+      onUpdated();
+    } catch (e) {
+      alert(`Error: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   function handleCancel() {

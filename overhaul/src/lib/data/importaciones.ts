@@ -52,6 +52,15 @@ export interface ImportPulso {
   free_units_unassigned: number;
 }
 
+export interface CloseImportResult {
+  ok: boolean;
+  n_items_updated: number;
+  n_jerseys_updated: number;
+  total_landed_gtq: number;
+  avg_unit_cost: number;
+  method: string;
+}
+
 export interface ImportFilter {
   status?: ImportStatus | 'pipeline' | 'all';   // 'pipeline' = paid+in_transit+arrived
   supplier?: string;

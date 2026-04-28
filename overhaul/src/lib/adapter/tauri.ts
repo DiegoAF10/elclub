@@ -29,7 +29,7 @@ import type {
 	WatermarkResult
 } from './types';
 import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, CreateOrderItem, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult, UpdateSaleArgs } from '../data/comercial';
-import type { Import, ImportItem, ImportPulso } from '../data/importaciones';
+import type { Import, ImportItem, ImportPulso, CloseImportResult } from '../data/importaciones';
 import type { Family } from '../data/types';
 import { transformFamily } from './transform';
 
@@ -524,5 +524,9 @@ export const tauriAdapter: Adapter = {
 
 	async getImportPulso(): Promise<ImportPulso> {
 		return invoke<ImportPulso>('cmd_get_import_pulso');
+	},
+
+	async closeImportProportional(import_id: string): Promise<CloseImportResult> {
+		return invoke<CloseImportResult>('cmd_close_import_proportional', { importId: import_id });
 	},
 };

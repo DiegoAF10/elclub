@@ -2604,6 +2604,119 @@ async fn cmd_get_import_pulso(_app: tauri::AppHandle) -> Result<ImportPulso> {
     })
 }
 
+// ─── Close import (destructive · transactional) ─────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct CloseImportResult {
+    pub ok: bool,
+    pub n_items_updated: usize,
+    pub n_jerseys_updated: usize,
+    pub total_landed_gtq: f64,
+    pub avg_unit_cost: f64,
+    pub method: &'static str,
+}
+
+#[tauri::command]
+async fn cmd_close_import_proportional(
+    _app: tauri::AppHandle,
+    import_id: String,
+) -> Result<CloseImportResult> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    // 1. Read import row + status check
+    let (bruto_usd, shipping_gtq, fx, status): (Option<f64>, Option<f64>, f64, String) = tx.query_row(
+        "SELECT bruto_usd, shipping_gtq, COALESCE(fx, 7.73), status FROM imports WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => ErpError::NotFound(format!("Import {}", import_id)),
+        other => other.into(),
+    })?;
+
+    if status == "closed" {
+        return Err(ErpError::Other(format!("Import {} ya está closed", import_id)));
+    }
+
+    let bruto = bruto_usd.ok_or_else(|| ErpError::Other("bruto_usd is null".into()))?;
+    let shipping = shipping_gtq.ok_or_else(|| ErpError::Other(
+        "shipping_gtq is null · necesita registrar arrival con DHL invoice antes de cerrar".into()
+    ))?;
+
+    let total_landed = bruto * fx + shipping;
+
+    // 2. Read all items (sale_items + jerseys) con sus unit_cost_usd
+    //    NOTE: sale_items PK is item_id (per Task 3 verification), not id
+    let sale_items: Vec<(i64, Option<f64>)> = tx.prepare(
+        "SELECT item_id, unit_cost_usd FROM sale_items WHERE import_id = ?1"
+    )?.query_map(rusqlite::params![&import_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+       .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    let jerseys: Vec<(i64, Option<f64>)> = tx.prepare(
+        "SELECT rowid, unit_cost_usd FROM jerseys WHERE import_id = ?1"
+    )?.query_map(rusqlite::params![&import_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+       .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    let n_total = sale_items.len() + jerseys.len();
+    if n_total == 0 {
+        return Err(ErpError::Other("No items linkeados a este import".into()));
+    }
+
+    // 3. Compute total USD (D2=B). Items con unit_cost_usd null → default uniforme = bruto/n
+    let usd_default = bruto / n_total as f64;
+    let total_usd_present: f64 = sale_items.iter().chain(jerseys.iter())
+        .map(|(_, usd)| usd.unwrap_or(usd_default)).sum();
+
+    // 4. Aplicar prorrateo proporcional al USD chino per item
+    for (id, usd_opt) in &sale_items {
+        let usd = usd_opt.unwrap_or(usd_default);
+        let landed_gtq = (usd / total_usd_present) * total_landed;
+        tx.execute(
+            "UPDATE sale_items SET unit_cost = ? WHERE item_id = ?",
+            rusqlite::params![landed_gtq.round() as i64, id],
+        )?;
+    }
+    for (rowid, usd_opt) in &jerseys {
+        let usd = usd_opt.unwrap_or(usd_default);
+        let landed_gtq = (usd / total_usd_present) * total_landed;
+        tx.execute(
+            "UPDATE jerseys SET cost = ? WHERE rowid = ?",
+            rusqlite::params![landed_gtq.round() as i64, rowid],
+        )?;
+    }
+
+    // 5. Update imports row: status, totals, lead time
+    let avg_unit = total_landed / n_total as f64;
+    let lead_time = tx.query_row(
+        "SELECT CAST((julianday(arrived_at) - julianday(paid_at)) AS INTEGER)
+         FROM imports WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+        |r| r.get::<_, Option<i64>>(0),
+    ).unwrap_or(None);
+
+    tx.execute(
+        "UPDATE imports SET
+            status = 'closed',
+            total_landed_gtq = ?,
+            n_units = ?,
+            unit_cost = ?,
+            lead_time_days = ?
+         WHERE import_id = ?",
+        rusqlite::params![total_landed, n_total as i64, avg_unit.round(), lead_time, import_id],
+    )?;
+
+    tx.commit()?;
+
+    Ok(CloseImportResult {
+        ok: true,
+        n_items_updated: sale_items.len(),
+        n_jerseys_updated: jerseys.len(),
+        total_landed_gtq: total_landed,
+        avg_unit_cost: avg_unit,
+        method: "D2=B (proportional by USD)",
+    })
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -2689,6 +2802,7 @@ pub fn run() {
             cmd_get_import,
             cmd_get_import_items,
             cmd_get_import_pulso,
+            cmd_close_import_proportional,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
