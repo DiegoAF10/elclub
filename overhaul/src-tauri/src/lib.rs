@@ -2728,6 +2728,18 @@ async fn cmd_close_import_proportional(
 }
 
 // ─── R1.5 Completion: Create / Register Arrival / Update / Cancel ────
+//
+// Convention for IMP-R1.5 commands that need integration testing:
+//   pub async fn impl_X(...) — business logic, callable from tests/*.rs binaries
+//   #[tauri::command] async fn cmd_X(...) — thin shim, registered in invoke_handler!
+//
+// Why split: existing convention is `#[tauri::command] async fn` (private to crate).
+// Integration tests in tests/*.rs are separate binaries · need pub access.
+// The split keeps the registered command name (cmd_X) aligned with adapter contract.
+//
+// Tasks 3 (cmd_register_arrival), 4 (cmd_update_import), 5 (cmd_cancel_import)
+// will reuse this pattern. Tasks 6 (cmd_export_imports_csv) does NOT need impl_X
+// split because it has no integration test (smoke-only via SQL script).
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -2770,6 +2782,12 @@ pub async fn impl_create_import(input: CreateImportInput) -> Result<Import> {
             input.n_units
         )));
     }
+    if chrono::NaiveDate::parse_from_str(&input.paid_at, "%Y-%m-%d").is_err() {
+        return Err(ErpError::Other(format!(
+            "paid_at format inválido: '{}' · esperado YYYY-MM-DD",
+            input.paid_at
+        )));
+    }
 
     let mut conn = open_db()?;
     let tx = conn.transaction()?;
@@ -2781,6 +2799,7 @@ pub async fn impl_create_import(input: CreateImportInput) -> Result<Import> {
         |row| row.get::<_, i64>(0).map(|n| n != 0),
     )?;
     if exists {
+        tx.rollback()?;
         return Err(ErpError::Other(format!(
             "Import {} already exists",
             input.import_id

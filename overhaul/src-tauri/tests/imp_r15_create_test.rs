@@ -129,3 +129,26 @@ async fn test_create_import_negative_bruto_rejected() {
     assert!(result.is_err());
     assert!(format!("{:?}", result.unwrap_err()).contains("bruto_usd"));
 }
+
+#[tokio::test]
+async fn test_create_import_invalid_paid_at_rejected() {
+    let _lock = DB_LOCK.lock().unwrap();
+    let _path = setup_temp_db("invalid_paid_at");
+    use el_club_erp_lib::*;
+
+    let input = CreateImportInput {
+        import_id: "IMP-2026-04-28".to_string(),
+        paid_at: "not-a-date".to_string(),
+        supplier: "Bond".to_string(),
+        bruto_usd: 100.0,
+        fx: 7.73,
+        n_units: 5,
+        notes: None,
+        tracking_code: None,
+        carrier: None,
+    };
+
+    let result = impl_create_import(input).await;
+    assert!(result.is_err());
+    assert!(format!("{:?}", result.unwrap_err()).contains("paid_at format"));
+}
