@@ -3076,6 +3076,59 @@ async fn cmd_cancel_import(import_id: String) -> Result<Import> {
     impl_cancel_import(import_id).await
 }
 
+#[tauri::command]
+async fn cmd_export_imports_csv() -> Result<String> {
+    let conn = open_db()?;
+    let mut stmt = conn.prepare(
+        "SELECT import_id, paid_at, arrived_at, supplier, bruto_usd, shipping_gtq,
+                fx, total_landed_gtq, n_units, unit_cost, status,
+                tracking_code, carrier, lead_time_days, notes, created_at
+         FROM imports ORDER BY paid_at IS NULL, paid_at DESC, created_at DESC"
+    )?;
+
+    let mut csv = String::from(
+        "import_id,paid_at,arrived_at,supplier,bruto_usd,shipping_gtq,fx,total_landed_gtq,n_units,unit_cost,status,tracking_code,carrier,lead_time_days,notes,created_at\n"
+    );
+
+    let rows = stmt.query_map([], |row| {
+        Ok(format!(
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            csv_escape(&row.get::<_, String>(0)?),
+            csv_escape(&row.get::<_, Option<String>>(1)?.unwrap_or_default()),
+            csv_escape(&row.get::<_, Option<String>>(2)?.unwrap_or_default()),
+            csv_escape(&row.get::<_, String>(3)?),
+            row.get::<_, Option<f64>>(4)?.map(|v| v.to_string()).unwrap_or_default(),
+            row.get::<_, Option<f64>>(5)?.map(|v| v.to_string()).unwrap_or_default(),
+            row.get::<_, Option<f64>>(6)?.map(|v| v.to_string()).unwrap_or_default(),
+            row.get::<_, Option<f64>>(7)?.map(|v| v.to_string()).unwrap_or_default(),
+            row.get::<_, Option<i64>>(8)?.map(|v| v.to_string()).unwrap_or_default(),
+            row.get::<_, Option<f64>>(9)?.map(|v| v.to_string()).unwrap_or_default(),
+            csv_escape(&row.get::<_, String>(10)?),
+            csv_escape(&row.get::<_, Option<String>>(11)?.unwrap_or_default()),
+            csv_escape(&row.get::<_, Option<String>>(12)?.unwrap_or_else(|| "DHL".into())),
+            row.get::<_, Option<i64>>(13)?.map(|v| v.to_string()).unwrap_or_default(),
+            csv_escape(&row.get::<_, Option<String>>(14)?.unwrap_or_default()),
+            csv_escape(&row.get::<_, String>(15)?),
+        ))
+    })?;
+
+    for row in rows {
+        csv.push_str(&row?);
+        csv.push('\n');
+    }
+
+    Ok(csv)
+}
+
+/// Escape a CSV cell · quotes the field if it contains commas, quotes, or newlines.
+fn csv_escape(s: &str) -> String {
+    if s.contains(',') || s.contains('"') || s.contains('\n') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
+
 // ─── Finanzas (FIN-R1) — structs ─────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -5616,6 +5669,7 @@ pub fn run() {
             cmd_register_arrival,
             cmd_update_import,
             cmd_cancel_import,
+            cmd_export_imports_csv,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
