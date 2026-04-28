@@ -376,5 +376,9 @@ export interface CatalogModeloRow {
 	[key: string]: unknown;
 }
 
+// ─── IMP-R1 ──────────────────────────────────────────────────────────
+export type { Import, ImportStatus, ImportItem, ImportPulso, ImportFilter } from '../data/importaciones';
+export { STATUS_LABELS as IMPORT_STATUS_LABELS, STATUS_PROGRESS as IMPORT_STATUS_PROGRESS } from '../data/importaciones';
+
 // Re-export para conveniencia
 export type { Family, Status };
