@@ -2431,13 +2431,14 @@ async fn comercial_replace_sale_items(args: ReplaceSaleItemsArgs) -> Result<Valu
 
 #[tauri::command]
 async fn cmd_list_imports(_app: tauri::AppHandle) -> Result<Vec<Import>> {
-    let conn = rusqlite::Connection::open(db_path())?;
+    let conn = open_db()?;
     let mut stmt = conn.prepare(
         "SELECT import_id, paid_at, arrived_at, supplier, bruto_usd, shipping_gtq,
                 COALESCE(fx, 7.73) as fx, total_landed_gtq, n_units, unit_cost,
                 status, notes, created_at,
                 tracking_code, COALESCE(carrier, 'DHL') as carrier, lead_time_days
          FROM imports
+         -- NULLs last via boolean trick, equivalent to NULLS LAST
          ORDER BY paid_at IS NULL, paid_at DESC, created_at DESC"
     )?;
 
@@ -2467,7 +2468,7 @@ async fn cmd_list_imports(_app: tauri::AppHandle) -> Result<Vec<Import>> {
 
 #[tauri::command]
 async fn cmd_get_import(_app: tauri::AppHandle, import_id: String) -> Result<Import> {
-    let conn = rusqlite::Connection::open(db_path())?;
+    let conn = open_db()?;
     let imp = conn.query_row(
         "SELECT import_id, paid_at, arrived_at, supplier, bruto_usd, shipping_gtq,
                 COALESCE(fx, 7.73), total_landed_gtq, n_units, unit_cost,
@@ -2502,8 +2503,10 @@ async fn cmd_get_import(_app: tauri::AppHandle, import_id: String) -> Result<Imp
 
 #[tauri::command]
 async fn cmd_get_import_items(_app: tauri::AppHandle, import_id: String) -> Result<Vec<ImportItem>> {
-    let conn = rusqlite::Connection::open(db_path())?;
+    let conn = open_db()?;
 
+    // TODO(IMP-R4): replace `is_free_unit` heuristic with JOIN against
+    // import_free_unit. Current heuristic flags ANY zero-cost item as free.
     let mut stmt = conn.prepare(
         "SELECT 'sale_items' as source_table, i.item_id as source_id, i.import_id,
                 i.family_id, i.jersey_id, i.size,
@@ -2526,7 +2529,8 @@ async fn cmd_get_import_items(_app: tauri::AppHandle, import_id: String) -> Resu
                 NULL as customer_id, NULL as customer_name,
                 0 as is_free_unit
          FROM jerseys j
-         WHERE j.import_id = ?1"
+         WHERE j.import_id = ?1
+         ORDER BY source_table, source_id"
     )?;
 
     let rows = stmt.query_map(rusqlite::params![import_id], |row| {
@@ -2554,7 +2558,7 @@ async fn cmd_get_import_items(_app: tauri::AppHandle, import_id: String) -> Resu
 
 #[tauri::command]
 async fn cmd_get_import_pulso(_app: tauri::AppHandle) -> Result<ImportPulso> {
-    let conn = rusqlite::Connection::open(db_path())?;
+    let conn = open_db()?;
 
     let capital: f64 = conn.query_row(
         "SELECT COALESCE(SUM(total_landed_gtq), 0) FROM imports
