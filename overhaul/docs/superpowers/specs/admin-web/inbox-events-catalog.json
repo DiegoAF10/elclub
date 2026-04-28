@@ -1,0 +1,557 @@
+{
+  "_meta": {
+    "description": "Catálogo completo de eventos del Inbox del Home. Cada evento tiene su detector (query SQL), severity, auto-dismiss rule, y action target. T6 del plan R7 implementa el cron que ejecuta detect_event() para cada uno.",
+    "version": "v0",
+    "created": "2026-04-26",
+    "total_events": 36,
+    "auto_dismiss_rules": {
+      "critical": "persiste hasta resolverse (query no detecta más)",
+      "important": "persiste 7 días, después auto-degrada a info",
+      "info": "persiste 3 días, después auto-dismiss"
+    }
+  },
+
+  "events": [
+
+    {
+      "type": "queue_pending",
+      "module": "vault",
+      "severity": "critical",
+      "title_template": "{count} jerseys esperando audit",
+      "description_template": "Queue acumulado · más antiguo lleva {oldest_hours}h",
+      "action_label": "QUEUE",
+      "action_target": "/admin-web/vault/queue",
+      "detector_sql": "SELECT COUNT(*) as count, MAX((unixepoch() - created_at) / 3600) as oldest_hours FROM audit_decisions WHERE status='pending' GROUP BY status HAVING count > 0",
+      "trigger_threshold": "count > 0",
+      "auto_resolve": "count == 0",
+      "frequency_check": "hourly",
+      "metadata_fields": ["count", "oldest_hours"]
+    },
+
+    {
+      "type": "dirty_detected",
+      "module": "vault",
+      "severity": "critical",
+      "title_template": "{count} publicados con foto rota",
+      "description_template": "Detectado en últimas {hours}h · CDN sirviendo stale",
+      "action_label": "REVISAR",
+      "action_target": "/admin-web/vault/publicados?filter=attention",
+      "detector_sql": "SELECT COUNT(*) as count FROM audit_decisions WHERE dirty_flag=1 AND archived_at IS NULL",
+      "trigger_threshold": "count > 0",
+      "auto_resolve": "count == 0",
+      "frequency_check": "every_4h",
+      "metadata_fields": ["count", "hours"]
+    },
+
+    {
+      "type": "orphan_drafts",
+      "module": "vault",
+      "severity": "important",
+      "title_template": "{count} parseadas pero sin fetch",
+      "description_template": "DRAFT sin scrap_fail — gallery vacía, ¿re-fetch?",
+      "action_label": "VER",
+      "action_target": "/admin-web/vault/universo?filter[states][]=DRAFT&filter[scrap_fail]=false",
+      "detector_sql": "SELECT COUNT(*) as count FROM v_jersey_state WHERE state='DRAFT' AND family_id NOT IN (SELECT family_id FROM audit_decisions WHERE dirty_reason='scrap_fail')",
+      "trigger_threshold": "count >= 5",
+      "auto_resolve": "count == 0",
+      "frequency_check": "daily",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "scrap_fail",
+      "module": "vault",
+      "severity": "important",
+      "title_template": "{count} scraped fallidos, re-scrap",
+      "description_template": "Firecrawl o pipeline falló silenciosamente · L21 del playbook",
+      "action_label": "RE-SCRAP",
+      "action_target": "/admin-web/sistema/operaciones",
+      "detector_sql": "SELECT COUNT(*) as count FROM audit_decisions WHERE dirty_reason='scrap_fail' AND archived_at IS NULL",
+      "trigger_threshold": "count > 0",
+      "auto_resolve": "count == 0",
+      "frequency_check": "hourly",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "archived_old",
+      "module": "vault",
+      "severity": "info",
+      "title_template": "{count} archivadas viejas, ¿purgar?",
+      "description_template": "Archivadas hace > 30 días sin tocar",
+      "action_label": "VER",
+      "action_target": "/admin-web/vault/universo?filter[states][]=ARCHIVED",
+      "detector_sql": "SELECT COUNT(*) as count FROM audit_decisions WHERE archived_at IS NOT NULL AND archived_at < (unixepoch() - 30*86400)",
+      "trigger_threshold": "count >= 10",
+      "auto_resolve": "count == 0",
+      "frequency_check": "weekly",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "supplier_gap_new",
+      "module": "vault",
+      "severity": "important",
+      "title_template": "{count} sin disponibilidad detectados",
+      "description_template": "Países/equipos que el proveedor no maneja · L12 del playbook",
+      "action_label": "VER",
+      "action_target": "/admin-web/vault/universo?filter[supplier_gap]=true",
+      "detector_sql": "SELECT COUNT(*) as count FROM audit_decisions WHERE supplier_gap=1 AND created_at > (unixepoch() - 7*86400)",
+      "trigger_threshold": "count > 0",
+      "auto_resolve": "count == 0",
+      "frequency_check": "weekly",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "no_tag_era",
+      "module": "vault",
+      "severity": "info",
+      "title_template": "{count} publicados sin tag de Era",
+      "description_template": "Gap de curaduría · clasificación por década",
+      "action_label": "TAG",
+      "action_target": "/admin-web/vault/universo?filter[no_tag_type]=era",
+      "detector_sql": "SELECT COUNT(*) as count FROM v_jersey_state vs WHERE state='PUBLISHED' AND family_id NOT IN (SELECT jt.family_id FROM jersey_tags jt JOIN tags t ON jt.tag_id=t.id JOIN tag_types tt ON t.type_id=tt.id WHERE tt.slug='era')",
+      "trigger_threshold": "count >= 5",
+      "auto_resolve": "count == 0",
+      "frequency_check": "weekly",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "no_tag_geography",
+      "module": "vault",
+      "severity": "info",
+      "title_template": "{count} publicados sin tag de Geografía",
+      "description_template": "Falta clasificación regional",
+      "action_label": "TAG",
+      "action_target": "/admin-web/vault/universo?filter[no_tag_type]=geografia_region",
+      "detector_sql": "SELECT COUNT(*) as count FROM v_jersey_state vs WHERE state='PUBLISHED' AND family_id NOT IN (SELECT jt.family_id FROM jersey_tags jt JOIN tags t ON jt.tag_id=t.id JOIN tag_types tt ON t.type_id=tt.id WHERE tt.slug='geografia_region')",
+      "trigger_threshold": "count >= 5",
+      "auto_resolve": "count == 0",
+      "frequency_check": "weekly",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "stock_drop_starting_24h",
+      "module": "stock",
+      "severity": "important",
+      "title_template": "{count} drops Stock entran mañana",
+      "description_template": "Drops programados en próximas 24h · {drop_names}",
+      "action_label": "DROP",
+      "action_target": "/admin-web/stock/calendario",
+      "detector_sql": "SELECT COUNT(*) as count, GROUP_CONCAT(DISTINCT family_id) as drop_names FROM v_stock_status WHERE computed_status='scheduled' AND publish_at <= (unixepoch() + 86400) AND publish_at > unixepoch()",
+      "trigger_threshold": "count > 0",
+      "auto_resolve": "ningún drop scheduled próximas 24h",
+      "frequency_check": "every_2h",
+      "metadata_fields": ["count", "drop_names"]
+    },
+
+    {
+      "type": "stock_drop_ending_24h",
+      "module": "stock",
+      "severity": "important",
+      "title_template": "{count} drops Stock terminan mañana",
+      "description_template": "Drops LIVE expiran en próximas 24h",
+      "action_label": "EXTENDER",
+      "action_target": "/admin-web/stock/drops?filter=ending_soon",
+      "detector_sql": "SELECT COUNT(*) as count FROM v_stock_status WHERE computed_status='live' AND unpublish_at IS NOT NULL AND unpublish_at <= (unixepoch() + 86400)",
+      "trigger_threshold": "count > 0",
+      "auto_resolve": "count == 0",
+      "frequency_check": "every_2h",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "stock_override_no_publish_at",
+      "module": "stock",
+      "severity": "info",
+      "title_template": "{count} overrides en draft sin programar",
+      "description_template": "Stock overrides creados sin publish_at > 7 días",
+      "action_label": "REVISAR",
+      "action_target": "/admin-web/stock/drops?filter=DRAFT",
+      "detector_sql": "SELECT COUNT(*) as count FROM stock_overrides WHERE publish_at IS NULL AND created_at < (unixepoch() - 7*86400)",
+      "trigger_threshold": "count > 0",
+      "auto_resolve": "count == 0",
+      "frequency_check": "weekly",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "stock_drop_old_no_update",
+      "module": "stock",
+      "severity": "info",
+      "title_template": "{count} drops antiguos, ¿revisar?",
+      "description_template": "Drops activos > 90 días sin update",
+      "action_label": "VER",
+      "action_target": "/admin-web/stock/universo?filter=old_active",
+      "detector_sql": "SELECT COUNT(*) as count FROM v_stock_status WHERE computed_status='live' AND publish_at < (unixepoch() - 90*86400) AND updated_at < (unixepoch() - 90*86400)",
+      "trigger_threshold": "count > 0",
+      "auto_resolve": "count == 0",
+      "frequency_check": "monthly",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "mystery_pool_low",
+      "module": "mystery",
+      "severity": "important",
+      "title_template": "Pool Mystery bajo · {count} elegibles",
+      "description_template": "Considerá agregar más jerseys al pool · sustainable threshold 20+",
+      "action_label": "POOL",
+      "action_target": "/admin-web/mystery/pool",
+      "detector_sql": "SELECT COUNT(*) as count FROM v_mystery_status WHERE computed_status='live'",
+      "trigger_threshold": "count < 20",
+      "auto_resolve": "count >= 20",
+      "frequency_check": "every_4h",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "mystery_pool_empty",
+      "module": "mystery",
+      "severity": "critical",
+      "title_template": "Pool vacío, Mystery no opera",
+      "description_template": "0 jerseys elegibles bajo reglas actuales · revisá reglas o agregá jerseys",
+      "action_label": "URGENT",
+      "action_target": "/admin-web/mystery/pool",
+      "detector_sql": "SELECT COUNT(*) as count FROM v_mystery_status WHERE computed_status='live'",
+      "trigger_threshold": "count == 0",
+      "auto_resolve": "count > 0",
+      "frequency_check": "every_30min",
+      "metadata_fields": []
+    },
+
+    {
+      "type": "mystery_drop_starting_24h",
+      "module": "mystery",
+      "severity": "important",
+      "title_template": "Drop temático Mystery mañana",
+      "description_template": "{drop_name} · {family_count} jerseys · publish_at {publish_at}",
+      "action_label": "VER",
+      "action_target": "/admin-web/mystery/calendario",
+      "detector_sql": "SELECT slug as drop_name, json_array_length(family_ids) as family_count, publish_at FROM thematic_drops WHERE publish_at <= (unixepoch() + 86400) AND publish_at > unixepoch()",
+      "trigger_threshold": "rows >= 1",
+      "auto_resolve": "ningún thematic drop próximas 24h",
+      "frequency_check": "every_2h",
+      "metadata_fields": ["drop_name", "family_count", "publish_at"]
+    },
+
+    {
+      "type": "mystery_drop_ending_24h",
+      "module": "mystery",
+      "severity": "important",
+      "title_template": "Drop temático Mystery termina mañana",
+      "description_template": "{drop_name} · expira {unpublish_at}",
+      "action_label": "EXTENDER",
+      "action_target": "/admin-web/mystery/calendario",
+      "detector_sql": "SELECT slug as drop_name, unpublish_at FROM thematic_drops WHERE unpublish_at IS NOT NULL AND unpublish_at <= (unixepoch() + 86400) AND unpublish_at > unixepoch()",
+      "trigger_threshold": "rows >= 1",
+      "auto_resolve": "ningún drop ending soon",
+      "frequency_check": "every_2h",
+      "metadata_fields": ["drop_name", "unpublish_at"]
+    },
+
+    {
+      "type": "mystery_jersey_never_delivered",
+      "module": "mystery",
+      "severity": "info",
+      "title_template": "{count} jerseys nunca entregadas, ¿boost?",
+      "description_template": "En pool > 90 días sin recibir entrega · considerar weight×2 manual",
+      "action_label": "VER",
+      "action_target": "/admin-web/mystery/universo?filter=never_delivered",
+      "detector_sql": "SELECT COUNT(*) as count FROM v_mystery_status mo WHERE computed_status='live' AND mo.created_at < (unixepoch() - 90*86400) AND family_id NOT IN (SELECT DISTINCT family_id FROM mystery_deliveries)",
+      "trigger_threshold": "count > 0",
+      "auto_resolve": "count == 0",
+      "frequency_check": "weekly",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "branding_changed",
+      "module": "site",
+      "severity": "info",
+      "title_template": "Branding cambió hace {hours}h",
+      "description_template": "Diego tiene un preview pendiente de aplicar",
+      "action_label": "PREVIEW",
+      "action_target": "/admin-web/site/branding",
+      "detector_sql": "SELECT (unixepoch() - MAX(updated_at)) / 3600 as hours FROM site_branding WHERE updated_at > (unixepoch() - 24*3600)",
+      "trigger_threshold": "rows >= 1 AND no apply yet",
+      "auto_resolve": "after apply",
+      "frequency_check": "every_2h",
+      "metadata_fields": ["hours"]
+    },
+
+    {
+      "type": "banner_expires_24h",
+      "module": "site",
+      "severity": "important",
+      "title_template": "Banner '{name}' expira mañana",
+      "description_template": "unpublish_at {unpublish_at}",
+      "action_label": "EXTENDER",
+      "action_target": "/admin-web/site/componentes",
+      "detector_sql": "SELECT type, json_extract(config, '$.message') as name, unpublish_at FROM site_components WHERE type='banner_top' AND enabled=1 AND unpublish_at IS NOT NULL AND unpublish_at <= (unixepoch() + 86400)",
+      "trigger_threshold": "rows >= 1",
+      "auto_resolve": "expired or extended",
+      "frequency_check": "every_2h",
+      "metadata_fields": ["name", "unpublish_at"]
+    },
+
+    {
+      "type": "page_draft_stale",
+      "module": "site",
+      "severity": "info",
+      "title_template": "Página '{title}' en draft hace {days}d",
+      "description_template": "Sin tocar > 7 días · ¿publicar o archivar?",
+      "action_label": "REVISAR",
+      "action_target": "/admin-web/site/paginas",
+      "detector_sql": "SELECT title, (unixepoch() - updated_at) / 86400 as days FROM site_pages WHERE status='draft' AND updated_at < (unixepoch() - 7*86400)",
+      "trigger_threshold": "rows >= 1",
+      "auto_resolve": "page status changed",
+      "frequency_check": "weekly",
+      "metadata_fields": ["title", "days"]
+    },
+
+    {
+      "type": "404_spike",
+      "module": "site",
+      "severity": "important",
+      "title_template": "{count} 404s nuevos esta semana",
+      "description_template": "URLs no encontradas · revisar logs del worker",
+      "action_label": "REVISAR",
+      "action_target": "/admin-web/sistema/status",
+      "detector_sql": "(viene del worker — query a logs analytics)",
+      "trigger_threshold": "count >= 50 in 7d",
+      "auto_resolve": "count drops below threshold",
+      "frequency_check": "daily",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "reviews_pending_moderation",
+      "module": "site",
+      "severity": "important",
+      "title_template": "{count} reviews esperando moderación",
+      "description_template": "Pending hace > {oldest_days}d",
+      "action_label": "MODERAR",
+      "action_target": "/admin-web/site/comunidad",
+      "detector_sql": "SELECT COUNT(*) as count, MAX((unixepoch() - submitted_at) / 86400) as oldest_days FROM reviews WHERE status='pending'",
+      "trigger_threshold": "count >= 5",
+      "auto_resolve": "count == 0",
+      "frequency_check": "daily",
+      "metadata_fields": ["count", "oldest_days"]
+    },
+
+    {
+      "type": "ab_test_significant",
+      "module": "site",
+      "severity": "info",
+      "title_template": "Variante B ganó +{lift}%",
+      "description_template": "A/B test '{name}' alcanzó significancia · ¿aplicar?",
+      "action_label": "APLICAR",
+      "action_target": "/admin-web/site/meta-tracking",
+      "detector_sql": "(viene de A/B testing engine — futuro)",
+      "trigger_threshold": "p < 0.05 AND sample > 1000",
+      "auto_resolve": "decision made",
+      "frequency_check": "daily",
+      "metadata_fields": ["name", "lift"]
+    },
+
+    {
+      "type": "email_workflow_failed",
+      "module": "site",
+      "severity": "important",
+      "title_template": "Workflow '{name}' falló para {count} users",
+      "description_template": "Welcome series error · revisar logs Resend",
+      "action_label": "LOGS",
+      "action_target": "/admin-web/sistema/operaciones",
+      "detector_sql": "(viene de logs Resend — futuro)",
+      "trigger_threshold": "count >= 3",
+      "auto_resolve": "count == 0 last 24h",
+      "frequency_check": "every_4h",
+      "metadata_fields": ["name", "count"]
+    },
+
+    {
+      "type": "nps_dropped",
+      "module": "site",
+      "severity": "important",
+      "title_template": "NPS bajó {points}pts esta semana",
+      "description_template": "Score actual: {score}, vs anterior: {prev_score}",
+      "action_label": "VER",
+      "action_target": "/admin-web/site/comunidad",
+      "detector_sql": "(calcular NPS de survey_responses tipo nps_quarterly)",
+      "trigger_threshold": "drop >= 10pts",
+      "auto_resolve": "score recovered",
+      "frequency_check": "weekly",
+      "metadata_fields": ["points", "score", "prev_score"]
+    },
+
+    {
+      "type": "contact_form_unanswered",
+      "module": "site",
+      "severity": "important",
+      "title_template": "{count} mensajes inbound sin contestar",
+      "description_template": "Contact form > 48h sin respuesta",
+      "action_label": "VER",
+      "action_target": "/admin-web/site/comunidad",
+      "detector_sql": "SELECT COUNT(*) as count FROM survey_responses WHERE survey_id=(contact_form_id) AND submitted_at < (unixepoch() - 48*3600) AND id NOT IN (SELECT response_id FROM responses_actioned)",
+      "trigger_threshold": "count >= 3",
+      "auto_resolve": "all answered",
+      "frequency_check": "every_4h",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "seo_keywords_lost",
+      "module": "site",
+      "severity": "info",
+      "title_template": "{page} perdió {count} keywords top",
+      "description_template": "Salida de top 10 en Google · revisar contenido",
+      "action_label": "VER",
+      "action_target": "/admin-web/site/meta-tracking",
+      "detector_sql": "(viene de GSC API — futuro)",
+      "trigger_threshold": "count >= 3 lost",
+      "auto_resolve": "keywords recovered",
+      "frequency_check": "weekly",
+      "metadata_fields": ["page", "count"]
+    },
+
+    {
+      "type": "accessibility_issue",
+      "module": "site",
+      "severity": "info",
+      "title_template": "{count} imágenes sin alt text",
+      "description_template": "Accessibility scan detectó issues · WCAG compliance",
+      "action_label": "FIX",
+      "action_target": "/admin-web/site/meta-tracking",
+      "detector_sql": "(scanner futuro)",
+      "trigger_threshold": "count >= 5",
+      "auto_resolve": "count == 0",
+      "frequency_check": "weekly",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "campaign_landing_expires",
+      "module": "site",
+      "severity": "important",
+      "title_template": "Landing /{slug} expira en 24h",
+      "description_template": "Campaign page programada para unpublish",
+      "action_label": "EXTENDER",
+      "action_target": "/admin-web/site/paginas",
+      "detector_sql": "SELECT slug FROM site_pages WHERE category='campaign' AND status='live' AND publish_at IS NOT NULL AND publish_at <= (unixepoch() + 86400)",
+      "trigger_threshold": "rows >= 1",
+      "auto_resolve": "expired or extended",
+      "frequency_check": "every_4h",
+      "metadata_fields": ["slug"]
+    },
+
+    {
+      "type": "new_subscribers",
+      "module": "site",
+      "severity": "info",
+      "title_template": "+{count} suscriptores newsletter",
+      "description_template": "Esta semana · oportunidad para enviar campaign",
+      "action_label": "VER",
+      "action_target": "/admin-web/site/comunicacion",
+      "detector_sql": "SELECT COUNT(*) as count FROM subscribers WHERE subscribed_at > (unixepoch() - 7*86400)",
+      "trigger_threshold": "count >= 20",
+      "auto_resolve": "auto-dismiss after 7 days",
+      "frequency_check": "weekly",
+      "metadata_fields": ["count"]
+    },
+
+    {
+      "type": "worker_error_rate_high",
+      "module": "sistema",
+      "severity": "critical",
+      "title_template": "Worker errores subieron a {pct}%",
+      "description_template": "Error rate > 1% · revisar logs",
+      "action_label": "LOGS",
+      "action_target": "/admin-web/sistema/status",
+      "detector_sql": "(viene de health_snapshots)",
+      "trigger_threshold": "error_rate > 0.01",
+      "auto_resolve": "error_rate < 0.005",
+      "frequency_check": "every_15min",
+      "metadata_fields": ["pct"]
+    },
+
+    {
+      "type": "firecrawl_credits_low",
+      "module": "sistema",
+      "severity": "critical",
+      "title_template": "Firecrawl casi sin créditos · {remaining}",
+      "description_template": "Plan al {pct}% · scrap pipeline en riesgo",
+      "action_label": "RECARGAR",
+      "action_target": "/admin-web/sistema/configuracion",
+      "detector_sql": "(viene de health_snapshots.firecrawl_credits_remaining)",
+      "trigger_threshold": "remaining < (total * 0.1)",
+      "auto_resolve": "remaining > (total * 0.2)",
+      "frequency_check": "daily",
+      "metadata_fields": ["remaining", "pct"]
+    },
+
+    {
+      "type": "last_backup_old",
+      "module": "sistema",
+      "severity": "critical",
+      "title_template": "Último backup hace {days}d, ¿forzar?",
+      "description_template": "Backup automático no corrió · riesgo de pérdida data",
+      "action_label": "BACKUP YA",
+      "action_target": "/admin-web/sistema/operaciones",
+      "detector_sql": "SELECT (unixepoch() - MAX(created_at)) / 86400 as days FROM backups WHERE type IN ('catalog', 'db', 'full')",
+      "trigger_threshold": "days > 7",
+      "auto_resolve": "fresh backup created",
+      "frequency_check": "daily",
+      "metadata_fields": ["days"]
+    },
+
+    {
+      "type": "deploy_failed",
+      "module": "sistema",
+      "severity": "critical",
+      "title_template": "Deploy {target} v{version} falló",
+      "description_template": "Hace {hours}h · rollback disponible",
+      "action_label": "ROLLBACK",
+      "action_target": "/admin-web/sistema/operaciones",
+      "detector_sql": "SELECT target, version, (unixepoch() - finished_at) / 3600 as hours FROM deploy_history WHERE status='failed' AND finished_at > (unixepoch() - 24*3600) ORDER BY finished_at DESC LIMIT 1",
+      "trigger_threshold": "rows >= 1",
+      "auto_resolve": "successful deploy after",
+      "frequency_check": "every_30min",
+      "metadata_fields": ["target", "version", "hours"]
+    },
+
+    {
+      "type": "cron_job_failed",
+      "module": "sistema",
+      "severity": "important",
+      "title_template": "Job '{name}' falló {count} veces seguidas",
+      "description_template": "Última error: {last_error}",
+      "action_label": "REVISAR",
+      "action_target": "/admin-web/sistema/operaciones",
+      "detector_sql": "SELECT slug as name, last_error FROM scheduled_jobs WHERE last_status='failed' AND enabled=1",
+      "trigger_threshold": "count >= 3 consecutive failures",
+      "auto_resolve": "successful run",
+      "frequency_check": "hourly",
+      "metadata_fields": ["name", "count", "last_error"]
+    },
+
+    {
+      "type": "r2_storage_high",
+      "module": "sistema",
+      "severity": "important",
+      "title_template": "R2 al {pct}%, considerar cleanup",
+      "description_template": "Storage usage > 80% del plan · purge ARCHIVED viejos",
+      "action_label": "CLEANUP",
+      "action_target": "/admin-web/sistema/operaciones",
+      "detector_sql": "(viene de health_snapshots.r2_storage_pct)",
+      "trigger_threshold": "pct > 0.8",
+      "auto_resolve": "pct < 0.7",
+      "frequency_check": "daily",
+      "metadata_fields": ["pct"]
+    }
+
+  ]
+}

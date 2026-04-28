@@ -1,0 +1,298 @@
+{
+  "_meta": {
+    "description": "Seed completo de tag_types + tags para Admin Web. Aplicar después de schema-migration.sql.",
+    "version": "v0",
+    "created": "2026-04-26",
+    "instructions": "Cargar como JSON, iterar tag_types primero, luego tags por type_slug. SQL INSERTs en una transacción.",
+    "totals": {
+      "tag_types": 11,
+      "tags": 110
+    }
+  },
+
+  "tag_types": [
+    {
+      "slug": "competicion",
+      "display_name": "Competición",
+      "icon": "🏆",
+      "cardinality": "many",
+      "display_order": 1,
+      "description": "Torneos en los que participa el equipo. Una jersey puede pertenecer a múltiples competiciones."
+    },
+    {
+      "slug": "geografia_region",
+      "display_name": "Geografía Región",
+      "icon": "🌎",
+      "cardinality": "one",
+      "display_order": 2,
+      "description": "Región geográfica del equipo. Excluyente: una jersey vive en una sola región."
+    },
+    {
+      "slug": "pais",
+      "display_name": "País",
+      "icon": "🌍",
+      "cardinality": "one",
+      "display_order": 3,
+      "description": "País del equipo. Sincronizado bidireccional con campo `meta_country` del catalog.json."
+    },
+    {
+      "slug": "liga",
+      "display_name": "Liga",
+      "icon": "⚽",
+      "cardinality": "one",
+      "display_order": 4,
+      "conditional_rule": {
+        "applies_when": { "tag_type": "tipo_equipo", "tag_slug": "club_pro" }
+      },
+      "description": "Liga del club. Solo aplica a clubes profesionales (no selecciones)."
+    },
+    {
+      "slug": "era",
+      "display_name": "Era",
+      "icon": "🕰",
+      "cardinality": "one",
+      "display_order": 5,
+      "description": "Década en la que se produjo la jersey."
+    },
+    {
+      "slug": "tipo_equipo",
+      "display_name": "Tipo de Equipo",
+      "icon": "🏟",
+      "cardinality": "one",
+      "display_order": 6,
+      "description": "Naturaleza del equipo: selección nacional, club profesional, etc."
+    },
+    {
+      "slug": "variant_edicion",
+      "display_name": "Variant Edición",
+      "icon": "👕",
+      "cardinality": "many",
+      "display_order": 7,
+      "description": "Características especiales de la edición. Una jersey puede ser conmemorativa Y limited edition simultáneamente."
+    },
+    {
+      "slug": "comercial",
+      "display_name": "Comercial",
+      "icon": "🎯",
+      "cardinality": "many",
+      "display_order": 8,
+      "description": "Tags comerciales/marketing. Algunos auto-derivados (Top Sellers, Bestseller del Mes)."
+    },
+    {
+      "slug": "paleta_principal",
+      "display_name": "Paleta Principal",
+      "icon": "🎨",
+      "cardinality": "one",
+      "display_order": 9,
+      "description": "Color dominante de la jersey. Útil para filtros visuales en Vault público."
+    },
+    {
+      "slug": "narrativa_cultural",
+      "display_name": "Narrativa Cultural",
+      "icon": "⭐",
+      "cardinality": "many",
+      "display_order": 10,
+      "description": "Era cultural / momentos icónicos asociados. Power user feature para storytelling."
+    },
+    {
+      "slug": "marca_tecnica",
+      "display_name": "Marca Técnica",
+      "icon": "🏭",
+      "cardinality": "one",
+      "display_order": 11,
+      "description": "Fabricante de la jersey (Adidas, Nike, etc.)."
+    }
+  ],
+
+  "tags": [
+    {
+      "_section": "🏆 COMPETICIÓN (~16 tags)",
+      "type_slug": "competicion",
+      "tags": [
+        { "slug": "mundial-2026", "display_name": "Mundial 2026", "icon": "⚽" },
+        { "slug": "mundial-2022", "display_name": "Mundial 2022", "icon": "⚽" },
+        { "slug": "mundial-2018", "display_name": "Mundial 2018", "icon": "⚽" },
+        { "slug": "champions-league", "display_name": "Champions League", "icon": "🏆", "color": "#1e3a8a" },
+        { "slug": "europa-league", "display_name": "Europa League", "icon": "🏆", "color": "#ea580c" },
+        { "slug": "eurocopa-2024", "display_name": "Eurocopa 2024", "icon": "🏆" },
+        { "slug": "copa-america-2024", "display_name": "Copa América 2024", "icon": "🏆" },
+        { "slug": "copa-america-2025", "display_name": "Copa América 2025 (Centenario)", "icon": "🏆" },
+        { "slug": "copa-libertadores", "display_name": "Copa Libertadores", "icon": "🏆", "color": "#dc2626" },
+        { "slug": "copa-sudamericana", "display_name": "Copa Sudamericana", "icon": "🏆" },
+        { "slug": "concacaf-gold-cup", "display_name": "Concacaf Gold Cup", "icon": "🏆" },
+        { "slug": "concacaf-champions-cup", "display_name": "Concacaf Champions Cup", "icon": "🏆" },
+        { "slug": "afcon", "display_name": "AFCON (Africa Cup of Nations)", "icon": "🏆" },
+        { "slug": "asia-cup", "display_name": "Copa Asia", "icon": "🏆" },
+        { "slug": "supercopa-europa", "display_name": "Supercopa de Europa", "icon": "🏆" },
+        { "slug": "mls-all-star", "display_name": "MLS All-Star", "icon": "⭐" }
+      ]
+    },
+    {
+      "_section": "🌎 GEOGRAFÍA REGIÓN (9 tags)",
+      "type_slug": "geografia_region",
+      "tags": [
+        { "slug": "sudamerica", "display_name": "Sudamérica", "icon": "🌎" },
+        { "slug": "norteamerica", "display_name": "Norteamérica", "icon": "🌎" },
+        { "slug": "centroamerica", "display_name": "Centroamérica", "icon": "🌎" },
+        { "slug": "caribe", "display_name": "Caribe", "icon": "🌴" },
+        { "slug": "europa", "display_name": "Europa", "icon": "🌍" },
+        { "slug": "africa", "display_name": "África", "icon": "🌍" },
+        { "slug": "asia", "display_name": "Asia", "icon": "🌏" },
+        { "slug": "oceania", "display_name": "Oceanía", "icon": "🌏" },
+        { "slug": "medio-oriente", "display_name": "Medio Oriente", "icon": "🌍" }
+      ]
+    },
+    {
+      "_section": "🌍 PAÍS (~30 tags — los del Mundial 2026 + grandes ligas)",
+      "_note": "Sincronización bidireccional con catalog.json:meta_country. Lista pre-poblada con teams comunes; Diego agrega más on-demand.",
+      "type_slug": "pais",
+      "tags": [
+        { "slug": "argentina", "display_name": "Argentina", "icon": "🇦🇷" },
+        { "slug": "brasil", "display_name": "Brasil", "icon": "🇧🇷" },
+        { "slug": "uruguay", "display_name": "Uruguay", "icon": "🇺🇾" },
+        { "slug": "colombia", "display_name": "Colombia", "icon": "🇨🇴" },
+        { "slug": "chile", "display_name": "Chile", "icon": "🇨🇱" },
+        { "slug": "peru", "display_name": "Perú", "icon": "🇵🇪" },
+        { "slug": "ecuador", "display_name": "Ecuador", "icon": "🇪🇨" },
+        { "slug": "paraguay", "display_name": "Paraguay", "icon": "🇵🇾" },
+        { "slug": "venezuela", "display_name": "Venezuela", "icon": "🇻🇪" },
+        { "slug": "bolivia", "display_name": "Bolivia", "icon": "🇧🇴" },
+        { "slug": "mexico", "display_name": "México", "icon": "🇲🇽" },
+        { "slug": "estados-unidos", "display_name": "Estados Unidos", "icon": "🇺🇸" },
+        { "slug": "canada", "display_name": "Canadá", "icon": "🇨🇦" },
+        { "slug": "guatemala", "display_name": "Guatemala", "icon": "🇬🇹" },
+        { "slug": "honduras", "display_name": "Honduras", "icon": "🇭🇳" },
+        { "slug": "costa-rica", "display_name": "Costa Rica", "icon": "🇨🇷" },
+        { "slug": "panama", "display_name": "Panamá", "icon": "🇵🇦" },
+        { "slug": "el-salvador", "display_name": "El Salvador", "icon": "🇸🇻" },
+        { "slug": "espana", "display_name": "España", "icon": "🇪🇸" },
+        { "slug": "italia", "display_name": "Italia", "icon": "🇮🇹" },
+        { "slug": "alemania", "display_name": "Alemania", "icon": "🇩🇪" },
+        { "slug": "francia", "display_name": "Francia", "icon": "🇫🇷" },
+        { "slug": "inglaterra", "display_name": "Inglaterra", "icon": "🏴󠁧󠁢󠁥󠁮󠁧󠁿" },
+        { "slug": "portugal", "display_name": "Portugal", "icon": "🇵🇹" },
+        { "slug": "paises-bajos", "display_name": "Países Bajos", "icon": "🇳🇱" },
+        { "slug": "belgica", "display_name": "Bélgica", "icon": "🇧🇪" },
+        { "slug": "croacia", "display_name": "Croacia", "icon": "🇭🇷" },
+        { "slug": "turquia", "display_name": "Turquía", "icon": "🇹🇷" },
+        { "slug": "japon", "display_name": "Japón", "icon": "🇯🇵" },
+        { "slug": "corea-del-sur", "display_name": "Corea del Sur", "icon": "🇰🇷" }
+      ]
+    },
+    {
+      "_section": "⚽ LIGA (~10 tags — solo clubes pro)",
+      "type_slug": "liga",
+      "tags": [
+        { "slug": "premier-league", "display_name": "Premier League", "icon": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "color": "#3d195b" },
+        { "slug": "la-liga", "display_name": "La Liga", "icon": "🇪🇸" },
+        { "slug": "serie-a", "display_name": "Serie A", "icon": "🇮🇹", "color": "#008fd7" },
+        { "slug": "bundesliga", "display_name": "Bundesliga", "icon": "🇩🇪" },
+        { "slug": "ligue-1", "display_name": "Ligue 1", "icon": "🇫🇷" },
+        { "slug": "eredivisie", "display_name": "Eredivisie", "icon": "🇳🇱" },
+        { "slug": "primeira-liga", "display_name": "Primeira Liga (Portugal)", "icon": "🇵🇹" },
+        { "slug": "liga-mx", "display_name": "Liga MX", "icon": "🇲🇽" },
+        { "slug": "mls", "display_name": "Major League Soccer", "icon": "🇺🇸" },
+        { "slug": "super-lig", "display_name": "Süper Lig (Turquía)", "icon": "🇹🇷" }
+      ]
+    },
+    {
+      "_section": "🕰 ERA (7 tags)",
+      "type_slug": "era",
+      "tags": [
+        { "slug": "retros-60s", "display_name": "Retros 60s", "icon": "🕰" },
+        { "slug": "retros-70s", "display_name": "Retros 70s", "icon": "🕰" },
+        { "slug": "retros-80s", "display_name": "Retros 80s", "icon": "🕰" },
+        { "slug": "retros-90s", "display_name": "Retros 90s", "icon": "🕰" },
+        { "slug": "2000s", "display_name": "2000s", "icon": "📺" },
+        { "slug": "2010s", "display_name": "2010s", "icon": "📱" },
+        { "slug": "modernos", "display_name": "Modernos (2020+)", "icon": "🆕" }
+      ]
+    },
+    {
+      "_section": "🏟 TIPO DE EQUIPO (5 tags)",
+      "type_slug": "tipo_equipo",
+      "tags": [
+        { "slug": "seleccion-nacional", "display_name": "Selección Nacional", "icon": "🌍" },
+        { "slug": "club-pro", "display_name": "Club Profesional", "icon": "🏟" },
+        { "slug": "universitario", "display_name": "Universitario", "icon": "🎓" },
+        { "slug": "amateur", "display_name": "Amateur / Semipro", "icon": "⚽" },
+        { "slug": "femenino", "display_name": "Femenino", "icon": "👩‍🦰" }
+      ]
+    },
+    {
+      "_section": "👕 VARIANT EDICIÓN (7 tags)",
+      "type_slug": "variant_edicion",
+      "tags": [
+        { "slug": "conmemorativa", "display_name": "Conmemorativa", "icon": "🎖" },
+        { "slug": "edicion-limitada", "display_name": "Edición Limitada", "icon": "🔒" },
+        { "slug": "anniversary", "display_name": "Anniversary", "icon": "🎂" },
+        { "slug": "co-branded", "display_name": "Co-branded", "icon": "🤝" },
+        { "slug": "pre-match", "display_name": "Pre-match Worn", "icon": "🔥" },
+        { "slug": "worn-by-player", "display_name": "Worn-by-Player", "icon": "🌟" },
+        { "slug": "legacy", "display_name": "Legacy / Iconic", "icon": "👑" }
+      ]
+    },
+    {
+      "_section": "🎯 COMERCIAL (8 tags — algunos auto)",
+      "type_slug": "comercial",
+      "tags": [
+        { "slug": "top-sellers", "display_name": "Top Sellers", "icon": "💰", "is_auto_derived": true, "derivation_rule": { "type": "top_n_by_metric", "config": { "metric": "sales_30d", "n": 5 }, "refresh_interval": "daily" } },
+        { "slug": "featured", "display_name": "Featured", "icon": "🔥" },
+        { "slug": "drop-nuevo", "display_name": "Drop Nuevo", "icon": "🆕", "is_auto_derived": true, "derivation_rule": { "type": "recent_n_days", "config": { "days": 7 }, "refresh_interval": "daily" } },
+        { "slug": "restock", "display_name": "Restock", "icon": "🔄" },
+        { "slug": "limited-edition", "display_name": "Limited Edition", "icon": "🎁" },
+        { "slug": "exclusivo-vault", "display_name": "Exclusivo Vault", "icon": "💎" },
+        { "slug": "bestseller-mes", "display_name": "Bestseller del Mes", "icon": "🏅", "is_auto_derived": true, "derivation_rule": { "type": "top_n_by_metric", "config": { "metric": "sales_30d", "n": 1 }, "refresh_interval": "weekly" } },
+        { "slug": "trending", "display_name": "Trending", "icon": "📈", "is_auto_derived": true, "derivation_rule": { "type": "custom_sql", "config": { "query": "views_7d > avg_views_28d * 1.5" }, "refresh_interval": "daily" } }
+      ]
+    },
+    {
+      "_section": "🎨 PALETA PRINCIPAL (10 tags)",
+      "type_slug": "paleta_principal",
+      "tags": [
+        { "slug": "azul", "display_name": "Azul", "icon": "🟦", "color": "#3b82f6" },
+        { "slug": "rojo", "display_name": "Rojo", "icon": "🟥", "color": "#dc2626" },
+        { "slug": "blanco", "display_name": "Blanco", "icon": "⬜", "color": "#ffffff" },
+        { "slug": "negro", "display_name": "Negro", "icon": "⬛", "color": "#0a0a0a" },
+        { "slug": "verde", "display_name": "Verde", "icon": "🟩", "color": "#16a34a" },
+        { "slug": "naranja", "display_name": "Naranja", "icon": "🟧", "color": "#ea580c" },
+        { "slug": "amarillo", "display_name": "Amarillo", "icon": "🟨", "color": "#eab308" },
+        { "slug": "morado", "display_name": "Morado / Violeta", "icon": "🟪", "color": "#7c3aed" },
+        { "slug": "multicolor", "display_name": "Multicolor", "icon": "🌈" },
+        { "slug": "vintage-crema", "display_name": "Vintage Crema", "icon": "🟫", "color": "#d4a574" }
+      ]
+    },
+    {
+      "_section": "⭐ NARRATIVA CULTURAL (~12 tags — power user storytelling)",
+      "type_slug": "narrativa_cultural",
+      "tags": [
+        { "slug": "era-maradona", "display_name": "Era Maradona", "icon": "🇦🇷" },
+        { "slug": "era-messi", "display_name": "Era Messi", "icon": "🐐" },
+        { "slug": "era-pele", "display_name": "Era Pelé", "icon": "🇧🇷" },
+        { "slug": "era-cr7", "display_name": "Era CR7", "icon": "🇵🇹" },
+        { "slug": "era-cruyff", "display_name": "Era Cruyff", "icon": "🇳🇱" },
+        { "slug": "era-del-piero", "display_name": "Era Del Piero", "icon": "🇮🇹" },
+        { "slug": "era-zidane", "display_name": "Era Zidane", "icon": "🇫🇷" },
+        { "slug": "final-mundial", "display_name": "Final Mundial", "icon": "🏆" },
+        { "slug": "final-champions", "display_name": "Final Champions", "icon": "🏆" },
+        { "slug": "hat-trick-historico", "display_name": "Hat-Trick Histórico", "icon": "🎩" },
+        { "slug": "goleador-torneo", "display_name": "Goleador del Torneo", "icon": "⚽" },
+        { "slug": "camiseta-portada", "display_name": "Portada de Revista", "icon": "📰" }
+      ]
+    },
+    {
+      "_section": "🏭 MARCA TÉCNICA (8 tags)",
+      "type_slug": "marca_tecnica",
+      "tags": [
+        { "slug": "adidas", "display_name": "Adidas", "icon": "👟", "color": "#000000" },
+        { "slug": "nike", "display_name": "Nike", "icon": "✓", "color": "#000000" },
+        { "slug": "puma", "display_name": "Puma", "icon": "🐆" },
+        { "slug": "umbro", "display_name": "Umbro", "icon": "♦" },
+        { "slug": "kappa", "display_name": "Kappa", "icon": "K" },
+        { "slug": "lotto", "display_name": "Lotto", "icon": "🇮🇹" },
+        { "slug": "le-coq-sportif", "display_name": "Le Coq Sportif", "icon": "🇫🇷" },
+        { "slug": "joma", "display_name": "Joma", "icon": "🇪🇸" }
+      ]
+    }
+  ]
+}
