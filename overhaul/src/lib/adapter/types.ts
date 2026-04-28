@@ -325,6 +325,12 @@ export interface Adapter {
 
 	// ─── Comercial R11 ──────────────────────────────────────────
 	replaceSaleItems(args: { saleId: number; items: CreateOrderItem[] }): Promise<{ ok: boolean; newSubtotal?: number; newTotal?: number; itemCount?: number; error?: string }>;
+
+	// ─── Importaciones R1 ──────────────────────────────────────
+	listImports(filter?: ImportFilter): Promise<Import[]>;
+	getImport(importId: string): Promise<Import>;
+	getImportItems(importId: string): Promise<ImportItem[]>;
+	getImportPulso(): Promise<ImportPulso>;
 }
 
 // ─── Error para operaciones no disponibles en dev ────────────────────
@@ -377,6 +383,7 @@ export interface CatalogModeloRow {
 }
 
 // ─── IMP-R1 ──────────────────────────────────────────────────────────
+import type { Import, ImportItem, ImportPulso, ImportFilter } from '../data/importaciones';
 export type { Import, ImportStatus, ImportItem, ImportPulso, ImportFilter } from '../data/importaciones';
 export { STATUS_LABELS as IMPORT_STATUS_LABELS, STATUS_PROGRESS as IMPORT_STATUS_PROGRESS } from '../data/importaciones';
 

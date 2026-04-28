@@ -27,6 +27,7 @@ import type {
 import { NotAvailableInBrowser } from './types';
 import type { Family } from '../data/types';
 import type { Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult } from '../data/comercial';
+import type { Import, ImportItem, ImportPulso, ImportFilter } from '../data/importaciones';
 import { transformFamily } from './transform';
 
 // ─── Endpoints (definidos en vite/plugin-erp-dev.ts) ──────────────────
@@ -354,6 +355,30 @@ export const browserAdapter: Adapter = {
 	// ─── Comercial R11 ──────────────────────────────────────────
 	async replaceSaleItems() {
 		throw new NotAvailableInBrowser('replaceSaleItems');
+	},
+
+	// ─── Importaciones R1 ──────────────────────────────────────
+	async listImports(_filter?: ImportFilter): Promise<Import[]> {
+		return [];
+	},
+
+	async getImport(_importId: string): Promise<Import> {
+		throw new NotAvailableInBrowser('getImport requires Tauri (.exe)');
+	},
+
+	async getImportItems(_importId: string): Promise<ImportItem[]> {
+		return [];
+	},
+
+	async getImportPulso(): Promise<ImportPulso> {
+		return {
+			capital_amarrado_gtq: 0,
+			closed_ytd_landed_gtq: 0,
+			avg_landed_unit: null,
+			lead_time_avg_days: null,
+			wishlist_count: 0,
+			free_units_unassigned: 0,
+		};
 	},
 };
 

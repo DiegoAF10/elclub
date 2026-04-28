@@ -29,6 +29,7 @@ import type {
 	WatermarkResult
 } from './types';
 import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, CreateOrderItem, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult, UpdateSaleArgs } from '../data/comercial';
+import type { Import, ImportItem, ImportPulso, ImportFilter } from '../data/importaciones';
 import type { Family } from '../data/types';
 import { transformFamily } from './transform';
 
@@ -506,5 +507,22 @@ export const tauriAdapter: Adapter = {
 			'comercial_replace_sale_items',
 			{ args: { saleId: args.saleId, items: args.items } }
 		);
+	},
+
+	// ─── Importaciones R1 ──────────────────────────────────────
+	async listImports(filter?: ImportFilter): Promise<Import[]> {
+		return invoke<Import[]>('cmd_list_imports', { filter: filter ?? {} });
+	},
+
+	async getImport(importId: string): Promise<Import> {
+		return invoke<Import>('cmd_get_import', { importId });
+	},
+
+	async getImportItems(importId: string): Promise<ImportItem[]> {
+		return invoke<ImportItem[]>('cmd_get_import_items', { importId });
+	},
+
+	async getImportPulso(): Promise<ImportPulso> {
+		return invoke<ImportPulso>('cmd_get_import_pulso');
 	},
 };
