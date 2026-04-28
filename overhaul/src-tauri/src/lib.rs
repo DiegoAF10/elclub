@@ -3915,6 +3915,341 @@ fn resolve_event(id: i64) -> Result<()> {
     Ok(())
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// ADMIN WEB R7 — Vault Publicados (T4.3) + promote/archive/dirty
+// ═══════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize)]
+pub struct ListPublishedArgs {
+    /// 'all' | 'attention' | 'recent' | 'scheduled' | 'no_tags' | 'old'
+    pub filter: Option<String>,
+    pub pagination: Option<PaginationArgs>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct PaginationArgs {
+    pub page: Option<u32>,
+    pub per_page: Option<u32>,
+}
+
+#[tauri::command]
+fn list_published(
+    args: Option<ListPublishedArgs>,
+    state: tauri::State<AppState>,
+) -> Result<Vec<Value>> {
+    let args = args.unwrap_or(ListPublishedArgs {
+        filter: None,
+        pagination: None,
+    });
+    let filter = args.filter.as_deref().unwrap_or("all");
+    let p = args.pagination.unwrap_or_default();
+    let per_page = p.per_page.unwrap_or(50).min(200) as i64;
+    let page = p.page.unwrap_or(1).max(1) as i64;
+    let offset = (page - 1) * per_page;
+
+    let conn = open_db()?;
+    let catalog = load_catalog(&state)?;
+
+    // Mapa family_id → catalog row para enriquecer.
+    let catalog_by_id: std::collections::HashMap<String, &Value> = catalog
+        .iter()
+        .filter_map(|f| {
+            f.get("family_id")
+                .and_then(|v| v.as_str())
+                .map(|id| (id.to_string(), f))
+        })
+        .collect();
+
+    // Filtros compartidos: PUBLISHED = verified+final_verified=1+archived_at IS NULL
+    // (excluye REJECTED status='deleted' y ARCHIVED via archived_at).
+    let base = "FROM audit_decisions ad
+                WHERE ad.status='verified' AND ad.final_verified=1 AND ad.archived_at IS NULL";
+
+    // Filtros derivados
+    let extra_where = match filter {
+        "attention" => " AND ad.dirty_flag=1",
+        "recent" => " AND ad.reviewed_at > datetime('now', '-7 days')",
+        "scheduled" => {
+            " AND ad.family_id IN (
+                SELECT family_id FROM stock_overrides
+                WHERE publish_at > unixepoch() AND publish_at < unixepoch() + 60*60*24*30
+                UNION
+                SELECT family_id FROM mystery_overrides
+                WHERE publish_at > unixepoch() AND publish_at < unixepoch() + 60*60*24*30
+            )"
+        }
+        "no_tags" => {
+            " AND ad.family_id NOT IN (SELECT DISTINCT family_id FROM jersey_tags)"
+        }
+        "old" => " AND (ad.reviewed_at IS NULL OR ad.reviewed_at < datetime('now', '-180 days'))",
+        _ => "", // 'all' default
+    };
+
+    let q = format!(
+        "SELECT ad.family_id, ad.tier, ad.dirty_flag, ad.dirty_reason,
+                ad.qa_priority, ad.archived_at,
+                ad.decided_at, ad.reviewed_at
+         {} {}
+         ORDER BY ad.reviewed_at DESC NULLS LAST, ad.family_id ASC
+         LIMIT ?1 OFFSET ?2",
+        base, extra_where
+    );
+
+    let mut stmt = conn.prepare(&q)?;
+    let rows = stmt.query_map(rusqlite::params![per_page, offset], |row| {
+        let family_id: String = row.get("family_id")?;
+        let tier: Option<String> = row.get("tier").ok();
+        let dirty_flag: i64 = row.get::<_, Option<i64>>("dirty_flag")?.unwrap_or(0);
+        let dirty_reason: Option<String> = row.get("dirty_reason").ok();
+        let qa_priority: i64 = row.get::<_, Option<i64>>("qa_priority")?.unwrap_or(0);
+        let archived_at: Option<i64> = row.get("archived_at").ok();
+        let decided_at: Option<String> = row.get("decided_at").ok();
+        let reviewed_at: Option<String> = row.get("reviewed_at").ok();
+        Ok((
+            family_id,
+            tier,
+            dirty_flag,
+            dirty_reason,
+            qa_priority,
+            archived_at,
+            decided_at,
+            reviewed_at,
+        ))
+    })?;
+
+    let mut out: Vec<Value> = vec![];
+    for row in rows.flatten() {
+        let (family_id, tier, dirty_flag, dirty_reason, qa_priority, archived_at, decided_at, reviewed_at) =
+            row;
+        let cat_row = catalog_by_id.get(&family_id);
+        let team = cat_row
+            .and_then(|f| f.get("team").and_then(|v| v.as_str()))
+            .unwrap_or("")
+            .to_string();
+        let season = cat_row
+            .and_then(|f| f.get("season").and_then(|v| v.as_str()))
+            .unwrap_or("")
+            .to_string();
+        let variant = cat_row
+            .and_then(|f| f.get("variant").and_then(|v| v.as_str()))
+            .unwrap_or("")
+            .to_string();
+        let hero = cat_row
+            .and_then(|f| f.get("hero_thumbnail").and_then(|v| v.as_str()))
+            .map(|s| s.to_string());
+        let gallery = cat_row
+            .and_then(|f| f.get("gallery"))
+            .cloned()
+            .unwrap_or(Value::Array(vec![]));
+        let sku = cat_row
+            .and_then(|f| f.get("sku").and_then(|v| v.as_str()))
+            .unwrap_or(family_id.as_str())
+            .to_string();
+
+        let mut o = serde_json::Map::new();
+        o.insert("family_id".into(), Value::from(family_id));
+        o.insert("sku".into(), Value::from(sku));
+        o.insert("team".into(), Value::from(team));
+        o.insert("season".into(), Value::from(season));
+        o.insert("variant".into(), Value::from(variant));
+        o.insert("hero_thumbnail".into(), hero.map(Value::from).unwrap_or(Value::Null));
+        o.insert("gallery".into(), gallery);
+        o.insert("tier".into(), tier.map(Value::from).unwrap_or(Value::Null));
+        o.insert("state".into(), Value::from("PUBLISHED"));
+        let mut flags = serde_json::Map::new();
+        flags.insert("dirty".into(), Value::from(dirty_flag == 1));
+        flags.insert("dirty_reason".into(), dirty_reason.map(Value::from).unwrap_or(Value::Null));
+        flags.insert("qa_priority".into(), Value::from(qa_priority));
+        o.insert("flags".into(), Value::Object(flags));
+        o.insert(
+            "archived_at".into(),
+            archived_at.map(Value::from).unwrap_or(Value::Null),
+        );
+        o.insert("decided_at".into(), decided_at.map(Value::from).unwrap_or(Value::Null));
+        o.insert(
+            "reviewed_at".into(),
+            reviewed_at.map(Value::from).unwrap_or(Value::Null),
+        );
+        out.push(Value::Object(o));
+    }
+
+    Ok(out)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ToggleDirtyFlagArgs {
+    pub family_id: String,
+    pub dirty: bool,
+    pub reason: Option<String>,
+}
+
+#[tauri::command]
+fn toggle_dirty_flag(args: ToggleDirtyFlagArgs) -> Result<()> {
+    let conn = open_db()?;
+    if args.dirty {
+        conn.execute(
+            "UPDATE audit_decisions
+             SET dirty_flag = 1, dirty_reason = ?1, dirty_detected_at = unixepoch()
+             WHERE family_id = ?2",
+            rusqlite::params![args.reason, args.family_id],
+        )?;
+    } else {
+        conn.execute(
+            "UPDATE audit_decisions
+             SET dirty_flag = 0, dirty_reason = NULL, dirty_detected_at = NULL
+             WHERE family_id = ?1",
+            rusqlite::params![args.family_id],
+        )?;
+    }
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ArchiveJerseyArgs {
+    pub family_id: String,
+}
+
+#[tauri::command]
+fn archive_jersey(args: ArchiveJerseyArgs) -> Result<()> {
+    let conn = open_db()?;
+    conn.execute(
+        "UPDATE audit_decisions SET archived_at = unixepoch()
+         WHERE family_id = ?1 AND archived_at IS NULL",
+        rusqlite::params![args.family_id],
+    )?;
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReviveArchivedArgs {
+    pub family_id: String,
+    pub scheduled_at: Option<i64>,
+}
+
+#[tauri::command]
+fn revive_archived(args: ReviveArchivedArgs) -> Result<()> {
+    let conn = open_db()?;
+    conn.execute(
+        "UPDATE audit_decisions SET archived_at = NULL WHERE family_id = ?1",
+        rusqlite::params![args.family_id],
+    )?;
+    // Si scheduled_at: crear stock_override scheduled (asumimos Stock por default)
+    if let Some(ts) = args.scheduled_at {
+        conn.execute(
+            "INSERT INTO stock_overrides (family_id, publish_at, status, priority)
+             VALUES (?1, ?2, 'scheduled', 5)",
+            rusqlite::params![args.family_id, ts],
+        )?;
+    }
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PromoteOverridePayload {
+    pub publish_at: Option<i64>,
+    pub unpublish_at: Option<i64>,
+    pub price_override: Option<i64>,
+    pub badge: Option<String>,
+    pub copy_override: Option<String>,
+    pub priority: Option<i64>,
+    pub pool_weight: Option<f64>,
+}
+
+// JS pasa { family_id, override }. Rust necesita renombrar 'override' (palabra
+// reservada) → serde_rename = "override" para deserializar correctamente.
+#[derive(Debug, Deserialize)]
+pub struct PromoteToStockJsonArgs {
+    pub family_id: String,
+    #[serde(rename = "override")]
+    pub override_: PromoteOverridePayload,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PromoteToMysteryJsonArgs {
+    pub family_id: String,
+    #[serde(rename = "override")]
+    pub override_: PromoteOverridePayload,
+}
+
+#[tauri::command]
+fn promote_to_stock(args: PromoteToStockJsonArgs) -> Result<Value> {
+    let conn = open_db()?;
+    let o = &args.override_;
+    let priority = o.priority.unwrap_or(5).clamp(1, 10);
+    let status = if o.publish_at.is_none() {
+        "draft"
+    } else if o.publish_at.unwrap() > chrono::Utc::now().timestamp() {
+        "scheduled"
+    } else {
+        "live"
+    };
+    conn.execute(
+        "INSERT INTO stock_overrides
+            (family_id, publish_at, unpublish_at, price_override, badge,
+             copy_override, priority, status, created_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'diego')",
+        rusqlite::params![
+            args.family_id,
+            o.publish_at,
+            o.unpublish_at,
+            o.price_override,
+            o.badge,
+            o.copy_override,
+            priority,
+            status,
+        ],
+    )?;
+    let id = conn.last_insert_rowid();
+    Ok(serde_json::json!({
+        "id": id,
+        "family_id": args.family_id,
+        "publish_at": o.publish_at,
+        "unpublish_at": o.unpublish_at,
+        "price_override": o.price_override,
+        "badge": o.badge,
+        "copy_override": o.copy_override,
+        "priority": priority,
+        "status": status,
+        "computed_status": status,
+    }))
+}
+
+#[tauri::command]
+fn promote_to_mystery(args: PromoteToMysteryJsonArgs) -> Result<Value> {
+    let conn = open_db()?;
+    let o = &args.override_;
+    let pool_weight = o.pool_weight.unwrap_or(1.0);
+    let status = if o.publish_at.is_none() {
+        "draft"
+    } else if o.publish_at.unwrap() > chrono::Utc::now().timestamp() {
+        "scheduled"
+    } else {
+        "live"
+    };
+    conn.execute(
+        "INSERT INTO mystery_overrides
+            (family_id, publish_at, unpublish_at, pool_weight, status, created_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, 'diego')",
+        rusqlite::params![
+            args.family_id,
+            o.publish_at,
+            o.unpublish_at,
+            pool_weight,
+            status,
+        ],
+    )?;
+    let id = conn.last_insert_rowid();
+    Ok(serde_json::json!({
+        "id": id,
+        "family_id": args.family_id,
+        "publish_at": o.publish_at,
+        "unpublish_at": o.unpublish_at,
+        "pool_weight": pool_weight,
+        "status": status,
+        "computed_status": status,
+    }))
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -4017,6 +4352,13 @@ pub fn run() {
             dismiss_event,
             resolve_event,
             detect_events_now,
+            // Admin Web R7 (T4.3)
+            list_published,
+            toggle_dirty_flag,
+            archive_jersey,
+            revive_archived,
+            promote_to_stock,
+            promote_to_mystery,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
