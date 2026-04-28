@@ -39,10 +39,20 @@
 		return tag === 'input' || tag === 'textarea' || t.isContentEditable;
 	}
 
+	// Chord bindings 'g X' — vim-style. Updated 2026-04-28 (Iteración Continuous)
+	// post sidebar reorg: Stock reemplazado por Inventario · agregados Audit y
+	// Mundial 2026 (movidos del sidebar global al Workflow group de Admin Web).
+	//   g h → home              g a → audit (NEW · workflow)
+	//   g v → vault             g u → mundial (NEW · workflow · 'm' ya tomada por mystery)
+	//   g i → inventario (NEW · ex-stock)
+	//   g m → mystery           g w → site
+	//   g c → sistema
 	const G_BINDINGS: Record<string, string> = {
 		h: '/admin-web/home',
+		a: '/admin-web/audit',
+		u: '/admin-web/mundial',
 		v: '/admin-web/vault',
-		s: '/admin-web/stock',
+		i: '/admin-web/inventario',
 		m: '/admin-web/mystery',
 		w: '/admin-web/site',
 		c: '/admin-web/sistema'

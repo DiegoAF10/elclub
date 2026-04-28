@@ -83,7 +83,7 @@
 			icon={Package}
 			label="Stock live"
 			value={kpis.stock_live}
-			target="/admin-web/stock/drops"
+			target="/admin-web/inventario"
 			sparkline={spark('stock_live')}
 		/>
 		<KpiCard
@@ -98,7 +98,7 @@
 			icon={Calendar}
 			label="Scheduled 30d"
 			value={kpis.scheduled_30d}
-			target="/admin-web/stock/calendario"
+			target="/admin-web/inventario"
 			sparkline={spark('scheduled_30d')}
 		/>
 		<KpiCard
