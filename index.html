@@ -92,6 +92,7 @@
       <div class="hidden md:flex items-center gap-8">
         <a href="/explora.html" class="nav-link">DROP <span class="text-ash text-xs">(en stock)</span></a>
         <a href="/mystery-box.html" class="nav-link">Mystery Box</a>
+        <a href="https://vault.elclub.club" class="nav-link">Vault <span class="text-ash text-xs">(entrega 2-4 semanas)</span></a>
         <a href="/nosotros.html" class="nav-link">Nosotros</a>
       </div>
       <div class="flex items-center gap-4">
@@ -125,6 +126,7 @@
       <nav class="flex flex-col gap-8">
         <a href="/explora.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">DROP <span class="text-ash text-base normal-case tracking-normal">(en stock inmediato)</span></a>
         <a href="/mystery-box.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Mystery Box</a>
+        <a href="https://vault.elclub.club" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Vault <span class="text-ash text-base normal-case tracking-normal">(entrega 2-4 semanas)</span></a>
         <a href="/nosotros.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Nosotros</a>
         <a href="/contacto.html" onclick="closeMobileMenu()" class="text-2xl font-bold uppercase tracking-wider text-white hover:text-ice transition-colors">Contacto</a>
       </nav>
@@ -144,46 +146,50 @@
   <!-- ============================================================ -->
   <main class="pt-20">
 
-    <!-- ── HERO ──────────────────────────────────── -->
-    <section class="hero-smoke relative min-h-[60vh] md:min-h-[85vh] flex items-center">
-      <div class="max-w-6xl mx-auto px-4 w-full grid md:grid-cols-2 gap-8 md:gap-12 items-center py-16 md:py-0">
-        <!-- Left: Copy -->
-        <div class="relative z-10">
-          <p class="text-ice text-sm font-semibold uppercase tracking-[0.15em] mb-4" style="font-family:'Oswald',system-ui,sans-serif;">Guatemala · Est. 2023</p>
-          <h1 class="text-4xl sm:text-5xl md:text-6xl font-bold leading-[1.05] mb-6" style="font-family:'Oswald',system-ui,sans-serif; text-transform:uppercase; letter-spacing:0.04em;">
-            La camiseta<br>te elige<br><span class="text-ice">a vos.</span>
+    <!-- ── HERO MUNDIAL 2026 ─────────────────────── -->
+    <!-- 2026-04-27: hero pivoteado de Mystery Box-generic a Mundial 2026.
+         CTA principal traslada al Vault donde está el catálogo Mundial.
+         Imagen full-bleed con responsive (desktop + mobile separados via <picture>).
+         Overlay dark izquierda → derecha para legibilidad del copy. -->
+    <section class="relative min-h-[70vh] md:min-h-[88vh] flex items-center overflow-hidden">
+      <!-- Background image (responsive) -->
+      <picture class="absolute inset-0 z-0">
+        <source media="(max-width: 768px)" srcset="/assets/img/hero/mundial-2026-mobile.jpg">
+        <img src="/assets/img/hero/mundial-2026-desktop.jpg"
+             alt="Mundial 2026 — USA · México · Canadá"
+             class="w-full h-full object-cover"
+             fetchpriority="high">
+      </picture>
+
+      <!-- Dark overlay: gradiente diagonal para destacar copy del lado izquierdo
+           sin matar la imagen del lado derecho. Más oscuro abajo para evitar
+           que el copy compita con el hero stock count strip. -->
+      <div class="absolute inset-0 z-[1] bg-gradient-to-r from-midnight/95 via-midnight/70 to-midnight/30"></div>
+      <div class="absolute inset-0 z-[1] bg-gradient-to-t from-midnight/60 via-transparent to-transparent"></div>
+
+      <!-- Copy -->
+      <div class="relative z-10 max-w-6xl mx-auto px-4 w-full py-16 md:py-0">
+        <div class="max-w-xl">
+          <p class="text-ice text-sm font-semibold uppercase tracking-[0.2em] mb-4" style="font-family:'Oswald',system-ui,sans-serif;">
+            ⚽ USA · México · Canadá
+          </p>
+          <h1 class="text-4xl sm:text-5xl md:text-6xl font-bold leading-[1.05] mb-6 text-white" style="font-family:'Oswald',system-ui,sans-serif; text-transform:uppercase; letter-spacing:0.04em;">
+            Mundial 2026<br>tu camiseta<br><span class="text-ice">te espera</span>
           </h1>
-          <p class="text-smoke text-base md:text-lg max-w-md mb-8 leading-relaxed">Mystery boxes con las camisetas más legendarias del fútbol mundial. Cada pieza tiene una historia — y la próxima es tuya.</p>
+          <p class="text-white/90 text-base md:text-lg max-w-md mb-8 leading-relaxed">
+            Reservá tu camiseta oficial del Mundial con Q100. Personalización con nombre, dorsal y los 2 parches oficiales — todo incluido.
+          </p>
           <div class="flex flex-wrap gap-4">
-            <a href="/mystery-box.html" class="btn-primary">Descubrí tu Box</a>
-            <a href="/explora.html" class="btn-secondary">Ver DROP</a>
+            <a href="https://vault.elclub.club/mundial.html" class="btn-primary">Explorar Mundial 2026</a>
+            <a href="/explora.html" class="btn-secondary">Ver DROP en stock</a>
           </div>
           <div class="flex items-center gap-6 mt-8 text-sm">
             <div class="flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-success inline-block"></span>
-              <span class="text-smoke" id="hero-stock-count">25+ piezas disponibles</span>
+              <span class="text-white/80">Reservás ahora · Recibís antes del kickoff</span>
             </div>
-            <span class="text-chalk">|</span>
-            <span class="text-smoke">Envío en toda Guatemala</span>
-          </div>
-        </div>
-        <!-- Right: Jersey Collage -->
-        <div class="relative hidden md:block">
-          <div class="relative w-full aspect-square max-w-[480px] mx-auto">
-            <!-- Main jersey (large, centered) -->
-            <div class="absolute inset-[8%] rounded-2xl overflow-hidden border border-chalk shadow-2xl shadow-black/50 z-20 transition-transform duration-500 hover:scale-[1.03]">
-              <img src="/assets/img/products/JRS-004-JRS-004-01.png" alt="Barcelona 2005/06 — Ronaldinho" class="w-full h-full object-cover" loading="eager">
-            </div>
-            <!-- Secondary jersey (top-right, overlapping) -->
-            <div class="absolute top-0 right-0 w-[45%] aspect-square rounded-xl overflow-hidden border border-chalk/60 shadow-xl shadow-black/40 z-30 transition-transform duration-500 hover:scale-105">
-              <img src="/assets/img/products/JRS-023-JRS-023-01.png" alt="Real Madrid 2005/06 — Ronaldo" class="w-full h-full object-cover" loading="eager">
-            </div>
-            <!-- Tertiary jersey (bottom-left, overlapping) -->
-            <div class="absolute bottom-0 left-0 w-[40%] aspect-square rounded-xl overflow-hidden border border-chalk/60 shadow-xl shadow-black/40 z-30 transition-transform duration-500 hover:scale-105">
-              <img src="/assets/img/products/JRS-013-JRS-013-01.png" alt="Francia Retro — Cantona" class="w-full h-full object-cover" loading="eager">
-            </div>
-            <!-- Ambient glow -->
-            <div class="absolute inset-0 bg-gradient-to-br from-ice/5 via-transparent to-ice/3 rounded-3xl z-10 pointer-events-none"></div>
+            <span class="text-chalk hidden sm:inline">|</span>
+            <span class="text-white/80 hidden sm:inline">Envío gratis en Guatemala</span>
           </div>
         </div>
       </div>
@@ -209,45 +215,7 @@
       </div>
     </section>
 
-    <!-- ── WORLD CUP 2026 BANNER ─────────────────── -->
-    <section class="relative overflow-hidden border-y border-chalk">
-      <div class="absolute inset-0 bg-gradient-to-r from-midnight via-pitch to-midnight"></div>
-      <div class="absolute inset-0 opacity-[0.03]" style="background-image: url('/assets/img/mundial/wc2026-logo-sm.jpg'); background-size: 200px; background-repeat: repeat; background-position: center;"></div>
-      <div class="relative max-w-6xl mx-auto px-4 py-14 md:py-20">
-        <div class="grid md:grid-cols-2 gap-10 items-center">
-          <!-- Left: Countdown -->
-          <div>
-            <p class="text-ice text-xs font-semibold uppercase tracking-[0.2em] mb-3" style="font-family:'Oswald',system-ui,sans-serif;">Mundial 2026</p>
-            <h2 class="text-3xl md:text-4xl font-bold uppercase tracking-wider mb-4" style="font-family:'Oswald',system-ui,sans-serif;">
-              <span id="wc-days" class="text-ice">--</span> días para<br>el kickoff
-            </h2>
-            <p class="text-smoke text-sm md:text-base max-w-md mb-6 leading-relaxed">USA, México y Canadá. El torneo más grande de la historia. Prepará tu colección antes de que arranque.</p>
-            <a href="https://vault.elclub.club/mundial.html" target="_blank" rel="noopener" class="btn-primary">Explorar Mundial 2026</a>
-          </div>
-          <!-- Right: Mini jersey grid -->
-          <div class="grid grid-cols-3 gap-3">
-            <div class="aspect-square rounded-lg overflow-hidden border border-chalk/50 transition-transform duration-300 hover:scale-105">
-              <img src="/assets/img/mundial/arg-home-sm.jpg" alt="Argentina" class="w-full h-full object-cover" loading="lazy">
-            </div>
-            <div class="aspect-square rounded-lg overflow-hidden border border-chalk/50 transition-transform duration-300 hover:scale-105">
-              <img src="/assets/img/mundial/esp-home-sm.jpg" alt="España" class="w-full h-full object-cover" loading="lazy">
-            </div>
-            <div class="aspect-square rounded-lg overflow-hidden border border-chalk/50 transition-transform duration-300 hover:scale-105">
-              <img src="/assets/img/mundial/ger-home-sm.jpg" alt="Alemania" class="w-full h-full object-cover" loading="lazy">
-            </div>
-            <div class="aspect-square rounded-lg overflow-hidden border border-chalk/50 transition-transform duration-300 hover:scale-105">
-              <img src="/assets/img/mundial/col-home-sm.jpg" alt="Colombia" class="w-full h-full object-cover" loading="lazy">
-            </div>
-            <div class="aspect-square rounded-lg overflow-hidden border border-chalk/50 transition-transform duration-300 hover:scale-105">
-              <img src="/assets/img/mundial/por-home-sm.jpg" alt="Portugal" class="w-full h-full object-cover" loading="lazy">
-            </div>
-            <div class="aspect-square rounded-lg overflow-hidden border border-chalk/50 transition-transform duration-300 hover:scale-105">
-              <img src="/assets/img/mundial/jpn-home-sm.jpg" alt="Japón" class="w-full h-full object-cover" loading="lazy">
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
+    <!-- WORLD CUP 2026 BANNER removido 2026-04-27 — el hero principal ya cubre Mundial. -->
 
     <!-- ── HUB CARDS — 3 Caminos ─────────────────── -->
     <section class="max-w-5xl mx-auto px-4 py-16 md:py-24">
