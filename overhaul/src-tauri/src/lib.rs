@@ -2717,6 +2717,407 @@ async fn cmd_close_import_proportional(
     })
 }
 
+// ─── Finanzas (FIN-R1) — structs ─────────────────────────────────────
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Expense {
+    pub expense_id: i64,
+    pub amount_gtq: f64,
+    pub amount_native: Option<f64>,
+    pub currency: String,
+    pub fx_used: f64,
+    pub category: String,
+    pub payment_method: String,
+    pub paid_at: String,
+    pub notes: Option<String>,
+    pub source: String,
+    pub source_ref: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ExpenseInput {
+    pub amount_native: f64,
+    pub currency: String,
+    pub fx_used: Option<f64>,
+    pub category: String,
+    pub payment_method: String,
+    pub paid_at: String,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProfitSnapshot {
+    pub period_start: String,
+    pub period_end: String,
+    pub period_label: String,
+    pub revenue_gtq: f64,
+    pub cogs_gtq: f64,
+    pub marketing_gtq: f64,
+    pub opex_gtq: f64,
+    pub profit_operativo: f64,
+    pub prev_period_profit: Option<f64>,
+    pub trend_pct: Option<f64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct HomeSnapshot {
+    pub profit: ProfitSnapshot,
+    pub cash_business_gtq: Option<f64>,
+    pub cash_synced_at: Option<String>,
+    pub cash_stale_days: Option<i64>,
+    pub capital_amarrado_gtq: f64,
+    pub shareholder_loan_balance: f64,
+    pub shareholder_loan_trend_30d: f64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RecentExpenseRow {
+    pub expense_id: i64,
+    pub paid_at: String,
+    pub category: String,
+    pub payment_method: String,
+    pub amount_gtq: f64,
+    pub notes: Option<String>,
+}
+
+// ─── Finanzas commands (FIN-R1) ───────────────────────────────────────
+
+#[tauri::command]
+async fn cmd_compute_profit_snapshot(
+    _app: tauri::AppHandle,
+    period_start: String,
+    period_end: String,
+    period_label: String,
+    prev_start: Option<String>,
+    prev_end: Option<String>,
+) -> Result<ProfitSnapshot> {
+    let conn = open_db()?;
+
+    // Revenue: cash basis · sales fulfilled (shipped or delivered) in range
+    let revenue: f64 = conn.query_row(
+        "SELECT COALESCE(CAST(SUM(total) AS REAL), 0) FROM sales
+         WHERE fulfillment_status IN ('shipped','delivered')
+           AND date(COALESCE(shipped_at, occurred_at)) BETWEEN date(?1) AND date(?2)",
+        rusqlite::params![&period_start, &period_end],
+        |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    // COGS: sale_items.unit_cost of fulfilled sales in range
+    let cogs: f64 = conn.query_row(
+        "SELECT COALESCE(CAST(SUM(si.unit_cost) AS REAL), 0)
+         FROM sale_items si
+         JOIN sales s ON s.sale_id = si.sale_id
+         WHERE s.fulfillment_status IN ('shipped','delivered')
+           AND date(COALESCE(s.shipped_at, s.occurred_at)) BETWEEN date(?1) AND date(?2)",
+        rusqlite::params![&period_start, &period_end],
+        |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    // Marketing: expenses category=marketing in range
+    let marketing_logged: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(amount_gtq), 0) FROM expenses
+         WHERE category = 'marketing'
+           AND date(paid_at) BETWEEN date(?1) AND date(?2)",
+        rusqlite::params![&period_start, &period_end],
+        |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    // Opex: expenses NOT (marketing, owner_draw)
+    let opex: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(amount_gtq), 0) FROM expenses
+         WHERE category NOT IN ('marketing','owner_draw')
+           AND date(paid_at) BETWEEN date(?1) AND date(?2)",
+        rusqlite::params![&period_start, &period_end],
+        |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    let profit = revenue - cogs - marketing_logged - opex;
+
+    let prev_profit = if let (Some(ps), Some(pe)) = (prev_start, prev_end) {
+        let prev_rev: f64 = conn.query_row(
+            "SELECT COALESCE(CAST(SUM(total) AS REAL), 0) FROM sales
+             WHERE fulfillment_status IN ('shipped','delivered')
+               AND date(COALESCE(shipped_at, occurred_at)) BETWEEN date(?1) AND date(?2)",
+            rusqlite::params![&ps, &pe], |r| r.get(0),
+        ).unwrap_or(0.0);
+        let prev_cogs: f64 = conn.query_row(
+            "SELECT COALESCE(CAST(SUM(si.unit_cost) AS REAL), 0)
+             FROM sale_items si JOIN sales s ON s.sale_id = si.sale_id
+             WHERE s.fulfillment_status IN ('shipped','delivered')
+               AND date(COALESCE(s.shipped_at, s.occurred_at)) BETWEEN date(?1) AND date(?2)",
+            rusqlite::params![&ps, &pe], |r| r.get(0),
+        ).unwrap_or(0.0);
+        let prev_mkt: f64 = conn.query_row(
+            "SELECT COALESCE(SUM(amount_gtq), 0) FROM expenses
+             WHERE category = 'marketing' AND date(paid_at) BETWEEN date(?1) AND date(?2)",
+            rusqlite::params![&ps, &pe], |r| r.get(0),
+        ).unwrap_or(0.0);
+        let prev_opex: f64 = conn.query_row(
+            "SELECT COALESCE(SUM(amount_gtq), 0) FROM expenses
+             WHERE category NOT IN ('marketing','owner_draw') AND date(paid_at) BETWEEN date(?1) AND date(?2)",
+            rusqlite::params![&ps, &pe], |r| r.get(0),
+        ).unwrap_or(0.0);
+        Some(prev_rev - prev_cogs - prev_mkt - prev_opex)
+    } else {
+        None
+    };
+
+    let trend_pct = match prev_profit {
+        Some(prev) if prev != 0.0 => Some(((profit - prev) / prev.abs()) * 100.0),
+        _ => None,
+    };
+
+    Ok(ProfitSnapshot {
+        period_start, period_end, period_label,
+        revenue_gtq: revenue, cogs_gtq: cogs,
+        marketing_gtq: marketing_logged, opex_gtq: opex,
+        profit_operativo: profit,
+        prev_period_profit: prev_profit, trend_pct,
+    })
+}
+
+#[tauri::command]
+async fn cmd_get_home_snapshot(
+    app: tauri::AppHandle,
+    period_start: String,
+    period_end: String,
+    period_label: String,
+    prev_start: Option<String>,
+    prev_end: Option<String>,
+) -> Result<HomeSnapshot> {
+    let profit = cmd_compute_profit_snapshot(
+        app, period_start.clone(), period_end.clone(), period_label.clone(),
+        prev_start, prev_end,
+    ).await?;
+
+    let conn = open_db()?;
+
+    // Cash business: latest balance entry
+    let cash_row: Option<(f64, String)> = conn.query_row(
+        "SELECT balance_gtq, synced_at FROM cash_balance_history
+         WHERE account = 'el_club_business'
+         ORDER BY synced_at DESC LIMIT 1",
+        [],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    ).ok();
+
+    let (cash_business_gtq, cash_synced_at, cash_stale_days) = match cash_row {
+        Some((bal, synced)) => {
+            let stale: i64 = conn.query_row(
+                "SELECT CAST(julianday('now', 'localtime') - julianday(?1) AS INTEGER)",
+                rusqlite::params![&synced],
+                |r| r.get(0),
+            ).unwrap_or(0);
+            (Some(bal), Some(synced), Some(stale))
+        }
+        None => (None, None, None),
+    };
+
+    // Capital amarrado: imports with status='paid' (pre-close, capital still tied up)
+    let capital: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(total_landed_gtq), 0) FROM imports
+         WHERE status = 'paid'",
+        [],
+        |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    let loan_balance: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(amount_gtq), 0) FROM shareholder_loan_movements",
+        [], |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    let loan_trend: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(amount_gtq), 0) FROM shareholder_loan_movements
+         WHERE date(movement_date) >= date('now', 'localtime', '-30 days')",
+        [], |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    Ok(HomeSnapshot {
+        profit,
+        cash_business_gtq, cash_synced_at, cash_stale_days,
+        capital_amarrado_gtq: capital,
+        shareholder_loan_balance: loan_balance,
+        shareholder_loan_trend_30d: loan_trend,
+    })
+}
+
+#[tauri::command]
+async fn cmd_create_expense(
+    _app: tauri::AppHandle,
+    input: ExpenseInput,
+) -> Result<i64> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    let fx = input.fx_used.unwrap_or(7.73);
+    let amount_gtq = match input.currency.as_str() {
+        "USD" => input.amount_native * fx,
+        "GTQ" => input.amount_native,
+        _ => return Err(ErpError::Other(format!("Invalid currency: {}", input.currency))),
+    };
+
+    tx.execute(
+        "INSERT INTO expenses (amount_gtq, amount_native, currency, fx_used, category, payment_method, paid_at, notes, source)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'manual')",
+        rusqlite::params![
+            amount_gtq, input.amount_native, input.currency, fx,
+            input.category, input.payment_method, input.paid_at, input.notes
+        ],
+    )?;
+    let expense_id = tx.last_insert_rowid();
+
+    // Auto-trigger shareholder_loan_movement if paid with TDC personal
+    if input.payment_method == "tdc_personal" {
+        let current_balance: f64 = tx.query_row(
+            "SELECT COALESCE(SUM(amount_gtq), 0) FROM shareholder_loan_movements",
+            [], |r| r.get(0),
+        ).unwrap_or(0.0);
+        let new_balance = current_balance + amount_gtq;
+
+        tx.execute(
+            "INSERT INTO shareholder_loan_movements (amount_gtq, source_type, source_ref, movement_date, loan_balance_after, notes)
+             VALUES (?1, 'expense_tdc', ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                amount_gtq, expense_id.to_string(), input.paid_at, new_balance, input.notes
+            ],
+        )?;
+    }
+
+    tx.commit()?;
+    Ok(expense_id)
+}
+
+#[tauri::command]
+async fn cmd_list_expenses(
+    _app: tauri::AppHandle,
+    period_start: Option<String>,
+    period_end: Option<String>,
+    category: Option<String>,
+    payment_method: Option<String>,
+    limit: Option<i64>,
+) -> Result<Vec<Expense>> {
+    let conn = open_db()?;
+
+    let mut where_clauses: Vec<String> = vec!["1=1".to_string()];
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+
+    if let Some(s) = period_start.as_ref() {
+        where_clauses.push("date(paid_at) >= date(?)".to_string());
+        params.push(Box::new(s.clone()));
+    }
+    if let Some(e) = period_end.as_ref() {
+        where_clauses.push("date(paid_at) <= date(?)".to_string());
+        params.push(Box::new(e.clone()));
+    }
+    if let Some(c) = category.as_ref() {
+        where_clauses.push("category = ?".to_string());
+        params.push(Box::new(c.clone()));
+    }
+    if let Some(pm) = payment_method.as_ref() {
+        where_clauses.push("payment_method = ?".to_string());
+        params.push(Box::new(pm.clone()));
+    }
+
+    let limit_v = limit.unwrap_or(500);
+    let sql = format!(
+        "SELECT expense_id, amount_gtq, amount_native, currency, fx_used, category, payment_method, paid_at, notes, source, source_ref, created_at
+         FROM expenses WHERE {} ORDER BY paid_at DESC, expense_id DESC LIMIT {}",
+        where_clauses.join(" AND "), limit_v
+    );
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(&params_refs[..], |row| {
+        Ok(Expense {
+            expense_id: row.get(0)?,
+            amount_gtq: row.get(1)?,
+            amount_native: row.get(2)?,
+            currency: row.get(3)?,
+            fx_used: row.get(4)?,
+            category: row.get(5)?,
+            payment_method: row.get(6)?,
+            paid_at: row.get(7)?,
+            notes: row.get(8)?,
+            source: row.get(9)?,
+            source_ref: row.get(10)?,
+            created_at: row.get(11)?,
+        })
+    })?;
+    Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+}
+
+#[tauri::command]
+async fn cmd_delete_expense(_app: tauri::AppHandle, expense_id: i64) -> Result<()> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    tx.execute(
+        "DELETE FROM shareholder_loan_movements
+         WHERE source_type = 'expense_tdc' AND source_ref = ?1",
+        rusqlite::params![expense_id.to_string()],
+    )?;
+
+    tx.execute(
+        "DELETE FROM expenses WHERE expense_id = ?1",
+        rusqlite::params![expense_id],
+    )?;
+
+    tx.commit()?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn cmd_update_expense(
+    app: tauri::AppHandle,
+    expense_id: i64,
+    input: ExpenseInput,
+) -> Result<()> {
+    cmd_delete_expense(app.clone(), expense_id).await?;
+    cmd_create_expense(app, input).await?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn cmd_recent_expenses(
+    _app: tauri::AppHandle,
+    limit: Option<i64>,
+) -> Result<Vec<RecentExpenseRow>> {
+    let conn = open_db()?;
+    let limit_v = limit.unwrap_or(6);
+    let mut stmt = conn.prepare(
+        "SELECT expense_id, paid_at, category, payment_method, amount_gtq, notes
+         FROM expenses ORDER BY paid_at DESC, expense_id DESC LIMIT ?1"
+    )?;
+    let rows = stmt.query_map(rusqlite::params![limit_v], |row| {
+        Ok(RecentExpenseRow {
+            expense_id: row.get(0)?,
+            paid_at: row.get(1)?,
+            category: row.get(2)?,
+            payment_method: row.get(3)?,
+            amount_gtq: row.get(4)?,
+            notes: row.get(5)?,
+        })
+    })?;
+    Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
+}
+
+#[tauri::command]
+async fn cmd_set_cash_balance(
+    _app: tauri::AppHandle,
+    balance_gtq: f64,
+    source: String,
+    notes: Option<String>,
+) -> Result<i64> {
+    let conn = open_db()?;
+    conn.execute(
+        "INSERT INTO cash_balance_history (account, balance_gtq, synced_at, source, notes)
+         VALUES ('el_club_business', ?1, datetime('now', 'localtime'), ?2, ?3)",
+        rusqlite::params![balance_gtq, source, notes],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -2803,6 +3204,15 @@ pub fn run() {
             cmd_get_import_items,
             cmd_get_import_pulso,
             cmd_close_import_proportional,
+            // Finanzas R1
+            cmd_compute_profit_snapshot,
+            cmd_get_home_snapshot,
+            cmd_create_expense,
+            cmd_list_expenses,
+            cmd_delete_expense,
+            cmd_update_expense,
+            cmd_recent_expenses,
+            cmd_set_cash_balance,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
