@@ -21,10 +21,64 @@
 -->
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import AdminWebSidebar from './AdminWebSidebar.svelte';
 	import BreadcrumbBar from './BreadcrumbBar.svelte';
+	import AdminWebCommandPalette from './AdminWebCommandPalette.svelte';
 
 	let { children } = $props();
+
+	// ─── Command palette + atajos vim-style ───────────────────────────
+	let paletteOpen = $state(false);
+	let lastG = 0; // timestamp del último 'g' presionado, para chord 'g X'
+	const G_WINDOW_MS = 800;
+
+	function isTypingTarget(t: EventTarget | null): boolean {
+		if (!(t instanceof HTMLElement)) return false;
+		const tag = t.tagName.toLowerCase();
+		return tag === 'input' || tag === 'textarea' || t.isContentEditable;
+	}
+
+	const G_BINDINGS: Record<string, string> = {
+		h: '/admin-web/home',
+		v: '/admin-web/vault',
+		s: '/admin-web/stock',
+		m: '/admin-web/mystery',
+		w: '/admin-web/site',
+		c: '/admin-web/sistema'
+	};
+
+	function handleGlobalKey(e: KeyboardEvent) {
+		// Ignorar mientras se tipea en input/textarea
+		if (isTypingTarget(e.target)) return;
+
+		// ⌘K / Ctrl+K toggle palette
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+			e.preventDefault();
+			paletteOpen = !paletteOpen;
+			return;
+		}
+
+		if (paletteOpen) return; // los atajos no funcionan con palette abierto (palette maneja Esc/arrows)
+
+		const now = Date.now();
+
+		// Chord 'g X'
+		if (e.key.toLowerCase() === 'g' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+			lastG = now;
+			return;
+		}
+		if (lastG && now - lastG < G_WINDOW_MS) {
+			const target = G_BINDINGS[e.key.toLowerCase()];
+			if (target) {
+				e.preventDefault();
+				lastG = 0;
+				void goto(target);
+				return;
+			}
+			lastG = 0;
+		}
+	}
 
 	// Derivar section + tab del pathname. Pathname formato esperado:
 	//   /admin-web                    → section='home', tab=undefined
@@ -57,6 +111,8 @@
 	});
 </script>
 
+<svelte:window onkeydown={handleGlobalKey} />
+
 <div class="flex h-full min-h-0">
 	<AdminWebSidebar section={currentSection} />
 	<div class="flex min-w-0 flex-1 flex-col">
@@ -66,3 +122,5 @@
 		</main>
 	</div>
 </div>
+
+<AdminWebCommandPalette open={paletteOpen} onClose={() => (paletteOpen = false)} />
