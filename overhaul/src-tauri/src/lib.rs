@@ -4746,6 +4746,426 @@ fn list_jerseys_by_tag(
     Ok(out)
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// ADMIN WEB R7 — Vault Universo (T6.1) + bulk actions (T6.6)
+// ═══════════════════════════════════════════════════════════════════════
+
+#[derive(Debug, Deserialize, Default)]
+pub struct UniversoFiltersArgs {
+    pub states: Option<Vec<String>>, // ['DRAFT','QUEUE','PUBLISHED','REJECTED','ARCHIVED']
+    pub flags: Option<Value>,        // partial Record<flag, bool>
+    pub tags: Option<Vec<i64>>,      // tag IDs
+    pub coverage_min: Option<i64>,
+    pub coverage_max: Option<i64>,
+    pub last_action: Option<String>, // 'today' | 'week' | 'month' | 'older'
+    pub search: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct SortConfigArgs {
+    pub column: Option<String>,
+    pub direction: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListUniversoArgs {
+    pub filters: Option<UniversoFiltersArgs>,
+    pub sort: Option<SortConfigArgs>,
+    pub pagination: PaginationArgs,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UniversoQueryResultOut {
+    pub rows: Vec<Value>,
+    pub total: i64,
+    pub filters_counts: Value,
+}
+
+#[tauri::command]
+fn list_universo(
+    args: ListUniversoArgs,
+    state: tauri::State<AppState>,
+) -> Result<UniversoQueryResultOut> {
+    let conn = open_db()?;
+    let f = args.filters.unwrap_or_default();
+    let p = args.pagination;
+    let per_page = p.per_page.unwrap_or(50).min(500) as i64;
+    let page = p.page.unwrap_or(1).max(1) as i64;
+    let offset = (page - 1) * per_page;
+
+    // Construir WHERE dinámico
+    let mut wheres: Vec<String> = vec!["1=1".to_string()];
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+
+    // States: usar v_jersey_state computed
+    if let Some(states) = &f.states {
+        if !states.is_empty() {
+            let placeholders: Vec<String> = (0..states.len()).map(|_| "?".to_string()).collect();
+            wheres.push(format!(
+                "vjs.state IN ({})",
+                placeholders.join(",")
+            ));
+            for s in states {
+                params.push(Box::new(s.clone()));
+            }
+        }
+    }
+
+    // Flags
+    if let Some(flags) = &f.flags {
+        if flags.is_object() {
+            if flags.get("dirty").and_then(|v| v.as_bool()) == Some(true) {
+                wheres.push("ad.dirty_flag = 1".into());
+            }
+            if flags.get("qa_priority").and_then(|v| v.as_bool()) == Some(true) {
+                wheres.push("ad.qa_priority = 1".into());
+            }
+        }
+    }
+
+    // Search: SKU o family_id contains
+    if let Some(search) = &f.search {
+        if !search.trim().is_empty() {
+            wheres.push("(ad.family_id LIKE ?)".into());
+            params.push(Box::new(format!("%{}%", search.trim())));
+        }
+    }
+
+    // Last action
+    if let Some(la) = &f.last_action {
+        let cutoff = match la.as_str() {
+            "today" => Some("-1 days"),
+            "week" => Some("-7 days"),
+            "month" => Some("-30 days"),
+            "older" => None,
+            _ => None,
+        };
+        if let Some(c) = cutoff {
+            wheres.push(format!("(ad.reviewed_at > datetime('now', '{}'))", c));
+        } else if la == "older" {
+            wheres.push("(ad.reviewed_at IS NULL OR ad.reviewed_at < datetime('now', '-30 days'))".into());
+        }
+    }
+
+    // Tags (any of)
+    if let Some(tag_ids) = &f.tags {
+        if !tag_ids.is_empty() {
+            let placeholders: Vec<String> = (0..tag_ids.len()).map(|_| "?".to_string()).collect();
+            wheres.push(format!(
+                "ad.family_id IN (SELECT family_id FROM jersey_tags WHERE tag_id IN ({}))",
+                placeholders.join(",")
+            ));
+            for id in tag_ids {
+                params.push(Box::new(*id));
+            }
+        }
+    }
+
+    let where_clause = wheres.join(" AND ");
+
+    // Total count first (para pagination)
+    let count_q = format!(
+        "SELECT COUNT(*) FROM audit_decisions ad
+         JOIN v_jersey_state vjs ON vjs.family_id = ad.family_id
+         WHERE {}",
+        where_clause
+    );
+    let param_refs: Vec<&dyn rusqlite::ToSql> =
+        params.iter().map(|p| p.as_ref() as &dyn rusqlite::ToSql).collect();
+    let total: i64 = conn.query_row(&count_q, param_refs.as_slice(), |row| row.get(0))?;
+
+    // Sort
+    let sort = args.sort.unwrap_or_default();
+    let sort_col = match sort.column.as_deref().unwrap_or("reviewed_at") {
+        "family_id" => "ad.family_id",
+        "tier" => "ad.tier",
+        "decided_at" => "ad.decided_at",
+        "reviewed_at" => "ad.reviewed_at",
+        "state" => "vjs.state",
+        _ => "ad.reviewed_at",
+    };
+    let sort_dir = match sort.direction.as_deref().unwrap_or("desc") {
+        "asc" => "ASC",
+        _ => "DESC",
+    };
+
+    // Main query
+    let main_q = format!(
+        "SELECT ad.family_id, ad.tier, ad.dirty_flag, ad.dirty_reason,
+                ad.qa_priority, ad.archived_at, ad.decided_at, ad.reviewed_at,
+                vjs.state
+         FROM audit_decisions ad
+         JOIN v_jersey_state vjs ON vjs.family_id = ad.family_id
+         WHERE {}
+         ORDER BY {} {} NULLS LAST
+         LIMIT ? OFFSET ?",
+        where_clause, sort_col, sort_dir
+    );
+    let mut stmt = conn.prepare(&main_q)?;
+    let mut all_params = params;
+    all_params.push(Box::new(per_page));
+    all_params.push(Box::new(offset));
+    let all_param_refs: Vec<&dyn rusqlite::ToSql> = all_params
+        .iter()
+        .map(|p| p.as_ref() as &dyn rusqlite::ToSql)
+        .collect();
+
+    let rows_iter = stmt.query_map(all_param_refs.as_slice(), |row| {
+        let family_id: String = row.get("family_id")?;
+        let tier: Option<String> = row.get("tier").ok();
+        let dirty_flag: i64 = row.get::<_, Option<i64>>("dirty_flag")?.unwrap_or(0);
+        let qa_priority: i64 = row.get::<_, Option<i64>>("qa_priority")?.unwrap_or(0);
+        let archived_at: Option<i64> = row.get("archived_at").ok();
+        let decided_at: Option<String> = row.get("decided_at").ok();
+        let reviewed_at: Option<String> = row.get("reviewed_at").ok();
+        let state: String = row.get("state")?;
+        Ok((
+            family_id,
+            tier,
+            dirty_flag,
+            qa_priority,
+            archived_at,
+            decided_at,
+            reviewed_at,
+            state,
+        ))
+    })?;
+
+    let catalog = load_catalog(&state)?;
+    let catalog_by_id: std::collections::HashMap<String, &Value> = catalog
+        .iter()
+        .filter_map(|cf| {
+            cf.get("family_id")
+                .and_then(|v| v.as_str())
+                .map(|id| (id.to_string(), cf))
+        })
+        .collect();
+
+    let mut rows: Vec<Value> = vec![];
+    for row_res in rows_iter {
+        let (family_id, tier, dirty_flag, qa_priority, archived_at, decided_at, reviewed_at, state_str) =
+            match row_res {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+        let cat = catalog_by_id.get(&family_id);
+        let mut o = serde_json::Map::new();
+        o.insert("family_id".into(), Value::from(family_id.clone()));
+        o.insert(
+            "sku".into(),
+            cat.and_then(|f| f.get("sku")).cloned().unwrap_or(Value::Null),
+        );
+        o.insert(
+            "team".into(),
+            cat.and_then(|f| f.get("team")).cloned().unwrap_or(Value::Null),
+        );
+        o.insert(
+            "season".into(),
+            cat.and_then(|f| f.get("season")).cloned().unwrap_or(Value::Null),
+        );
+        o.insert(
+            "variant".into(),
+            cat.and_then(|f| f.get("variant")).cloned().unwrap_or(Value::Null),
+        );
+        o.insert(
+            "hero_thumbnail".into(),
+            cat.and_then(|f| f.get("hero_thumbnail"))
+                .cloned()
+                .unwrap_or(Value::Null),
+        );
+        let coverage = cat
+            .and_then(|f| f.get("gallery"))
+            .and_then(|g| g.as_array())
+            .map(|a| a.len() as i64)
+            .unwrap_or(0);
+        o.insert("coverage".into(), Value::from(coverage));
+        o.insert("tier".into(), tier.map(Value::from).unwrap_or(Value::Null));
+        o.insert("state".into(), Value::from(state_str));
+        let mut flags = serde_json::Map::new();
+        flags.insert("dirty".into(), Value::from(dirty_flag == 1));
+        flags.insert("qa_priority".into(), Value::from(qa_priority));
+        o.insert("flags".into(), Value::Object(flags));
+        o.insert(
+            "archived_at".into(),
+            archived_at.map(Value::from).unwrap_or(Value::Null),
+        );
+        o.insert(
+            "decided_at".into(),
+            decided_at.map(Value::from).unwrap_or(Value::Null),
+        );
+        o.insert(
+            "reviewed_at".into(),
+            reviewed_at.map(Value::from).unwrap_or(Value::Null),
+        );
+        rows.push(Value::Object(o));
+    }
+
+    // Filter counts (state breakdown — útil para sidebar)
+    let mut state_counts = serde_json::Map::new();
+    let mut count_stmt = conn.prepare(
+        "SELECT state, COUNT(*) FROM v_jersey_state GROUP BY state",
+    )?;
+    let state_rows = count_stmt.query_map([], |row| {
+        let s: String = row.get(0)?;
+        let c: i64 = row.get(1)?;
+        Ok((s, c))
+    })?;
+    for r in state_rows.flatten() {
+        state_counts.insert(r.0, Value::from(r.1));
+    }
+
+    let filters_counts =
+        Value::Object({ let mut m = serde_json::Map::new(); m.insert("by_state".into(), Value::Object(state_counts)); m });
+
+    Ok(UniversoQueryResultOut {
+        rows,
+        total,
+        filters_counts,
+    })
+}
+
+// ─── Bulk actions (T6.6) ────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct BulkActionArgs {
+    pub family_ids: Vec<String>,
+    pub action: String, // 'tag' | 'archive' | 're_fetch' | 'delete'
+    pub payload: Option<Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BulkActionResult {
+    pub affected: i64,
+    pub errors: Vec<String>,
+}
+
+#[tauri::command]
+fn bulk_action(args: BulkActionArgs) -> Result<BulkActionResult> {
+    let conn = open_db()?;
+    let mut affected = 0i64;
+    let mut errors: Vec<String> = vec![];
+
+    match args.action.as_str() {
+        "archive" => {
+            for fid in &args.family_ids {
+                match conn.execute(
+                    "UPDATE audit_decisions SET archived_at = unixepoch()
+                     WHERE family_id = ?1 AND archived_at IS NULL",
+                    rusqlite::params![fid],
+                ) {
+                    Ok(n) => affected += n as i64,
+                    Err(e) => errors.push(format!("{}: {}", fid, e)),
+                }
+            }
+        }
+        "tag" => {
+            // payload: { tag_id: number }
+            let tag_id = args
+                .payload
+                .as_ref()
+                .and_then(|v| v.get("tag_id"))
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| ErpError::Other("payload.tag_id requerido para action='tag'".into()))?;
+            for fid in &args.family_ids {
+                match conn.execute(
+                    "INSERT OR IGNORE INTO jersey_tags (family_id, tag_id, assigned_by)
+                     VALUES (?1, ?2, 'bulk:diego')",
+                    rusqlite::params![fid, tag_id],
+                ) {
+                    Ok(n) => affected += n as i64,
+                    Err(e) => errors.push(format!("{}: {}", fid, e)),
+                }
+            }
+        }
+        "delete" => {
+            // Soft delete: status='deleted'
+            for fid in &args.family_ids {
+                match conn.execute(
+                    "UPDATE audit_decisions SET status='deleted' WHERE family_id = ?1",
+                    rusqlite::params![fid],
+                ) {
+                    Ok(n) => affected += n as i64,
+                    Err(e) => errors.push(format!("{}: {}", fid, e)),
+                }
+            }
+        }
+        "re_fetch" => {
+            // Marca dirty para que el detector lo recoja en el siguiente ciclo
+            for fid in &args.family_ids {
+                match conn.execute(
+                    "UPDATE audit_decisions SET dirty_flag = 1, dirty_reason = 're_fetch_requested',
+                                                 dirty_detected_at = unixepoch()
+                     WHERE family_id = ?1",
+                    rusqlite::params![fid],
+                ) {
+                    Ok(n) => affected += n as i64,
+                    Err(e) => errors.push(format!("{}: {}", fid, e)),
+                }
+            }
+        }
+        _ => {
+            return Err(ErpError::Other(format!("bulk action desconocida: {}", args.action)));
+        }
+    }
+
+    Ok(BulkActionResult { affected, errors })
+}
+
+// ─── Saved views (T6.4) ─────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ListSavedViewsArgs {
+    pub module: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SavedViewOut {
+    pub id: i64,
+    pub module: String,
+    pub slug: String,
+    pub display_name: String,
+    pub icon: Option<String>,
+    pub filters: Value,
+    pub sort: Option<Value>,
+    pub columns: Option<Value>,
+    pub is_factory: bool,
+    pub display_order: i64,
+    pub created_at: i64,
+}
+
+#[tauri::command]
+fn list_saved_views(args: ListSavedViewsArgs) -> Result<Vec<SavedViewOut>> {
+    let conn = open_db()?;
+    let mut stmt = conn.prepare(
+        "SELECT id, module, slug, display_name, icon, filters, sort, columns,
+                is_factory, display_order, created_at
+         FROM saved_views WHERE module = ?1
+         ORDER BY display_order ASC, display_name ASC",
+    )?;
+    let rows = stmt.query_map([&args.module], |row| {
+        let filters_str: String = row.get("filters")?;
+        let filters: Value = serde_json::from_str(&filters_str).unwrap_or(Value::Null);
+        let sort_str: Option<String> = row.get("sort").ok();
+        let sort: Option<Value> = sort_str.and_then(|s| serde_json::from_str(&s).ok());
+        let cols_str: Option<String> = row.get("columns").ok();
+        let columns: Option<Value> = cols_str.and_then(|s| serde_json::from_str(&s).ok());
+        Ok(SavedViewOut {
+            id: row.get("id")?,
+            module: row.get("module")?,
+            slug: row.get("slug")?,
+            display_name: row.get("display_name")?,
+            icon: row.get("icon").ok(),
+            filters,
+            sort,
+            columns,
+            is_factory: row.get::<_, Option<i64>>("is_factory")?.unwrap_or(0) == 1,
+            display_order: row.get("display_order")?,
+            created_at: row.get("created_at")?,
+        })
+    })?;
+    Ok(rows.filter_map(|r| r.ok()).collect())
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -4866,6 +5286,10 @@ pub fn run() {
             validate_tag_assignment,
             assign_tag,
             remove_tag,
+            // Admin Web R7 (T6.1 + T6.4 + T6.6) — Universo + bulk + saved views
+            list_universo,
+            bulk_action,
+            list_saved_views,
         ])
         .run(tauri::generate_context!())
         .expect("error while running El Club ERP");
