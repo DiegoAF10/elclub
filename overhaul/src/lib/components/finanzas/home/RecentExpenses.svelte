@@ -1,23 +1,38 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { adapter } from '$lib/adapter';
-  import type { RecentExpense } from '$lib/data/finanzas';
+  import type { Expense, PeriodRange } from '$lib/data/finanzas';
   import { CATEGORY_LABELS, CATEGORY_PILL_CLASS, PAYMENT_METHOD_ICON } from '$lib/data/finanzas';
   import { formatGTQ } from '$lib/data/finanzasComputed';
+  import { adapter } from '$lib/adapter';
 
-  let items = $state<RecentExpense[]>([]);
+  let { periodRange }: { periodRange: PeriodRange } = $props();
+
+  let items = $state<Expense[]>([]);
   let loading = $state(true);
+  let loadGen = 0;
 
-  onMount(async () => {
+  $effect(() => {
+    const my = ++loadGen;
+    void load(periodRange, my);
+  });
+
+  async function load(range: PeriodRange, my: number) {
+    loading = true;
     try {
-      items = await adapter.recentExpenses(6);
+      const result = await adapter.listExpenses({
+        periodStart: range.start,
+        periodEnd: range.end,
+        limit: 6,
+      });
+      if (my !== loadGen) return;
+      items = result;
     } catch (e) {
-      console.error('recentExpenses failed', e);
+      if (my !== loadGen) return;
+      console.error('listExpenses (recent) failed', e);
       items = [];
     } finally {
-      loading = false;
+      if (my === loadGen) loading = false;
     }
-  });
+  }
 </script>
 
 <div class="bg-[var(--color-surface-1)] border border-[var(--color-border)] rounded-[6px] p-4 flex flex-col min-h-0">

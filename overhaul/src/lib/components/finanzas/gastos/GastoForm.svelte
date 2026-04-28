@@ -2,6 +2,7 @@
 	import { adapter } from '$lib/adapter';
 	import type { ExpenseCategory, PaymentMethod, Currency, ExpenseInput } from '$lib/data/finanzas';
 	import { CATEGORY_LABELS } from '$lib/data/finanzas';
+	import { toLocalIsoDate } from '$lib/data/finanzasPeriods';
 
 	let {
 		onSaved,
@@ -11,15 +12,11 @@
 		onCancel: () => void;
 	} = $props();
 
-	function todayIso(): string {
-		return new Date().toISOString().slice(0, 10);
-	}
-
 	let amount = $state<string>('');
 	let currency = $state<Currency>('GTQ');
 	let category = $state<ExpenseCategory | null>(null);
 	let paymentMethod = $state<PaymentMethod | null>(null);
-	let paidAt = $state<string>(todayIso());
+	let paidAt = $state<string>(toLocalIsoDate(new Date()));
 	let notes = $state<string>('');
 	let saving = $state(false);
 	let error = $state<string | null>(null);

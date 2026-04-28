@@ -6,9 +6,20 @@ export function todayInGT(): Date {
   return new Date();
 }
 
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
+/**
+ * Format a Date as YYYY-MM-DD using local timezone components, NOT UTC.
+ * Critical: Date.toISOString() uses UTC, which drifts the date after 18:00
+ * in Guatemala (UTC-6) and produces a wrong "today".
+ */
+export function toLocalIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
+
+// Internal alias kept for the existing call sites in this file.
+const isoDate = toLocalIsoDate;
 
 export function periodToDateRange(period: Period, customStart?: string, customEnd?: string): PeriodRange {
   const today = todayInGT();

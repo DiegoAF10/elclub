@@ -14,31 +14,37 @@
   let showForm = $state(false);
   let categoryFilter = $state<ExpenseCategory | 'all'>('all');
   let methodFilter = $state<PaymentMethod | 'all'>('all');
+  let loadGen = 0;
 
   $effect(() => {
-    void load(periodRange, categoryFilter, methodFilter);
+    const my = ++loadGen;
+    void load(periodRange, categoryFilter, methodFilter, my);
   });
 
   async function load(
     range: PeriodRange,
     cat: ExpenseCategory | 'all',
     method: PaymentMethod | 'all',
+    my: number,
   ) {
     loading = true;
     error = null;
     try {
-      expenses = await adapter.listExpenses({
+      const result = await adapter.listExpenses({
         periodStart: range.start,
         periodEnd: range.end,
         category: cat === 'all' ? undefined : cat,
         paymentMethod: method === 'all' ? undefined : method,
       });
+      if (my !== loadGen) return; // stale
+      expenses = result;
     } catch (e) {
+      if (my !== loadGen) return;
       console.error('listExpenses failed', e);
       error = e instanceof Error ? e.message : String(e);
       expenses = [];
     } finally {
-      loading = false;
+      if (my === loadGen) loading = false;
     }
   }
 
@@ -46,7 +52,8 @@
     if (!confirm('Borrar gasto? Si era TDC personal, también se borra el shareholder_loan_movement asociado.')) return;
     try {
       await adapter.deleteExpense(id);
-      await load(periodRange, categoryFilter, methodFilter);
+      const my = ++loadGen;
+      await load(periodRange, categoryFilter, methodFilter, my);
     } catch (e) {
       alert(`Error borrando: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -167,7 +174,7 @@
   {#if showForm}
     <div class="mb-6">
       <GastoForm
-        onSaved={() => { showForm = false; load(periodRange, categoryFilter, methodFilter); }}
+        onSaved={() => { showForm = false; const my = ++loadGen; void load(periodRange, categoryFilter, methodFilter, my); }}
         onCancel={() => showForm = false}
       />
     </div>

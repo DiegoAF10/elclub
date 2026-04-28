@@ -15,26 +15,31 @@
   let snapshot = $state<HomeSnapshot | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
+  let loadGen = 0;
 
   $effect(() => {
-    loadSnapshot(periodRange);
+    const my = ++loadGen;
+    void loadSnapshot(periodRange, my);
   });
 
-  async function loadSnapshot(range: PeriodRange) {
+  async function loadSnapshot(range: PeriodRange, my: number) {
     loading = true;
     error = null;
     try {
       const prev = previousPeriodRange(range);
-      snapshot = await adapter.getHomeSnapshot(
+      const result = await adapter.getHomeSnapshot(
         range.start, range.end, range.label,
         prev.start, prev.end,
       );
+      if (my !== loadGen) return; // stale
+      snapshot = result;
     } catch (e) {
+      if (my !== loadGen) return;
       console.error('getHomeSnapshot failed', e);
       error = e instanceof Error ? e.message : String(e);
       snapshot = null;
     } finally {
-      loading = false;
+      if (my === loadGen) loading = false;
     }
   }
 </script>
@@ -67,7 +72,7 @@
 
     <!-- Sub-grid: Recent expenses + Inbox financiero -->
     <div class="grid grid-cols-2 gap-4">
-      <RecentExpenses />
+      <RecentExpenses {periodRange} />
       <InboxFinanciero {snapshot} />
     </div>
   {/if}

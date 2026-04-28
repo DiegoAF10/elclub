@@ -3069,12 +3069,65 @@ async fn cmd_delete_expense(_app: tauri::AppHandle, expense_id: i64) -> Result<(
 
 #[tauri::command]
 async fn cmd_update_expense(
-    app: tauri::AppHandle,
+    _app: tauri::AppHandle,
     expense_id: i64,
     input: ExpenseInput,
 ) -> Result<()> {
-    cmd_delete_expense(app.clone(), expense_id).await?;
-    cmd_create_expense(app, input).await?;
+    // Validate currency before opening tx (avoids holding a write lock for nothing)
+    let fx = input.fx_used.unwrap_or(7.73);
+    let amount_gtq = match input.currency.as_str() {
+        "USD" => input.amount_native * fx,
+        "GTQ" => input.amount_native,
+        _ => return Err(ErpError::Other(format!("Invalid currency: {}", input.currency))),
+    };
+
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    // Drop any existing shareholder_loan_movement linked to this expense_id.
+    // If the new payment_method is also tdc_personal, we'll re-insert below.
+    tx.execute(
+        "DELETE FROM shareholder_loan_movements
+         WHERE source_type = 'expense_tdc' AND source_ref = ?1",
+        rusqlite::params![expense_id.to_string()],
+    )?;
+
+    // Update expense in place (preserves expense_id + created_at)
+    let updated = tx.execute(
+        "UPDATE expenses
+         SET amount_gtq = ?1, amount_native = ?2, currency = ?3, fx_used = ?4,
+             category = ?5, payment_method = ?6, paid_at = ?7, notes = ?8
+         WHERE expense_id = ?9",
+        rusqlite::params![
+            amount_gtq, input.amount_native, input.currency, fx,
+            input.category, input.payment_method, input.paid_at, input.notes,
+            expense_id
+        ],
+    )?;
+
+    if updated == 0 {
+        // Roll back implicitly by not committing — drop the tx.
+        return Err(ErpError::Other(format!("expense {} not found", expense_id)));
+    }
+
+    // If new payment_method is tdc_personal, re-create the loan movement
+    if input.payment_method == "tdc_personal" {
+        let current_balance: f64 = tx.query_row(
+            "SELECT COALESCE(SUM(amount_gtq), 0) FROM shareholder_loan_movements",
+            [], |r| r.get(0),
+        ).unwrap_or(0.0);
+        let new_balance = current_balance + amount_gtq;
+
+        tx.execute(
+            "INSERT INTO shareholder_loan_movements (amount_gtq, source_type, source_ref, movement_date, loan_balance_after, notes)
+             VALUES (?1, 'expense_tdc', ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                amount_gtq, expense_id.to_string(), input.paid_at, new_balance, input.notes
+            ],
+        )?;
+    }
+
+    tx.commit()?;
     Ok(())
 }
 
