@@ -50,14 +50,21 @@
 		});
 
 		return [
-			nav('/', '← Volver al ERP principal', ['salir', 'audit', 'comercial', 'finanzas', 'back']),
-			nav('/admin-web/home', 'Ir a Home', ['inicio', 'dashboard', 'kpis', 'gh']),
-			nav('/admin-web/vault/queue', 'Vault › Queue', ['audit', 'pending', 'gv', 'gq']),
+			// Salida al ERP raíz (Dashboard, Comercial, Importaciones, Finanzas)
+			nav('/', '← Volver al ERP principal', ['salir', 'dashboard', 'comercial', 'finanzas', 'back']),
+			// Home Admin Web
+			nav('/admin-web/home', 'Ir a Home', ['inicio', 'kpis', 'panorama', 'gh']),
+			// Workflow group (NEW post sidebar reorg 2026-04-28)
+			nav('/admin-web/audit', 'Audit', ['ga', 'auditar', 'verify', 'flag', 'list', 'detail']),
+			nav('/admin-web/mundial', 'Mundial 2026', ['gu', 'cobertura', 'wc', 'world cup', 'mundialista']),
+			// Vault sub-tabs
+			nav('/admin-web/vault/queue', 'Vault › Queue', ['audit pending', 'gv', 'gq']),
 			nav('/admin-web/vault/publicados', 'Vault › Publicados', ['live', 'cards', 'gp']),
 			nav('/admin-web/vault/grupos', 'Vault › Grupos (tags)', ['tags', 'tipos', 'gg']),
-			nav('/admin-web/vault/universo', 'Vault › Universo', ['todos', 'tabla', 'gu']),
-			nav('/admin-web/stock/drops', 'Stock › Drops', ['gs', 'garantizadas']),
-			nav('/admin-web/stock/calendario', 'Stock › Calendario', ['fechas']),
+			nav('/admin-web/vault/universo', 'Vault › Universo', ['todos', 'tabla', 'guv']),
+			// Inventario (NEW · reemplaza Stock D1=c)
+			nav('/admin-web/inventario', 'Inventario', ['gi', 'stock', 'drops', 'calendario', 'garantizadas']),
+			// Mystery / Site / Sistema
 			nav('/admin-web/mystery/pool', 'Mystery › Pool', ['gm', 'sorpresa']),
 			nav('/admin-web/site/paginas', 'Site › Páginas', ['gw', 'cms']),
 			nav('/admin-web/site/branding', 'Site › Branding'),
