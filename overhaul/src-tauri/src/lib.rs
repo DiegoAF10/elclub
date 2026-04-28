@@ -2727,6 +2727,131 @@ async fn cmd_close_import_proportional(
     })
 }
 
+// ─── R1.5 Completion: Create / Register Arrival / Update / Cancel ────
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateImportInput {
+    pub import_id: String,
+    pub paid_at: String,
+    pub supplier: String,
+    pub bruto_usd: f64,
+    pub fx: f64,
+    pub n_units: i64,
+    pub notes: Option<String>,
+    pub tracking_code: Option<String>,
+    pub carrier: Option<String>,
+}
+
+/// Business logic for creating an import — pub so integration tests can call directly.
+pub async fn cmd_create_import(input: CreateImportInput) -> Result<Import> {
+    // Validation
+    if !is_valid_import_id(&input.import_id) {
+        return Err(ErpError::Other(format!(
+            "import_id format inválido: '{}' · esperado IMP-YYYY-MM-DD",
+            input.import_id
+        )));
+    }
+    if input.bruto_usd <= 0.0 {
+        return Err(ErpError::Other(format!(
+            "bruto_usd debe ser > 0 · recibido {}",
+            input.bruto_usd
+        )));
+    }
+    if input.fx <= 0.0 {
+        return Err(ErpError::Other(format!(
+            "fx debe ser > 0 · recibido {}",
+            input.fx
+        )));
+    }
+    if input.n_units <= 0 {
+        return Err(ErpError::Other(format!(
+            "n_units debe ser > 0 · recibido {}",
+            input.n_units
+        )));
+    }
+
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    // Duplicate guard
+    let exists: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM imports WHERE import_id = ?1)",
+        rusqlite::params![&input.import_id],
+        |row| row.get::<_, i64>(0).map(|n| n != 0),
+    )?;
+    if exists {
+        return Err(ErpError::Other(format!(
+            "Import {} already exists",
+            input.import_id
+        )));
+    }
+
+    let supplier = if input.supplier.trim().is_empty() {
+        "Bond Soccer Jersey".to_string()
+    } else {
+        input.supplier.clone()
+    };
+    let carrier = input.carrier.clone().unwrap_or_else(|| "DHL".to_string());
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+    tx.execute(
+        "INSERT INTO imports
+         (import_id, paid_at, supplier, bruto_usd, fx, n_units, notes,
+          tracking_code, carrier, status, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'paid', ?10)",
+        rusqlite::params![
+            input.import_id,
+            input.paid_at,
+            supplier,
+            input.bruto_usd,
+            input.fx,
+            input.n_units,
+            input.notes,
+            input.tracking_code,
+            carrier,
+            now,
+        ],
+    )?;
+
+    tx.commit()?;
+
+    // Re-read to return canonical Import
+    let conn = open_db()?;
+    conn.query_row(
+        "SELECT import_id, paid_at, arrived_at, supplier, bruto_usd, shipping_gtq,
+                COALESCE(fx, 7.73), total_landed_gtq, n_units, unit_cost,
+                status, notes, created_at,
+                tracking_code, COALESCE(carrier, 'DHL'), lead_time_days
+         FROM imports WHERE import_id = ?1",
+        rusqlite::params![input.import_id],
+        |row| Ok(Import {
+            import_id:        row.get(0)?,
+            paid_at:          row.get(1)?,
+            arrived_at:       row.get(2)?,
+            supplier:         row.get(3)?,
+            bruto_usd:        row.get(4)?,
+            shipping_gtq:     row.get(5)?,
+            fx:               row.get(6)?,
+            total_landed_gtq: row.get(7)?,
+            n_units:          row.get(8)?,
+            unit_cost:        row.get(9)?,
+            status:           row.get(10)?,
+            notes:            row.get(11)?,
+            created_at:       row.get(12)?,
+            tracking_code:    row.get(13)?,
+            carrier:          row.get(14)?,
+            lead_time_days:   row.get(15)?,
+        }),
+    ).map_err(|e| e.into())
+}
+
+/// Tauri command wrapper — thin shim that delegates to cmd_create_import.
+#[tauri::command]
+async fn tauri_cmd_create_import(input: CreateImportInput) -> Result<Import> {
+    cmd_create_import(input).await
+}
+
 // ─── Finanzas (FIN-R1) — structs ─────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -5262,6 +5387,8 @@ pub fn run() {
             cmd_get_import_items,
             cmd_get_import_pulso,
             cmd_close_import_proportional,
+            // Importaciones R1.5
+            tauri_cmd_create_import,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
