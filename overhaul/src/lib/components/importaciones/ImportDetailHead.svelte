@@ -9,10 +9,13 @@
     onClose: () => void;
     onCancel: () => void;
     onEdit: () => void;
+    onDelete: () => void;
     onRefresh?: () => void;
   }
 
-  let { imp, onRegisterArrival, onClose, onCancel, onEdit, onRefresh }: Props = $props();
+  let { imp, onRegisterArrival, onClose, onCancel, onEdit, onDelete, onRefresh }: Props = $props();
+
+  let canDelete = $derived(imp.status === 'draft' || imp.status === 'cancelled');
 
   // R2 addition: mark in-transit flow
   let markInTransitModalOpen = $state(false);
@@ -113,6 +116,15 @@
       📝 Editar
     </button>
     <span class="flex-1"></span>
+    {#if canDelete}
+      <button
+        onclick={onDelete}
+        title="Eliminar permanentemente · solo disponible en draft o cancelled"
+        class="text-mono text-[11px] px-3 py-1.5 rounded-[3px] bg-[rgba(244,63,94,0.08)] border border-[rgba(244,63,94,0.5)] text-[var(--color-danger)] hover:bg-[rgba(244,63,94,0.18)]"
+      >
+        🗑️ Eliminar
+      </button>
+    {/if}
     <button class="text-mono text-[11px] px-3 py-1.5 rounded-[3px] bg-transparent border border-[rgba(244,63,94,0.3)] text-[var(--color-danger)] hover:bg-[rgba(244,63,94,0.10)]" onclick={onCancel}>
       🚫 Cancelar batch
     </button>
