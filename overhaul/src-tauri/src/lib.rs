@@ -7501,6 +7501,67 @@ fn cmd_get_imp_settings() -> std::result::Result<Vec<ImpSetting>, String> {
     impl_get_imp_settings(&conn).map_err(|e| e.to_string())
 }
 
+/// Validates a setting value against its key's expected type.
+fn validate_setting_value(key: &str, value: &str) -> std::result::Result<(), String> {
+    match key {
+        "default_fx" => {
+            let v: f64 = value.parse().map_err(|_| format!("'{}' debe ser numérico", key))?;
+            if v <= 0.0 || v > 50.0 {
+                return Err(format!("'{}' fuera de rango (0,50]", key));
+            }
+        }
+        "default_free_ratio" | "default_wishlist_target" => {
+            let v: i64 = value.parse().map_err(|_| format!("'{}' debe ser entero", key))?;
+            if v <= 0 {
+                return Err(format!("'{}' debe ser > 0", key));
+            }
+        }
+        "threshold_wishlist_unbatched_days"
+        | "threshold_paid_unarrived_days"
+        | "threshold_free_unit_unassigned_days" => {
+            let v: i64 = value.parse().map_err(|_| format!("'{}' debe ser entero", key))?;
+            if v <= 0 || v > 365 {
+                return Err(format!("'{}' fuera de rango (0,365]", key));
+            }
+        }
+        "threshold_cost_overrun_pct" => {
+            let v: f64 = value.parse().map_err(|_| format!("'{}' debe ser numérico", key))?;
+            if v <= 0.0 || v > 500.0 {
+                return Err(format!("'{}' fuera de rango (0,500]", key));
+            }
+        }
+        _ => return Err(format!("Key desconocida: '{}'", key)),
+    }
+    Ok(())
+}
+
+pub fn impl_update_imp_setting_at(
+    conn: &rusqlite::Connection,
+    key: &str,
+    value: &str,
+) -> std::result::Result<ImpSetting, String> {
+    validate_setting_value(key, value)?;
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    conn.execute(
+        "INSERT INTO imp_settings (key, value, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, 'diego')
+         ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at, updated_by=excluded.updated_by",
+        rusqlite::params![key, value, now],
+    ).map_err(|e| e.to_string())?;
+    Ok(ImpSetting {
+        key: key.to_string(),
+        value: value.to_string(),
+        updated_at: Some(now),
+        updated_by: Some("diego".to_string()),
+    })
+}
+
+#[tauri::command]
+fn cmd_update_imp_setting(key: String, value: String) -> std::result::Result<ImpSetting, String> {
+    let conn = rusqlite::Connection::open(db_path()).map_err(|e| e.to_string())?;
+    impl_update_imp_setting_at(&conn, &key, &value)
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -7614,6 +7675,7 @@ pub fn run() {
             cmd_get_most_requested_unpublished,
             // Importaciones R6 (Settings · migration log · integrations)
             cmd_get_imp_settings,
+            cmd_update_imp_setting,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
