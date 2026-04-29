@@ -32,7 +32,7 @@
       reset();
     } else {
       // Default: select all active items
-      selectedIds = new Set(activeItems.map(i => i.wishlist_item_id));
+      selectedIds = new Set(activeItems.map(i => i.wishlistItemId));
     }
   });
 
@@ -40,11 +40,11 @@
   const idPattern = /^IMP-\d{4}-\d{2}-\d{2}$/;
   let idValid = $derived(idPattern.test(importId));
 
-  let selectedItems = $derived(activeItems.filter(i => selectedIds.has(i.wishlist_item_id)));
-  let assignedCount = $derived(selectedItems.filter(i => i.customer_id).length);
-  let stockCount = $derived(selectedItems.filter(i => !i.customer_id).length);
+  let selectedItems = $derived(activeItems.filter(i => selectedIds.has(i.wishlistItemId)));
+  let assignedCount = $derived(selectedItems.filter(i => i.customerId).length);
+  let stockCount = $derived(selectedItems.filter(i => !i.customerId).length);
   let estimatedBrutoUsd = $derived(
-    selectedItems.reduce((sum, i) => sum + (i.expected_usd ?? 0), 0)
+    selectedItems.reduce((sum, i) => sum + (i.expectedUsd ?? 0), 0)
   );
   let nUnits = $derived(selectedItems.length);
 
@@ -66,7 +66,7 @@
   }
 
   function selectAll() {
-    selectedIds = new Set(activeItems.map(i => i.wishlist_item_id));
+    selectedIds = new Set(activeItems.map(i => i.wishlistItemId));
   }
 
   function selectNone() {
@@ -111,9 +111,9 @@
   }
 
   function itemLabel(item: WishlistItem): string {
-    const parts: string[] = [item.family_id];
-    if (item.player_name) parts.push(item.player_name);
-    if (item.player_number !== null) parts.push(`#${item.player_number}`);
+    const parts: string[] = [item.familyId];
+    if (item.playerName) parts.push(item.playerName);
+    if (item.playerNumber !== null) parts.push(`#${item.playerNumber}`);
     if (item.size) parts.push(item.size);
     if (item.patch) parts.push(item.patch);
     return parts.join(' · ');
@@ -243,26 +243,26 @@
               No hay items active en wishlist. Agregá items primero.
             </p>
           {:else}
-            {#each activeItems as item (item.wishlist_item_id)}
+            {#each activeItems as item (item.wishlistItemId)}
               <label class="flex items-center gap-2 px-3 py-2 hover:bg-[var(--color-surface-2)] cursor-pointer border-b border-[var(--color-surface-2)] last:border-b-0">
                 <input
                   type="checkbox"
-                  checked={selectedIds.has(item.wishlist_item_id)}
-                  onchange={() => toggleItem(item.wishlist_item_id)}
+                  checked={selectedIds.has(item.wishlistItemId)}
+                  onchange={() => toggleItem(item.wishlistItemId)}
                   disabled={submitting}
                   class="accent-[var(--color-accent)]"
                 />
                 <span class="text-mono text-[11px] text-[var(--color-text-primary)] flex-1">
                   {itemLabel(item)}
                 </span>
-                {#if item.expected_usd}
+                {#if item.expectedUsd}
                   <span class="text-mono text-[10px] text-[var(--color-text-tertiary)] tabular-nums">
-                    ${item.expected_usd.toFixed(2)}
+                    ${item.expectedUsd.toFixed(2)}
                   </span>
                 {/if}
-                {#if item.customer_id}
+                {#if item.customerId}
                   <span class="text-mono text-[10px] text-[var(--color-accent)] uppercase" style="letter-spacing: 0.06em;">
-                    {item.customer_id}
+                    {item.customerId}
                   </span>
                 {:else}
                   <span class="text-mono text-[10px] text-[var(--color-text-tertiary)] uppercase" style="letter-spacing: 0.06em;">

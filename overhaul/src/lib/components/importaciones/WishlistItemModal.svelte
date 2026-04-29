@@ -68,15 +68,15 @@
     if (!open) {
       reset();
     } else if (mode === 'edit' && item) {
-      familyId = item.family_id;
-      jerseyId = item.jersey_id ?? '';
+      familyId = item.familyId;
+      jerseyId = item.jerseyId ?? '';
       size = item.size ?? '';
-      playerName = item.player_name ?? '';
-      playerNumber = item.player_number;
+      playerName = item.playerName ?? '';
+      playerNumber = item.playerNumber;
       patch = item.patch ?? '';
       version = item.version ?? '';
-      customerId = item.customer_id ?? '';
-      expectedUsd = item.expected_usd;
+      customerId = item.customerId ?? '';
+      expectedUsd = item.expectedUsd;
       notes = item.notes ?? '';
     }
   });
@@ -84,7 +84,7 @@
   // Reverse-lookup: when catalog loads in edit mode, try to find the modelo by SKU
   $effect(() => {
     if (mode === 'edit' && item && modelos.length > 0 && !selectedTeam) {
-      const found = modelos.find((m) => m.sku === item.family_id);
+      const found = modelos.find((m) => m.sku === item.familyId);
       if (found) {
         selectedTipo = tipoOf(found);
         selectedTeam = found.team;
@@ -209,7 +209,7 @@
       } else {
         if (!item) throw new Error('edit mode requires item prop');
         saved = await adapter.updateWishlistItem({
-          wishlistItemId: item.wishlist_item_id,
+          wishlistItemId: item.wishlistItemId,
           size: size.trim() || undefined,
           playerName: playerName.trim() || undefined,
           playerNumber: playerNumber ?? undefined,

@@ -76,10 +76,10 @@
   }
 
   async function handleCancelItem(item: WishlistItem) {
-    const confirmed = confirm(`¿Quitar "${item.family_id}${item.player_name ? ' · ' + item.player_name : ''}" del wishlist?`);
+    const confirmed = confirm(`¿Quitar "${item.familyId}${item.playerName ? ' · ' + item.playerName : ''}" del wishlist?`);
     if (!confirmed) return;
     try {
-      await adapter.cancelWishlistItem(item.wishlist_item_id);
+      await adapter.cancelWishlistItem(item.wishlistItemId);
       await load();
       onPulsoRefresh();
     } catch (e) {
@@ -107,8 +107,8 @@
 
   function rowLabel(item: WishlistItem): string {
     const parts: string[] = [];
-    if (item.player_name) parts.push(item.player_name);
-    if (item.player_number !== null) parts.push(`#${item.player_number}`);
+    if (item.playerName) parts.push(item.playerName);
+    if (item.playerNumber !== null) parts.push(`#${item.playerNumber}`);
     if (item.patch) parts.push(item.patch);
     if (item.version) parts.push(item.version);
     if (item.size) parts.push(item.size);
@@ -221,16 +221,16 @@
             [ASSIGNED · {assignedItems.length}]
           </h3>
           <div class="border border-[var(--color-border)] rounded-[3px]">
-            {#each assignedItems as item (item.wishlist_item_id)}
+            {#each assignedItems as item (item.wishlistItemId)}
               <div class="flex items-center gap-3 px-3 py-2 border-b border-[var(--color-surface-2)] last:border-b-0 hover:bg-[var(--color-surface-2)]">
-                <span class="text-mono text-[11px] text-[var(--color-text-primary)] w-[120px]">{item.family_id}</span>
+                <span class="text-mono text-[11px] text-[var(--color-text-primary)] w-[120px]">{item.familyId}</span>
                 <span class="text-mono text-[11px] text-[var(--color-text-secondary)] flex-1">{rowLabel(item)}</span>
                 <span class="text-mono text-[10px] uppercase text-[var(--color-accent)] w-[100px] text-right" style="letter-spacing: 0.06em;">
-                  {item.customer_id}
+                  {item.customerId}
                 </span>
-                {#if item.expected_usd}
+                {#if item.expectedUsd}
                   <span class="text-mono text-[10px] text-[var(--color-text-tertiary)] tabular-nums w-[60px] text-right">
-                    ${item.expected_usd.toFixed(2)}
+                    ${item.expectedUsd.toFixed(2)}
                   </span>
                 {:else}
                   <span class="w-[60px]"></span>
@@ -252,14 +252,14 @@
             [STOCK FUTURO · {stockItems.length}]
           </h3>
           <div class="border border-[var(--color-border)] rounded-[3px]">
-            {#each stockItems as item (item.wishlist_item_id)}
+            {#each stockItems as item (item.wishlistItemId)}
               <div class="flex items-center gap-3 px-3 py-2 border-b border-[var(--color-surface-2)] last:border-b-0 hover:bg-[var(--color-surface-2)]">
-                <span class="text-mono text-[11px] text-[var(--color-text-primary)] w-[120px]">{item.family_id}</span>
+                <span class="text-mono text-[11px] text-[var(--color-text-primary)] w-[120px]">{item.familyId}</span>
                 <span class="text-mono text-[11px] text-[var(--color-text-secondary)] flex-1">{rowLabel(item)}</span>
                 <span class="w-[100px]"></span>
-                {#if item.expected_usd}
+                {#if item.expectedUsd}
                   <span class="text-mono text-[10px] text-[var(--color-text-tertiary)] tabular-nums w-[60px] text-right">
-                    ${item.expected_usd.toFixed(2)}
+                    ${item.expectedUsd.toFixed(2)}
                   </span>
                 {:else}
                   <span class="w-[60px]"></span>
@@ -276,16 +276,16 @@
     {:else}
       <!-- promoted / cancelled · simple flat list -->
       <div class="border border-[var(--color-border)] rounded-[3px]">
-        {#each items as item (item.wishlist_item_id)}
+        {#each items as item (item.wishlistItemId)}
           <div class="flex items-center gap-3 px-3 py-2 border-b border-[var(--color-surface-2)] last:border-b-0 hover:bg-[var(--color-surface-2)]">
-            <span class="text-mono text-[11px] text-[var(--color-text-primary)] w-[120px]">{item.family_id}</span>
+            <span class="text-mono text-[11px] text-[var(--color-text-primary)] w-[120px]">{item.familyId}</span>
             <span class="text-mono text-[11px] text-[var(--color-text-secondary)] flex-1">{rowLabel(item)}</span>
-            {#if item.promoted_to_import_id}
+            {#if item.promotedToImportId}
               <span class="text-mono text-[10px] uppercase text-[var(--color-accent)]" style="letter-spacing: 0.06em;">
-                → {item.promoted_to_import_id}
+                → {item.promotedToImportId}
               </span>
             {/if}
-            <span class="text-mono text-[10px] text-[var(--color-text-tertiary)]">{item.created_at.slice(0, 10)}</span>
+            <span class="text-mono text-[10px] text-[var(--color-text-tertiary)]">{item.createdAt.slice(0, 10)}</span>
           </div>
         {/each}
       </div>
