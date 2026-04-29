@@ -2758,6 +2758,93 @@ fn read_import_by_id(conn: &rusqlite::Connection, import_id: &str) -> Result<Imp
     ).map_err(ErpError::from)
 }
 
+// ─── R2: Wishlist + Promote-to-batch ────
+//
+// Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
+// All 5 R2 commands (list/create/update/cancel/promote) follow this split.
+//
+// D7=B: catalog_family_exists() reads catalog.json server-side via catalog_path() (L53).
+// Tests override catalog path via env var ELCLUB_CATALOG_PATH for fixture isolation.
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WishlistItem {
+    pub wishlist_item_id:      i64,
+    pub family_id:             String,
+    pub jersey_id:             Option<String>,
+    pub size:                  Option<String>,
+    pub player_name:           Option<String>,
+    pub player_number:         Option<i64>,
+    pub patch:                 Option<String>,
+    pub version:               Option<String>,
+    pub customer_id:           Option<String>,
+    pub expected_usd:          Option<f64>,
+    pub status:                String,
+    pub promoted_to_import_id: Option<String>,
+    pub created_at:            String,
+    pub notes:                 Option<String>,
+}
+
+/// D7=B validation: returns true if `family_id` exists in catalog.json.
+/// Overridable via ELCLUB_CATALOG_PATH env var (tests use fixtures).
+fn catalog_family_exists(family_id: &str) -> Result<bool> {
+    let path = std::env::var("ELCLUB_CATALOG_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| catalog_path());
+
+    if !path.exists() {
+        return Err(ErpError::Other(format!(
+            "catalog.json not found at {:?} · cannot validate family_id (D7=B)",
+            path
+        )));
+    }
+
+    let raw = std::fs::read_to_string(&path).map_err(|e| {
+        ErpError::Other(format!("failed reading catalog.json: {}", e))
+    })?;
+    let catalog: serde_json::Value = serde_json::from_str(&raw).map_err(|e| {
+        ErpError::Other(format!("invalid catalog.json: {}", e))
+    })?;
+
+    let families = catalog.as_array().ok_or_else(|| {
+        ErpError::Other("catalog.json root not an array".into())
+    })?;
+
+    Ok(families.iter().any(|f| {
+        f.get("family_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s == family_id)
+            .unwrap_or(false)
+    }))
+}
+
+/// Re-reads canonical WishlistItem row by id. Used post-tx by impl_X commands.
+fn read_wishlist_item_by_id(conn: &rusqlite::Connection, wishlist_item_id: i64) -> Result<WishlistItem> {
+    conn.query_row(
+        "SELECT wishlist_item_id, family_id, jersey_id, size, player_name, player_number,
+                patch, version, customer_id, expected_usd, status, promoted_to_import_id,
+                created_at, notes
+         FROM import_wishlist WHERE wishlist_item_id = ?1",
+        rusqlite::params![wishlist_item_id],
+        |row| Ok(WishlistItem {
+            wishlist_item_id:      row.get(0)?,
+            family_id:             row.get(1)?,
+            jersey_id:             row.get(2)?,
+            size:                  row.get(3)?,
+            player_name:           row.get(4)?,
+            player_number:         row.get(5)?,
+            patch:                 row.get(6)?,
+            version:               row.get(7)?,
+            customer_id:           row.get(8)?,
+            expected_usd:          row.get(9)?,
+            status:                row.get(10)?,
+            promoted_to_import_id: row.get(11)?,
+            created_at:            row.get(12)?,
+            notes:                 row.get(13)?,
+        }),
+    ).map_err(ErpError::from)
+}
+
 // ─── R1.5 Completion: Create / Register Arrival / Update / Cancel ────
 //
 // Convention for IMP-R1.5 commands that need integration testing:
@@ -5758,5 +5845,38 @@ mod imp_r15_helper_tests {
     fn test_csv_escape_with_newline() {
         assert_eq!(csv_escape("line1\nline2"), "\"line1\nline2\"");
         assert_eq!(csv_escape("crlf\r\n"), "\"crlf\r\n\"");
+    }
+}
+
+#[cfg(test)]
+mod imp_r2_helper_tests {
+    use super::*;
+
+    fn fixture_path() -> std::path::PathBuf {
+        let mut p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        p.push("tests/fixtures/catalog_minimal.json");
+        p
+    }
+
+    #[test]
+    fn test_catalog_family_exists_known() {
+        std::env::set_var("ELCLUB_CATALOG_PATH", fixture_path());
+        assert!(catalog_family_exists("ARG-2026-L-FS").unwrap());
+        assert!(catalog_family_exists("FRA-2026-L-FS").unwrap());
+    }
+
+    #[test]
+    fn test_catalog_family_exists_unknown() {
+        std::env::set_var("ELCLUB_CATALOG_PATH", fixture_path());
+        assert!(!catalog_family_exists("FAKE-XXXX-X-XX").unwrap());
+        assert!(!catalog_family_exists("").unwrap());
+    }
+
+    #[test]
+    fn test_catalog_family_exists_missing_file() {
+        std::env::set_var("ELCLUB_CATALOG_PATH", "/nonexistent/path.json");
+        let result = catalog_family_exists("ARG-2026-L-FS");
+        assert!(result.is_err());
+        assert!(format!("{:?}", result.unwrap_err()).contains("not found"));
     }
 }

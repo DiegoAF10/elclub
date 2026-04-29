@@ -1,0 +1,5 @@
+[
+  {"family_id": "ARG-2026-L-FS", "name": "Argentina 2026 Local Fan", "tier": "A"},
+  {"family_id": "FRA-2026-L-FS", "name": "Francia 2026 Local Fan", "tier": "A"},
+  {"family_id": "BRA-2026-L-FS", "name": "Brasil 2026 Local Fan", "tier": "B"}
+]
