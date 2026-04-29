@@ -109,21 +109,32 @@
   </section>
 
   {#if loading}
-    <div class="flex flex-1 items-center justify-center text-[var(--color-text-tertiary)]">
-      <div class="text-mono text-[11px] uppercase" style="letter-spacing: 0.08em;">Cargando supplier metrics…</div>
+    <div class="space-y-3">
+      <div class="h-12 rounded-[3px] bg-[var(--color-surface-2)] animate-pulse"></div>
+      <div class="h-[160px] rounded-[4px] bg-[var(--color-surface-2)] animate-pulse"></div>
     </div>
   {:else if errorMsg}
-    <div class="text-[11px] text-[var(--color-danger)] bg-[rgba(244,63,94,0.10)] border border-[rgba(244,63,94,0.3)] rounded-[3px] px-3 py-2 mb-4">
-      ⚠️ {errorMsg}
+    <div class="flex items-center justify-between gap-3 text-[11px] text-[var(--color-danger)] bg-[rgba(244,63,94,0.10)] border border-[rgba(244,63,94,0.3)] rounded-[3px] px-3 py-2 mb-4">
+      <span>⚠️ Error: {errorMsg}</span>
+      <button
+        type="button"
+        onclick={loadMetrics}
+        class="text-mono text-[10px] uppercase px-2 py-1 bg-[var(--color-danger)] text-white rounded-[2px]"
+        style="letter-spacing: 0.06em;"
+      >
+        Reintentar
+      </button>
     </div>
   {:else if metrics.length === 0}
     <!-- Empty state: zero suppliers means zero batches -->
     <div class="flex flex-1 items-center justify-center">
-      <div class="text-center max-w-md">
-        <div class="text-mono text-[11px] uppercase text-[var(--color-text-tertiary)] mb-2" style="letter-spacing: 0.08em;">Sin batches todavía</div>
-        <div class="text-sm text-[var(--color-text-secondary)]">
-          Cuando crees el primer pedido (tab Pedidos · botón <span class="text-mono">+ Nuevo</span>), aparece scorecard del supplier acá con métricas reales.
-        </div>
+      <div class="flex flex-col items-center text-center max-w-md py-12 px-6 border border-dashed border-[var(--color-border)] rounded-[6px]">
+        <div class="text-[28px] opacity-50 mb-1">🏢</div>
+        <h3 class="text-mono text-[11px] uppercase text-[var(--color-text-secondary)] mb-1" style="letter-spacing: 0.08em;">Sin métricas de supplier</h3>
+        <p class="text-[11px] text-[var(--color-text-tertiary)]">El scorecard requiere al menos 1 batch closed.</p>
+        <p class="text-[10.5px] text-[var(--color-text-muted)] mt-2">
+          Cerrá un batch desde Pedidos para activar métricas.
+        </p>
       </div>
     </div>
   {:else}
