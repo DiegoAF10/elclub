@@ -287,6 +287,86 @@ export interface PromoteWishlistResult {
 	importItemsCount:  number;       // count of import_items rows inserted (= wishlistItemIds.length)
 }
 
+// ─── R3: Margen Real ────────────────────────────────────────────────
+// camelCase field names match Rust serde rename — transparent translation
+
+export interface MargenFilter {
+	periodFrom?: string;       // YYYY-MM-DD
+	periodTo?: string;         // YYYY-MM-DD
+	supplier?: string;
+	includePipeline?: boolean; // default false (closed only)
+}
+
+export interface BatchMargenSummary {
+	importId: string;
+	supplier: string;
+	paidAt: string | null;
+	arrivedAt: string | null;
+	status: string;
+	nUnits: number | null;
+	totalLandedGtq: number | null;
+	nSalesLinked: number;
+	nItemsLinked: number;
+	revenueTotalGtq: number;        // SUM(sale_items.unit_price) WHERE import_id=?
+	margenBrutoGtq: number;
+	margenPct: number | null;
+	nStockPendiente: number;        // count import_items WHERE status='pending' (R6 single source)
+	valorStockPendienteGtq: number; // SUM(COALESCE(import_items.unit_cost_gtq, imports.unit_cost)) for pending items
+	nFreeUnits: number;
+	valorFreeUnitsGtq: number | null; // null hasta que se decida D-FREE valuation rule
+}
+
+export interface LinkedSale {
+	saleId: number;                 // Rust i64
+	occurredAt: string | null;      // production col: sales.occurred_at
+	customerId: number | null;      // production col: sales.customer_id is INTEGER
+	total: number;                  // production col: sales.total (NOT total_gtq)
+	nItemsFromBatch: number;
+}
+
+export interface PendingItem {
+	importItemId: number;
+	familyId: string;               // production col (NOT sku)
+	jerseyId: string | null;
+	size: string | null;
+	playerName: string | null;
+	playerNumber: number | null;
+	patch: string | null;
+	version: string | null;
+	customerId: string | null;      // NULL = stock-future · populated = assigned to specific customer
+	expectedUsd: number | null;
+	unitCostGtq: number | null;     // null hasta que close (R4) corra prorrateo
+	status: string;                 // 'pending' | 'arrived' | 'sold' | 'published' | 'cancelled'
+}
+
+export interface FreeUnitRow {
+	freeUnitId: number;
+	destination: string | null;
+	destinationRef: string | null;
+	assignedAt: string | null;
+	notes: string | null;
+}
+
+export interface BatchMargenDetail {
+	summary: BatchMargenSummary;
+	linkedSales: LinkedSale[];
+	pendingItems: PendingItem[];
+	freeUnits: FreeUnitRow[];
+}
+
+export interface MargenPulso {
+	nBatchesClosed: number;
+	revenueTotalYtdGtq: number;
+	landedTotalYtdGtq: number;
+	margenTotalYtdGtq: number;
+	margenPctAvg: number | null;
+	bestBatchId: string | null;
+	bestBatchMargenPct: number | null;
+	worstBatchId: string | null;
+	worstBatchMargenPct: number | null;
+	capitalAmarradoGtq: number;
+}
+
 // ─── Capabilities — lo que cada adapter puede hacer ──────────────────
 export interface AdapterCapabilities {
 	reads: boolean;
@@ -427,6 +507,11 @@ export interface Adapter {
 	cancelWishlistItem(wishlistItemId: number): Promise<WishlistItem>;
 	promoteWishlistToBatch(input: PromoteWishlistInput): Promise<PromoteWishlistResult>;
 	markInTransit(importId: string, trackingCode?: string): Promise<Import>;
+
+	// R3 additions: Margen Real
+	getMargenReal(filter: MargenFilter): Promise<BatchMargenSummary[]>;
+	getBatchMargenBreakdown(importId: string): Promise<BatchMargenDetail>;
+	getMargenPulso(): Promise<MargenPulso>;
 
 	// ─── Finanzas (FIN-R1) ──────────────────────────────────────
 	computeProfitSnapshot(

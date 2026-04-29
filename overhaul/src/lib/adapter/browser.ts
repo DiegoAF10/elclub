@@ -30,7 +30,12 @@ import type {
 	UpdateImportInput,
 	UpdateWishlistItemInput,
 	WatermarkArgs,
-	WatermarkResult
+	WatermarkResult,
+	// R3
+	MargenFilter,
+	BatchMargenSummary,
+	BatchMargenDetail,
+	MargenPulso
 } from './types';
 import { NotAvailableInBrowser } from './types';
 import type { WishlistItem } from '$lib/data/wishlist';
@@ -438,6 +443,19 @@ export const browserAdapter: Adapter = {
 
 	async markInTransit(_importId: string, _trackingCode?: string): Promise<Import> {
 		throw new NotAvailableInBrowser('markInTransit');
+	},
+
+	// ─── Importaciones R3 (Margen Real) ────────────────────────────────
+	async getMargenReal(_filter: MargenFilter): Promise<BatchMargenSummary[]> {
+		throw new NotAvailableInBrowser('getMargenReal');
+	},
+
+	async getBatchMargenBreakdown(_importId: string): Promise<BatchMargenDetail> {
+		throw new NotAvailableInBrowser('getBatchMargenBreakdown');
+	},
+
+	async getMargenPulso(): Promise<MargenPulso> {
+		throw new NotAvailableInBrowser('getMargenPulso');
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────

@@ -34,7 +34,12 @@ import type {
 	UpdateImportInput,
 	UpdateWishlistItemInput,
 	WatermarkArgs,
-	WatermarkResult
+	WatermarkResult,
+	// R3
+	MargenFilter,
+	BatchMargenSummary,
+	BatchMargenDetail,
+	MargenPulso
 } from './types';
 import type { WishlistItem } from '$lib/data/wishlist';
 import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, CreateOrderItem, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult, UpdateSaleArgs } from '../data/comercial';
@@ -583,6 +588,19 @@ export const tauriAdapter: Adapter = {
 
 	async markInTransit(importId: string, trackingCode?: string): Promise<Import> {
 		return await invoke<Import>('cmd_mark_in_transit', { importId, trackingCode });
+	},
+
+	// ─── Importaciones R3 (Margen Real) ────────────────────────────────
+	async getMargenReal(filter: MargenFilter): Promise<BatchMargenSummary[]> {
+		return await invoke<BatchMargenSummary[]>('cmd_get_margen_real', { filter });
+	},
+
+	async getBatchMargenBreakdown(importId: string): Promise<BatchMargenDetail> {
+		return await invoke<BatchMargenDetail>('cmd_get_batch_margen_breakdown', { importId });
+	},
+
+	async getMargenPulso(): Promise<MargenPulso> {
+		return await invoke<MargenPulso>('cmd_get_margen_pulso');
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────
