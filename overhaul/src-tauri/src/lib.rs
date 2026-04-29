@@ -3777,6 +3777,105 @@ async fn cmd_get_supplier_detail(supplier: String) -> Result<SupplierDetail> {
     impl_get_supplier_detail(supplier)
 }
 
+// ─── R5 BONUS: "Más pedidos sin publicar" widget (feedback loop publishing) ───
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnpublishedRequest {
+    pub family_id: String,
+    pub n_requests: i32,        // count across all import_items (any status)
+    pub n_pending: i32,         // count where status='pending'
+    pub n_assigned: i32,        // count where customer_id IS NOT NULL
+    pub n_stock: i32,           // count where customer_id IS NULL
+    pub last_requested_at: Option<String>,
+    pub published: bool,        // computed: family_id present in catalog.json
+}
+
+/// Helper: lee `catalog.json` (path via catalog_path() en lib.rs) y devuelve set de family_ids publicados.
+/// Si el archivo no existe o falla parse, retorna Err (caller decide fallback).
+/// Soporta ELCLUB_CATALOG_PATH env override (ya usado en R2 tests).
+fn read_catalog_family_ids() -> std::result::Result<std::collections::HashSet<String>, String> {
+    use std::collections::HashSet;
+    let path = std::env::var("ELCLUB_CATALOG_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| catalog_path());
+    let content = std::fs::read_to_string(&path).map_err(|e| format!("read catalog.json: {e}"))?;
+    let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| format!("parse catalog.json: {e}"))?;
+    let families = json.get("families").and_then(|v| v.as_array())
+        .ok_or_else(|| "catalog.json missing 'families' array".to_string())?;
+    let mut set = HashSet::new();
+    for f in families {
+        if let Some(fid) = f.get("family_id").and_then(|v| v.as_str()) {
+            set.insert(fid.to_string());
+        }
+    }
+    Ok(set)
+}
+
+/// Aggregates import_items by family_id + cross-references catalog.json para identificar
+/// los family_ids con más pedidos pendientes de publicar (loop de feedback prioridad publishing).
+///
+/// `limit` default = 10 si None. Filtra a `published=false` antes de retornar (UI no muestra ya-publicados).
+pub async fn impl_get_most_requested_unpublished(limit: Option<i32>) -> std::result::Result<Vec<UnpublishedRequest>, String> {
+    let take = limit.unwrap_or(10).max(1).min(100);
+    let conn = open_db().map_err(|e| e.to_string())?;
+
+    // 1. Aggregate by family_id (any status) · ORDER BY count DESC
+    let mut stmt = conn.prepare(
+        "SELECT family_id,
+                COUNT(*) AS n_requests,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS n_pending,
+                SUM(CASE WHEN customer_id IS NOT NULL THEN 1 ELSE 0 END) AS n_assigned,
+                SUM(CASE WHEN customer_id IS NULL THEN 1 ELSE 0 END) AS n_stock,
+                MAX(created_at) AS last_requested_at
+         FROM import_items
+         GROUP BY family_id
+         ORDER BY n_requests DESC, last_requested_at DESC
+         LIMIT ?1"
+    ).map_err(|e| e.to_string())?;
+
+    let rows = stmt.query_map(rusqlite::params![take * 3], |row| {  // 3x buffer pre-filter
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, i32>(1)?,
+            row.get::<_, i32>(2)?,
+            row.get::<_, i32>(3)?,
+            row.get::<_, i32>(4)?,
+            row.get::<_, Option<String>>(5)?,
+        ))
+    }).map_err(|e| e.to_string())?;
+
+    let raw: Vec<_> = rows.collect::<rusqlite::Result<Vec<_>>>().map_err(|e| e.to_string())?;
+
+    // 2. Read catalog.json to identify published family_ids
+    let catalog_families: std::collections::HashSet<String> = read_catalog_family_ids()
+        .unwrap_or_else(|_| std::collections::HashSet::new());
+
+    // 3. Build response · filter to unpublished only
+    let mut out = Vec::new();
+    for (family_id, n_requests, n_pending, n_assigned, n_stock, last_requested_at) in raw {
+        let published = catalog_families.contains(&family_id);
+        if !published {
+            out.push(UnpublishedRequest {
+                family_id,
+                n_requests,
+                n_pending,
+                n_assigned,
+                n_stock,
+                last_requested_at,
+                published,
+            });
+        }
+        if out.len() >= take as usize { break; }
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+async fn cmd_get_most_requested_unpublished(limit: Option<i32>) -> std::result::Result<Vec<UnpublishedRequest>, String> {
+    impl_get_most_requested_unpublished(limit).await
+}
+
 // ─── R2: Wishlist + Promote-to-batch ────
 //
 // Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
