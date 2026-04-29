@@ -1,6 +1,6 @@
 [package]
 name = "el-club-erp"
-version = "0.4.2"
+version = "0.4.3"
 description = "El Club ERP — audit tool para catalog management"
 authors = ["Diego Arriaza Flores"]
 edition = "2021"
