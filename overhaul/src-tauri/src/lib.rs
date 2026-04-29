@@ -3520,6 +3520,64 @@ async fn cmd_unassign_free_unit(free_unit_id: i64) -> Result<FreeUnit> {
     impl_unassign_free_unit(free_unit_id)
 }
 
+// ─── R5: Supplier Scorecard ─────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContactInfo {
+    pub label: String,           // "WhatsApp · 志鵬 黎"
+    pub payment_method: String,  // "PayPal upfront"
+    pub carrier: String,         // "DHL door-to-door"
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PriceBand {
+    pub base_usd: Option<f64>,         // $11
+    pub patch_usd: Option<f64>,        // $13
+    pub patch_name_usd: Option<f64>,   // $15
+    pub source: String,                // "hardcoded:Bond" | "tbd"
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupplierMetrics {
+    pub supplier: String,
+    pub total_batches: i64,
+    pub closed_batches: i64,
+    pub pipeline_batches: i64,            // status in (paid, in_transit, arrived)
+    pub lead_time_avg_days: Option<f64>,
+    pub lead_time_p50_days: Option<f64>,
+    pub lead_time_p95_days: Option<f64>,
+    pub lead_time_n: i64,                 // sample size for transparency
+    pub total_landed_gtq_ytd: f64,        // sum closed batches · current year
+    pub cost_accuracy_pct: Option<f64>,   // None hasta que existan disputes log (R5 escalado)
+    pub next_expected_arrival: Option<String>,  // earliest paid_at + avg_lead among non-closed
+    pub last_batch_paid_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupplierBatchSummary {
+    pub import_id: String,
+    pub paid_at: Option<String>,
+    pub arrived_at: Option<String>,
+    pub status: String,
+    pub n_units: Option<i64>,
+    pub total_landed_gtq: Option<f64>,
+    pub lead_time_days: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupplierDetail {
+    pub metrics: SupplierMetrics,
+    pub contact: ContactInfo,
+    pub price_band: PriceBand,
+    pub free_policy_text: String,
+    pub batches: Vec<SupplierBatchSummary>,  // sorted DESC by paid_at
+}
+
 // ─── R2: Wishlist + Promote-to-batch ────
 //
 // Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
