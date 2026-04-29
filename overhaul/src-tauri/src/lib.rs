@@ -3074,6 +3074,48 @@ async fn cmd_update_wishlist_item(input: UpdateWishlistItemInput) -> Result<Wish
     impl_update_wishlist_item(input).await
 }
 
+/// Soft-delete a wishlist item by setting status='cancelled'.
+/// Idempotent: cancelling already-cancelled is OK.
+/// Cannot cancel a 'promoted' item (would orphan the linked import row).
+pub async fn impl_cancel_wishlist_item(wishlist_item_id: i64) -> Result<WishlistItem> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    let status: String = tx.query_row(
+        "SELECT status FROM import_wishlist WHERE wishlist_item_id = ?1",
+        rusqlite::params![wishlist_item_id],
+        |row| row.get(0),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => {
+            ErpError::NotFound(format!("Wishlist item {}", wishlist_item_id))
+        }
+        other => other.into(),
+    })?;
+
+    if status == "promoted" {
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "cannot cancel wishlist item already promoted to a batch (use the batch's cancel flow)"
+        )));
+    }
+
+    if status != "cancelled" {
+        tx.execute(
+            "UPDATE import_wishlist SET status = 'cancelled' WHERE wishlist_item_id = ?1",
+            rusqlite::params![wishlist_item_id],
+        )?;
+    }
+
+    tx.commit()?;
+
+    read_wishlist_item_by_id(&conn, wishlist_item_id)
+}
+
+#[tauri::command]
+async fn cmd_cancel_wishlist_item(wishlist_item_id: i64) -> Result<WishlistItem> {
+    impl_cancel_wishlist_item(wishlist_item_id).await
+}
+
 // ─── R1.5 Completion: Create / Register Arrival / Update / Cancel ────
 //
 // Convention for IMP-R1.5 commands that need integration testing:
