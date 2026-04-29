@@ -2774,6 +2774,125 @@ fn read_import_by_id(conn: &rusqlite::Connection, import_id: &str) -> Result<Imp
     ).map_err(ErpError::from)
 }
 
+// ─── R4: Free units ledger ──────────────────────────────────────────
+//
+// Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
+//
+// NULL convention para `destination` (decisión Diego 2026-04-28):
+// - destination: None  = sin asignar (default al INSERT desde close_import_proportional)
+// - destination: Some(s) = asignada a 'vip' | 'mystery' | 'garantizada' | 'personal'
+// - destination_ref: customer_id si destination='vip' · texto libre para los demás
+// - cmd_unassign_free_unit resetea destination a NULL (NO a la string 'unassigned')
+// - VALID_FREE_DESTINATIONS Rust constant SOLO contiene los 4 destinos reales (no 'unassigned')
+
+const VALID_FREE_DESTINATIONS: &[&str] = &["vip", "mystery", "garantizada", "personal"];
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FreeUnit {
+    pub free_unit_id: i64,
+    pub import_id: String,
+    pub family_id: Option<String>,
+    pub jersey_id: Option<String>,
+    pub destination: Option<String>,
+    pub destination_ref: Option<String>,
+    pub assigned_at: Option<String>,
+    pub assigned_by: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: String,
+    // Joined fields del import (display sin extra query)
+    pub import_supplier: Option<String>,
+    pub import_paid_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FreeUnitFilter {
+    pub import_id: Option<String>,
+    pub destination: Option<String>,
+    pub status: Option<String>, // 'assigned' (NOT NULL) / 'unassigned' (NULL)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssignFreeUnitInput {
+    pub free_unit_id: i64,
+    pub destination: String,
+    pub destination_ref: Option<String>,
+    pub family_id: Option<String>,
+    pub jersey_id: Option<String>,
+    pub notes: Option<String>,
+}
+
+/// Reads free units with optional filter. Joins `imports` for supplier/paid_at display.
+/// Pure read · no transaction needed.
+pub fn impl_list_free_units(filter: Option<FreeUnitFilter>) -> Result<Vec<FreeUnit>> {
+    let conn = open_db()?;
+
+    let mut sql = String::from(
+        "SELECT fu.free_unit_id, fu.import_id, fu.family_id, fu.jersey_id, \
+                fu.destination, fu.destination_ref, fu.assigned_at, fu.assigned_by, \
+                fu.notes, fu.created_at, i.supplier, i.paid_at \
+         FROM import_free_unit fu \
+         LEFT JOIN imports i ON i.import_id = fu.import_id \
+         WHERE 1=1"
+    );
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+
+    if let Some(ref f) = filter {
+        if let Some(ref imp_id) = f.import_id {
+            sql.push_str(" AND fu.import_id = ?");
+            params.push(Box::new(imp_id.clone()));
+        }
+        if let Some(ref status) = f.status {
+            match status.as_str() {
+                "assigned" => sql.push_str(" AND fu.destination IS NOT NULL"),
+                "unassigned" => sql.push_str(" AND fu.destination IS NULL"),
+                _ => return Err(ErpError::Other(format!("invalid status filter: {}", status))),
+            }
+        }
+        if let Some(ref dest) = f.destination {
+            if dest == "unassigned" {
+                sql.push_str(" AND fu.destination IS NULL");
+            } else {
+                sql.push_str(" AND fu.destination = ?");
+                params.push(Box::new(dest.clone()));
+            }
+        }
+    }
+    sql.push_str(" ORDER BY fu.created_at DESC, fu.free_unit_id DESC");
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params_refs.as_slice(), |row| {
+        Ok(FreeUnit {
+            free_unit_id: row.get(0)?,
+            import_id: row.get(1)?,
+            family_id: row.get(2)?,
+            jersey_id: row.get(3)?,
+            destination: row.get(4)?,
+            destination_ref: row.get(5)?,
+            assigned_at: row.get(6)?,
+            assigned_by: row.get(7)?,
+            notes: row.get(8)?,
+            created_at: row.get(9)?,
+            import_supplier: row.get(10)?,
+            import_paid_at: row.get(11)?,
+        })
+    })?;
+
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+async fn cmd_list_free_units(filter: Option<FreeUnitFilter>) -> Result<Vec<FreeUnit>> {
+    impl_list_free_units(filter)
+}
+
 // ─── R2: Wishlist + Promote-to-batch ────
 //
 // Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
@@ -6428,6 +6547,8 @@ pub fn run() {
             cmd_cancel_wishlist_item,
             cmd_promote_wishlist_to_batch,
             cmd_mark_in_transit,
+            // Importaciones R4 (Free units ledger)
+            cmd_list_free_units,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
