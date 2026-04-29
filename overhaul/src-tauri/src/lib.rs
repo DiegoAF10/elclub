@@ -3428,6 +3428,69 @@ async fn cmd_promote_wishlist_to_batch(input: PromoteWishlistInput) -> Result<Pr
     impl_promote_wishlist_to_batch(input).await
 }
 
+/// Mark an import as in_transit (state guard: only allowed from 'paid').
+/// Optional `tracking_code` overwrites existing only if Some (COALESCE semantics).
+///
+/// State machine (full): draft → paid → in_transit → arrived → closed
+/// (cancelled available from any active state via cmd_cancel_import).
+///
+/// Diego decision (2026-04-28): "después del paid puedo manualmente marcar in_transit
+/// cuando el chino confirme el envío, antes que registre arrival."
+pub async fn impl_mark_in_transit(
+    import_id: String,
+    tracking_code: Option<String>,
+) -> Result<Import> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    // 1. Fetch current status (assert exists)
+    let current_status: String = tx.query_row(
+        "SELECT status FROM imports WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+        |row| row.get(0),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => ErpError::NotFound(format!("Import {}", import_id)),
+        other => other.into(),
+    })?;
+
+    // 2. State guard: only 'paid' → 'in_transit' allowed
+    if current_status != "paid" {
+        tx.rollback()?;
+        if current_status == "in_transit" {
+            return Err(ErpError::Other(format!(
+                "Import {} is already in_transit · this is a one-way state transition",
+                import_id
+            )));
+        }
+        return Err(ErpError::Other(format!(
+            "Import {} has status '{}' · must be 'paid' to mark in_transit (state machine: draft → paid → in_transit → arrived → closed)",
+            import_id, current_status
+        )));
+    }
+
+    // 3. UPDATE — COALESCE preserves existing tracking_code if input is None
+    tx.execute(
+        "UPDATE imports
+         SET status = 'in_transit',
+             tracking_code = COALESCE(?1, tracking_code)
+         WHERE import_id = ?2",
+        rusqlite::params![tracking_code, import_id],
+    )?;
+
+    tx.commit()?;
+
+    // 4. Re-read canonical Import
+    read_import_by_id(&conn, &import_id)
+}
+
+#[tauri::command]
+async fn cmd_mark_in_transit(
+    import_id: String,
+    tracking_code: Option<String>,
+) -> Result<Import> {
+    impl_mark_in_transit(import_id, tracking_code).await
+}
+
 // ─── R1.5 Completion: Create / Register Arrival / Update / Cancel ────
 //
 // Convention for IMP-R1.5 commands that need integration testing:
