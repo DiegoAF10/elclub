@@ -429,6 +429,10 @@ export const browserAdapter: Adapter = {
 		throw new NotAvailableInBrowser('cancelImport');
 	},
 
+	async deleteImport(_importId: string): Promise<void> {
+		throw new NotAvailableInBrowser('deleteImport');
+	},
+
 	async exportImportsCsv(): Promise<string> {
 		throw new NotAvailableInBrowser('exportImportsCsv');
 	},

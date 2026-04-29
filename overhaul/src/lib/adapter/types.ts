@@ -236,6 +236,8 @@ export interface UpdateImportInput {
 	notes?: string;
 	trackingCode?: string;
 	carrier?: string;
+	paidAt?: string;       // YYYY-MM-DD · empty = no change · invalid = server error
+	arrivedAt?: string;    // YYYY-MM-DD · empty = no change · invalid = server error
 }
 
 // ─── R2: Wishlist ───
@@ -639,6 +641,7 @@ export interface Adapter {
 	registerArrival(input: RegisterArrivalInput): Promise<Import>;
 	updateImport(input: UpdateImportInput): Promise<Import>;
 	cancelImport(importId: string): Promise<Import>;
+	deleteImport(importId: string): Promise<void>;
 	exportImportsCsv(): Promise<string>;
 
 	// R2 additions

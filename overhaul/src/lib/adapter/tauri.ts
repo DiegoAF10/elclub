@@ -575,6 +575,10 @@ export const tauriAdapter: Adapter = {
 		return await invoke<Import>('cmd_cancel_import', { importId });
 	},
 
+	async deleteImport(importId: string): Promise<void> {
+		await invoke<void>('cmd_delete_import', { importId });
+	},
+
 	async exportImportsCsv(): Promise<string> {
 		return await invoke<string>('cmd_export_imports_csv');
 	},
