@@ -28,3 +28,6 @@ erp/backups/
 
 # Local worktrees
 .worktrees/
+
+# IMP schema migration backups (apply_imp_schema.py · per-DB snapshots · local only)
+erp/elclub.db.backup-*
