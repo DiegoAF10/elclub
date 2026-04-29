@@ -7675,6 +7675,13 @@ fn cmd_get_integrations_status() -> std::result::Result<IntegrationsStatus, Stri
     })
 }
 
+#[tauri::command]
+fn cmd_resync_migration() -> std::result::Result<String, String> {
+    // INTENTIONAL STUB · v0.4.0 doesn't re-run Streamlit migration (would risk overwriting
+    // Tauri-authoritative state). Re-enable in v0.5 with proper merge logic.
+    Err("Re-sync deshabilitado en v0.4.0 · Streamlit migration ya corrió en R1. Para v0.5 con merge logic.".to_string())
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -7791,6 +7798,7 @@ pub fn run() {
             cmd_update_imp_setting,
             cmd_get_migration_log,
             cmd_get_integrations_status,
+            cmd_resync_migration,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
