@@ -3578,6 +3578,126 @@ pub struct SupplierDetail {
     pub batches: Vec<SupplierBatchSummary>,  // sorted DESC by paid_at
 }
 
+/// Aggregates metrics per DISTINCT supplier from `imports.supplier`.
+/// Returns one row per supplier (today: only Bond · multi-supplier scaffold for v0.5).
+pub fn impl_get_supplier_metrics() -> Result<Vec<SupplierMetrics>> {
+    let conn = open_db()?;
+
+    // 1. Get DISTINCT suppliers (skip NULL/empty)
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT supplier FROM imports
+         WHERE supplier IS NOT NULL AND supplier != ''
+         ORDER BY supplier"
+    )?;
+    let supplier_iter = stmt.query_map([], |row| row.get::<_, String>(0))?;
+    let suppliers: Vec<String> = supplier_iter.collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let mut out = Vec::with_capacity(suppliers.len());
+
+    for supplier in suppliers {
+        // 2. Counts per status bucket
+        let total_batches: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM imports WHERE supplier = ?1",
+            rusqlite::params![&supplier],
+            |row| row.get(0),
+        )?;
+        let closed_batches: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM imports WHERE supplier = ?1 AND status = 'closed'",
+            rusqlite::params![&supplier],
+            |row| row.get(0),
+        )?;
+        let pipeline_batches: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM imports WHERE supplier = ?1
+             AND status IN ('paid', 'in_transit', 'arrived')",
+            rusqlite::params![&supplier],
+            |row| row.get(0),
+        )?;
+
+        // 3. Collect lead_time_days for closed batches → Rust-side percentile
+        let mut lt_stmt = conn.prepare(
+            "SELECT lead_time_days FROM imports
+             WHERE supplier = ?1 AND status = 'closed' AND lead_time_days IS NOT NULL"
+        )?;
+        let lt_iter = lt_stmt.query_map(rusqlite::params![&supplier], |row| row.get::<_, i64>(0))?;
+        let lead_times: Vec<f64> = lt_iter
+            .filter_map(|r| r.ok())
+            .map(|v| v as f64)
+            .collect();
+        let lead_time_n = lead_times.len() as i64;
+
+        let lead_time_avg_days = if lead_times.is_empty() {
+            None
+        } else {
+            Some(lead_times.iter().sum::<f64>() / lead_times.len() as f64)
+        };
+        let lead_time_p50_days = percentile_at(&lead_times, 0.50);
+        let lead_time_p95_days = percentile_at(&lead_times, 0.95);
+
+        // 4. Total landed GTQ YTD (current year closed)
+        let total_landed_gtq_ytd: f64 = conn.query_row(
+            "SELECT COALESCE(SUM(total_landed_gtq), 0.0) FROM imports
+             WHERE supplier = ?1 AND status = 'closed'
+             AND strftime('%Y', paid_at) = strftime('%Y', 'now', 'localtime')",
+            rusqlite::params![&supplier],
+            |row| row.get(0),
+        )?;
+
+        // 5. Last batch paid_at
+        let last_batch_paid_at: Option<String> = conn.query_row(
+            "SELECT MAX(paid_at) FROM imports WHERE supplier = ?1 AND paid_at IS NOT NULL",
+            rusqlite::params![&supplier],
+            |row| row.get(0),
+        ).ok().flatten();
+
+        // 6. Next expected arrival: earliest paid_at + avg_lead among non-closed/non-cancelled
+        // Only computable if avg_lead exists.
+        let next_expected_arrival: Option<String> = if let Some(avg) = lead_time_avg_days {
+            let earliest_paid: Option<String> = conn.query_row(
+                "SELECT MIN(paid_at) FROM imports
+                 WHERE supplier = ?1
+                 AND status IN ('paid', 'in_transit', 'arrived')
+                 AND paid_at IS NOT NULL",
+                rusqlite::params![&supplier],
+                |row| row.get(0),
+            ).ok().flatten();
+            earliest_paid.and_then(|paid| {
+                chrono::NaiveDate::parse_from_str(&paid, "%Y-%m-%d").ok().map(|d| {
+                    let eta = d + chrono::Duration::days(avg.round() as i64);
+                    eta.format("%Y-%m-%d").to_string()
+                })
+            })
+        } else {
+            None
+        };
+
+        // 7. cost_accuracy_pct: None until disputes log exists (per spec ambiguity escalation)
+        // See "Open questions for Diego" section · displayed as "Datos insuficientes" in UI.
+        let cost_accuracy_pct: Option<f64> = None;
+
+        out.push(SupplierMetrics {
+            supplier,
+            total_batches,
+            closed_batches,
+            pipeline_batches,
+            lead_time_avg_days,
+            lead_time_p50_days,
+            lead_time_p95_days,
+            lead_time_n,
+            total_landed_gtq_ytd,
+            cost_accuracy_pct,
+            next_expected_arrival,
+            last_batch_paid_at,
+        });
+    }
+
+    Ok(out)
+}
+
+#[tauri::command]
+async fn cmd_get_supplier_metrics() -> Result<Vec<SupplierMetrics>> {
+    impl_get_supplier_metrics()
+}
+
 // ─── R2: Wishlist + Promote-to-batch ────
 //
 // Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
