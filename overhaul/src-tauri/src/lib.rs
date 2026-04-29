@@ -4955,9 +4955,13 @@ pub struct UpdateImportInput {
     pub notes: Option<String>,
     pub tracking_code: Option<String>,
     pub carrier: Option<String>,
+    /// YYYY-MM-DD · empty/None = no change · invalid = error
+    pub paid_at: Option<String>,
+    /// YYYY-MM-DD · empty/None = no change · invalid = error
+    pub arrived_at: Option<String>,
 }
 
-/// Business logic for editing notes/tracking_code/carrier on an existing import.
+/// Business logic for editing notes/tracking_code/carrier/paid_at/arrived_at on an existing import.
 /// Status guard: cannot update if status='closed' or 'cancelled'.
 /// pub so integration tests can call directly (Task 4 has smoke-only · this future-proofs).
 pub async fn impl_update_import(input: UpdateImportInput) -> Result<Import> {
@@ -4981,16 +4985,44 @@ pub async fn impl_update_import(input: UpdateImportInput) -> Result<Import> {
         )));
     }
 
+    // Validate + normalize paid_at/arrived_at: empty string → None (no change), valid YYYY-MM-DD → Some, invalid → error.
+    let paid_at_norm: Option<String> = match input.paid_at.as_deref() {
+        None => None,
+        Some(s) if s.is_empty() => None,
+        Some(s) => {
+            if chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").is_err() {
+                tx.rollback()?;
+                return Err(ErpError::Other(format!("invalid paid_at '{}' · expected YYYY-MM-DD", s)));
+            }
+            Some(s.to_string())
+        }
+    };
+    let arrived_at_norm: Option<String> = match input.arrived_at.as_deref() {
+        None => None,
+        Some(s) if s.is_empty() => None,
+        Some(s) => {
+            if chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").is_err() {
+                tx.rollback()?;
+                return Err(ErpError::Other(format!("invalid arrived_at '{}' · expected YYYY-MM-DD", s)));
+            }
+            Some(s.to_string())
+        }
+    };
+
     tx.execute(
         "UPDATE imports
          SET notes = COALESCE(?1, notes),
              tracking_code = COALESCE(?2, tracking_code),
-             carrier = COALESCE(?3, carrier)
-         WHERE import_id = ?4",
+             carrier = COALESCE(?3, carrier),
+             paid_at = COALESCE(?4, paid_at),
+             arrived_at = COALESCE(?5, arrived_at)
+         WHERE import_id = ?6",
         rusqlite::params![
             input.notes,
             input.tracking_code,
             input.carrier,
+            paid_at_norm,
+            arrived_at_norm,
             input.import_id,
         ],
     )?;
