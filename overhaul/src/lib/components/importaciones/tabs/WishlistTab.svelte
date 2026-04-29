@@ -21,6 +21,7 @@
   // Data
   let items = $state<WishlistItem[]>([]);
   let loading = $state(true);
+  let error = $state<string | null>(null);
 
   // Modal state
   let itemModalOpen = $state(false);
@@ -46,8 +47,12 @@
 
   async function load() {
     loading = true;
+    error = null;
     try {
       items = await adapter.listWishlist({ status: statusFilter });
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e);
+      items = [];
     } finally {
       loading = false;
     }
@@ -171,15 +176,37 @@
   <!-- Body -->
   <div class="flex-1 overflow-y-auto p-4">
     {#if loading}
-      <div class="flex items-center justify-center text-[var(--color-text-tertiary)] py-8">
-        Cargando wishlist…
+      <div class="space-y-2">
+        {#each Array(3) as _, i (i)}
+          <div class="h-9 rounded-[3px] bg-[var(--color-surface-2)] animate-pulse"></div>
+        {/each}
+      </div>
+    {:else if error}
+      <div class="flex items-center justify-between gap-3 text-[11px] text-[var(--color-danger)] bg-[rgba(244,63,94,0.10)] border border-[rgba(244,63,94,0.3)] rounded-[3px] px-3 py-2">
+        <span>⚠️ Error: {error}</span>
+        <button
+          type="button"
+          onclick={load}
+          class="text-mono text-[10px] uppercase px-2 py-1 bg-[var(--color-danger)] text-white rounded-[2px]"
+          style="letter-spacing: 0.06em;"
+        >
+          Reintentar
+        </button>
       </div>
     {:else if items.length === 0}
       <div class="flex flex-col items-center justify-center text-center py-12 text-[var(--color-text-tertiary)] text-[12px]">
         {#if statusFilter === 'active'}
-          <p class="mb-2">Sin pre-pedidos activos.</p>
+          <div class="text-[28px] opacity-50 mb-1">📋</div>
+          <h3 class="text-mono text-[11px] uppercase text-[var(--color-text-secondary)] mb-1" style="letter-spacing: 0.08em;">Sin pre-pedidos</h3>
           <p class="text-[11px]">Cuando un cliente pida algo, agregá item acá.</p>
-          <p class="text-[10.5px] text-[var(--color-text-muted)] mt-3">Recordatorio: D7=B · SKU debe existir en catalog.</p>
+          <p class="text-[10.5px] text-[var(--color-text-muted)] mt-2">Recordatorio: D7=B · SKU debe existir en catalog.</p>
+          <button
+            type="button"
+            onclick={openCreate}
+            class="mt-3 text-mono text-[11px] px-3 py-1.5 rounded-[3px] bg-[var(--color-accent)] text-[var(--color-bg)] font-semibold hover:bg-[var(--color-accent-hover)]"
+          >
+            + Agregar item
+          </button>
         {:else if statusFilter === 'promoted'}
           <p>Sin items promovidos todavía.</p>
         {:else}
