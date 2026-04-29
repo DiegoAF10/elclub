@@ -2723,6 +2723,45 @@ pub async fn impl_close_import_proportional(
         rusqlite::params![total_landed, n_total as i64, avg_unit.round(), lead_time, import_id],
     )?;
 
+    // === IMP-R4 · Auto-create free units (floor(n_paid / 10)) ===
+    // Idempotency guard: skip if free units already exist for this import_id.
+    // Free units are created unassigned (destination NULL · D-FREE=A) · Diego asigna
+    // destino caso a caso vía cmd_assign_free_unit (Task 2).
+    let existing_free_count: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM import_free_unit WHERE import_id = ?",
+        rusqlite::params![&import_id],
+        |r| r.get(0),
+    )?;
+
+    if existing_free_count == 0 {
+        // Count items NOT already flagged as 'free' (sale_items + jerseys).
+        // Per spec sec 4.4 line 256, n_paid = closed paid items used as ratio basis.
+        let n_paid_sale_items: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM sale_items \
+             WHERE import_id = ? AND (item_type IS NULL OR item_type != 'free')",
+            rusqlite::params![&import_id],
+            |r| r.get(0),
+        )?;
+        let n_paid_jerseys: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM jerseys WHERE import_id = ?",
+            rusqlite::params![&import_id],
+            |r| r.get(0),
+        )?;
+        let n_paid = n_paid_sale_items + n_paid_jerseys;
+
+        let n_free = n_paid / 10; // integer division = floor
+        if n_free > 0 {
+            let now_ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            for _ in 0..n_free {
+                tx.execute(
+                    "INSERT INTO import_free_unit (import_id, created_at) VALUES (?, ?)",
+                    rusqlite::params![&import_id, &now_ts],
+                )?;
+            }
+        }
+    }
+    // === end IMP-R4 ===
+
     tx.commit()?;
 
     Ok(CloseImportResult {
