@@ -47,7 +47,11 @@ import type {
 	// R5
 	SupplierMetrics,
 	SupplierDetail,
-	UnpublishedRequest
+	UnpublishedRequest,
+	// R6
+	ImpSetting,
+	MigrationLog,
+	IntegrationsStatus
 } from './types';
 import type { WishlistItem } from '$lib/data/wishlist';
 import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, CreateOrderItem, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult, UpdateSaleArgs } from '../data/comercial';
@@ -636,6 +640,27 @@ export const tauriAdapter: Adapter = {
 
 	async getMostRequestedUnpublished(limit?: number): Promise<UnpublishedRequest[]> {
 		return await invoke<UnpublishedRequest[]>('cmd_get_most_requested_unpublished', { limit: limit ?? null });
+	},
+
+	// ─── Importaciones R6 (Settings · migration log · integrations) ────
+	async getImpSettings(): Promise<ImpSetting[]> {
+		return await invoke<ImpSetting[]>('cmd_get_imp_settings');
+	},
+
+	async updateImpSetting(key: string, value: string): Promise<ImpSetting> {
+		return await invoke<ImpSetting>('cmd_update_imp_setting', { key, value });
+	},
+
+	async getMigrationLog(): Promise<MigrationLog> {
+		return await invoke<MigrationLog>('cmd_get_migration_log');
+	},
+
+	async getIntegrationsStatus(): Promise<IntegrationsStatus> {
+		return await invoke<IntegrationsStatus>('cmd_get_integrations_status');
+	},
+
+	async resyncMigration(): Promise<string> {
+		return await invoke<string>('cmd_resync_migration');  // throws "Re-sync deshabilitado..."
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────
