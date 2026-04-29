@@ -6405,6 +6405,13 @@ pub fn run() {
             cmd_update_import,
             cmd_cancel_import,
             cmd_export_imports_csv,
+            // Importaciones R2 (Wishlist + Promote-to-batch + state machine)
+            cmd_list_wishlist,
+            cmd_create_wishlist_item,
+            cmd_update_wishlist_item,
+            cmd_cancel_wishlist_item,
+            cmd_promote_wishlist_to_batch,
+            cmd_mark_in_transit,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
