@@ -3698,6 +3698,85 @@ async fn cmd_get_supplier_metrics() -> Result<Vec<SupplierMetrics>> {
     impl_get_supplier_metrics()
 }
 
+/// Returns rich detail for a single supplier: metrics + contact + price_band + free_policy + batches[].
+/// For Bond: price_band hardcoded per spec sec 4.5 line 274.
+/// For unknown suppliers: price_band returned con source="tbd" + None values (UI muestra "datos pendientes").
+pub fn impl_get_supplier_detail(supplier: String) -> Result<SupplierDetail> {
+    // Reuse list aggregator + filter
+    let all = impl_get_supplier_metrics()?;
+    let metrics = all
+        .into_iter()
+        .find(|m| m.supplier == supplier)
+        .ok_or_else(|| ErpError::NotFound(format!("Supplier '{}'", supplier)))?;
+
+    // Contact info (hardcoded for Bond · placeholder for others)
+    let (contact, free_policy_text, price_band) = if supplier == BOND_SUPPLIER_NAME {
+        (
+            ContactInfo {
+                label: BOND_CONTACT_LABEL.to_string(),
+                payment_method: BOND_PAYMENT_METHOD.to_string(),
+                carrier: BOND_CARRIER.to_string(),
+            },
+            BOND_FREE_POLICY_TEXT.to_string(),
+            PriceBand {
+                base_usd: Some(BOND_PRICE_BASE_USD),
+                patch_usd: Some(BOND_PRICE_PATCH_USD),
+                patch_name_usd: Some(BOND_PRICE_PATCH_NAME_USD),
+                source: "hardcoded:Bond".to_string(),
+            },
+        )
+    } else {
+        (
+            ContactInfo {
+                label: "Datos pendientes".to_string(),
+                payment_method: "n/a".to_string(),
+                carrier: "n/a".to_string(),
+            },
+            "n/a".to_string(),
+            PriceBand {
+                base_usd: None,
+                patch_usd: None,
+                patch_name_usd: None,
+                source: "tbd".to_string(),
+            },
+        )
+    };
+
+    // Batches list (DESC by paid_at, NULLS LAST)
+    let conn = open_db()?;
+    let mut stmt = conn.prepare(
+        "SELECT import_id, paid_at, arrived_at, status, n_units, total_landed_gtq, lead_time_days
+         FROM imports
+         WHERE supplier = ?1
+         ORDER BY paid_at DESC NULLS LAST, created_at DESC"
+    )?;
+    let batches_iter = stmt.query_map(rusqlite::params![&supplier], |row| {
+        Ok(SupplierBatchSummary {
+            import_id: row.get(0)?,
+            paid_at: row.get(1)?,
+            arrived_at: row.get(2)?,
+            status: row.get(3)?,
+            n_units: row.get(4)?,
+            total_landed_gtq: row.get(5)?,
+            lead_time_days: row.get(6)?,
+        })
+    })?;
+    let batches: Vec<SupplierBatchSummary> = batches_iter.collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(SupplierDetail {
+        metrics,
+        contact,
+        price_band,
+        free_policy_text,
+        batches,
+    })
+}
+
+#[tauri::command]
+async fn cmd_get_supplier_detail(supplier: String) -> Result<SupplierDetail> {
+    impl_get_supplier_detail(supplier)
+}
+
 // ─── R2: Wishlist + Promote-to-batch ────
 //
 // Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
