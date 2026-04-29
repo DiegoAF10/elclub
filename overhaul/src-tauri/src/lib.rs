@@ -2566,6 +2566,60 @@ async fn cmd_get_import_items(_app: tauri::AppHandle, import_id: String) -> Resu
     Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
 }
 
+// ─── R5 Supplier Scorecard helpers ──────────────────────────────────
+
+/// Calcula percentil al ratio dado (0.0..1.0) sobre vector ordenado de valores f64.
+/// Usa nearest-rank method (sin interpolación) — suficiente para n pequeños (n<100).
+/// Retorna `None` si el vector está vacío.
+fn percentile_at(values: &[f64], ratio: f64) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    let mut sorted: Vec<f64> = values.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let n = sorted.len();
+    // Nearest-rank: idx = ceil(ratio * n) - 1, clamped to [0, n-1]
+    let idx = ((ratio * n as f64).ceil() as usize).saturating_sub(1).min(n - 1);
+    Some(sorted[idx])
+}
+
+#[cfg(test)]
+mod imp_r5_helper_tests {
+    use super::*;
+
+    #[test]
+    fn test_percentile_empty() {
+        assert_eq!(percentile_at(&[], 0.5), None);
+    }
+
+    #[test]
+    fn test_percentile_single() {
+        assert_eq!(percentile_at(&[42.0], 0.5), Some(42.0));
+        assert_eq!(percentile_at(&[42.0], 0.95), Some(42.0));
+    }
+
+    #[test]
+    fn test_percentile_known_values() {
+        // Lead times: 5, 7, 8, 10, 12 — avg 8.4
+        let v = vec![5.0, 7.0, 8.0, 10.0, 12.0];
+        // p50: nearest-rank idx = ceil(0.5 * 5) - 1 = 2 → sorted[2] = 8
+        assert_eq!(percentile_at(&v, 0.50), Some(8.0));
+        // p95: nearest-rank idx = ceil(0.95 * 5) - 1 = 4 → sorted[4] = 12
+        assert_eq!(percentile_at(&v, 0.95), Some(12.0));
+    }
+}
+
+// Bond Soccer Jersey hardcoded card data (per spec sec 4.5 line 269-278)
+// Move to suppliers table when v0.5 adds multi-supplier proper.
+const BOND_SUPPLIER_NAME: &str = "Bond Soccer Jersey";
+const BOND_CONTACT_LABEL: &str = "WhatsApp · 志鵬 黎";
+const BOND_PAYMENT_METHOD: &str = "PayPal upfront";
+const BOND_CARRIER: &str = "DHL door-to-door";
+const BOND_FREE_POLICY_TEXT: &str = "1 unit cada 10 paid units";
+const BOND_PRICE_BASE_USD: f64 = 11.0;
+const BOND_PRICE_PATCH_USD: f64 = 13.0;
+const BOND_PRICE_PATCH_NAME_USD: f64 = 15.0;
+
 #[tauri::command]
 async fn cmd_get_import_pulso(_app: tauri::AppHandle) -> Result<ImportPulso> {
     let conn = open_db()?;
