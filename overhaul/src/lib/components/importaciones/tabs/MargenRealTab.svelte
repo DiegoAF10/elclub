@@ -169,22 +169,34 @@
 
   <!-- Body: cards list / loading / empty / error -->
   {#if loading}
-    <div class="text-mono text-[12px] text-[var(--color-text-tertiary)] p-8 text-center">
-      Cargando margen real...
+    <div class="space-y-3">
+      {#each Array(2) as _, i (i)}
+        <div class="h-[120px] rounded-[4px] bg-[var(--color-surface-2)] animate-pulse"></div>
+      {/each}
     </div>
   {:else if errorMsg}
-    <div class="text-[11px] text-[var(--color-danger)] bg-[rgba(244,63,94,0.10)] border border-[rgba(244,63,94,0.3)] rounded-[3px] px-3 py-2">
-      ⚠ {errorMsg}
+    <div class="flex items-center justify-between gap-3 text-[11px] text-[var(--color-danger)] bg-[rgba(244,63,94,0.10)] border border-[rgba(244,63,94,0.3)] rounded-[3px] px-3 py-2">
+      <span>⚠️ Error: {errorMsg}</span>
+      <button
+        type="button"
+        onclick={load}
+        class="text-mono text-[10px] uppercase px-2 py-1 bg-[var(--color-danger)] text-white rounded-[2px]"
+        style="letter-spacing: 0.06em;"
+      >
+        Reintentar
+      </button>
     </div>
   {:else if sortedSummaries.length === 0}
-    <div class="text-mono text-[12px] text-[var(--color-text-tertiary)] p-8 text-center border border-dashed border-[var(--color-border)] rounded-[4px]">
-      <div class="mb-2">Sin batches cerrados aún</div>
-      <div class="text-[10.5px]">
-        Margen real disponible cuando un import pasa a status='closed'.<br/>
+    <div class="flex flex-col items-center justify-center text-center py-12 text-[var(--color-text-tertiary)] border border-dashed border-[var(--color-border)] rounded-[4px]">
+      <div class="text-[28px] opacity-50 mb-1">📊</div>
+      <h3 class="text-mono text-[11px] uppercase text-[var(--color-text-secondary)] mb-1" style="letter-spacing: 0.08em;">Sin batches closed</h3>
+      <p class="text-[11px]">El margen real se calcula al cerrar un batch.</p>
+      <p class="text-[10.5px] text-[var(--color-text-muted)] mt-2">
+        Cerrá un batch desde Pedidos para ver métricas.
         {#if !filter.includePipeline}
           O activá <strong>"Incluir pipeline"</strong> arriba para ver paid/arrived con margen estimado.
         {/if}
-      </div>
+      </p>
     </div>
   {:else}
     <div>
