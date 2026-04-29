@@ -48,6 +48,8 @@ import type {
 	SupplierMetrics,
 	SupplierDetail,
 	UnpublishedRequest,
+	// R4.1
+	ModeloOption,
 	// R6
 	ImpSetting,
 	MigrationLog,
@@ -640,6 +642,11 @@ export const tauriAdapter: Adapter = {
 
 	async getMostRequestedUnpublished(limit?: number): Promise<UnpublishedRequest[]> {
 		return await invoke<UnpublishedRequest[]>('cmd_get_most_requested_unpublished', { limit: limit ?? null });
+	},
+
+	// ─── R4.1: Catalog modelos picker (cascade UI · post-MSI fix) ──────
+	async listCatalogModelos(): Promise<ModeloOption[]> {
+		return await invoke<ModeloOption[]>('cmd_list_catalog_modelos');
 	},
 
 	// ─── Importaciones R6 (Settings · migration log · integrations) ────

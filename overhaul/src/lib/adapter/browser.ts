@@ -44,6 +44,7 @@ import type {
 	SupplierMetrics,
 	SupplierDetail,
 	UnpublishedRequest,
+	ModeloOption,
 	// R6
 	ImpSetting,
 	MigrationLog,
@@ -494,6 +495,11 @@ export const browserAdapter: Adapter = {
 
 	async getMostRequestedUnpublished(_limit?: number): Promise<UnpublishedRequest[]> {
 		throw new NotAvailableInBrowser('getMostRequestedUnpublished');
+	},
+
+	// ─── R4.1: Catalog modelos picker (cascade UI · post-MSI fix) ──────
+	async listCatalogModelos(): Promise<ModeloOption[]> {
+		throw new NotAvailableInBrowser('listCatalogModelos');
 	},
 
 	// ─── Importaciones R6 (Settings · migration log · integrations) ────

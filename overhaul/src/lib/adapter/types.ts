@@ -462,6 +462,23 @@ export interface UnpublishedRequest {
 	published: boolean;   // siempre false en el response (filter aplicado server-side)
 }
 
+// ─── R4.1: Catalog modelos picker (cascade Tipo → Equipo → Modelo) ──
+// Wire format matches Rust ModeloOption struct (#[serde(rename_all = "camelCase")]).
+export interface ModeloOption {
+	sku: string;
+	familyParentId: string;
+	team: string;
+	season: string | null;
+	variant: string | null;
+	modeloType: string | null;
+	sleeve: string | null;
+	price: number | null;
+	published: boolean;
+	confederation: string | null;  // "UEFA"/"Conmebol"/"CAF"/"Concacaf"/"AFC" or null
+	country: string | null;
+	display: string;
+}
+
 // ─── IMP-R6 Settings ────────────────────────────────────────────────────
 
 export interface ImpSetting {
@@ -646,6 +663,9 @@ export interface Adapter {
 	getSupplierMetrics(): Promise<SupplierMetrics[]>;
 	getSupplierDetail(supplier: string): Promise<SupplierDetail>;
 	getMostRequestedUnpublished(limit?: number): Promise<UnpublishedRequest[]>;
+
+	// R4.1: Catalog modelos picker (post-MSI fix · cascade UI for WishlistItemModal)
+	listCatalogModelos(): Promise<ModeloOption[]>;
 
 	// R6 additions: Settings · migration log · integrations
 	getImpSettings(): Promise<ImpSetting[]>;
