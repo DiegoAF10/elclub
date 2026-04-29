@@ -1,5 +1,39 @@
 [
-  {"family_id": "ARG-2026-L-FS", "name": "Argentina 2026 Local Fan", "tier": "A"},
-  {"family_id": "FRA-2026-L-FS", "name": "Francia 2026 Local Fan", "tier": "A"},
-  {"family_id": "BRA-2026-L-FS", "name": "Brasil 2026 Local Fan", "tier": "B"}
+  {
+    "family_id": "argentina-2026-home",
+    "team": "Argentina",
+    "season": "2026",
+    "variant": "home",
+    "published": true,
+    "meta_country": "Argentina",
+    "meta_confederation": "Conmebol",
+    "modelos": [
+      {"sku": "ARG-2026-L-FS", "type": "fan_adult", "sleeve": "short", "price": 275},
+      {"sku": "ARG-2026-L-PS", "type": "player_adult", "sleeve": "short", "price": 350}
+    ]
+  },
+  {
+    "family_id": "france-2026-home",
+    "team": "France",
+    "season": "2026",
+    "variant": "home",
+    "published": true,
+    "meta_country": "France",
+    "meta_confederation": "UEFA",
+    "modelos": [
+      {"sku": "FRA-2026-L-FS", "type": "fan_adult", "sleeve": "short", "price": 275}
+    ]
+  },
+  {
+    "family_id": "brazil-2026-home",
+    "team": "Brazil",
+    "season": "2026",
+    "variant": "home",
+    "published": true,
+    "meta_country": "Brazil",
+    "meta_confederation": "Conmebol",
+    "modelos": [
+      {"sku": "BRA-2026-L-FS", "type": "fan_adult", "sleeve": "short", "price": 275}
+    ]
+  }
 ]

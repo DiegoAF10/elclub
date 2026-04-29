@@ -8027,14 +8027,17 @@ mod imp_r2_helper_tests {
     fn test_catalog_family_exists_known() {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         std::env::set_var("ELCLUB_CATALOG_PATH", fixture_path());
-        assert!(catalog_family_exists("ARG-2026-L-FS").unwrap());
-        assert!(catalog_family_exists("FRA-2026-L-FS").unwrap());
+        // family.family_id is the kebab-case parent — what catalog_family_exists checks
+        assert!(catalog_family_exists("argentina-2026-home").unwrap());
+        assert!(catalog_family_exists("france-2026-home").unwrap());
     }
 
     #[test]
     fn test_catalog_family_exists_unknown() {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         std::env::set_var("ELCLUB_CATALOG_PATH", fixture_path());
+        // Modelo SKUs are NOT family.family_id values — must return false
+        assert!(!catalog_family_exists("ARG-2026-L-FS").unwrap());
         assert!(!catalog_family_exists("FAKE-XXXX-X-XX").unwrap());
         assert!(!catalog_family_exists("").unwrap());
     }
@@ -8043,8 +8046,63 @@ mod imp_r2_helper_tests {
     fn test_catalog_family_exists_missing_file() {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         std::env::set_var("ELCLUB_CATALOG_PATH", "/nonexistent/path.json");
-        let result = catalog_family_exists("ARG-2026-L-FS");
+        let result = catalog_family_exists("argentina-2026-home");
         assert!(result.is_err());
         assert!(format!("{:?}", result.unwrap_err()).contains("not found"));
+    }
+
+    // ─── R4.1: catalog_modelo_sku_exists (modelo-level D7=B) ────
+    #[test]
+    fn test_catalog_modelo_sku_exists_known() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::env::set_var("ELCLUB_CATALOG_PATH", fixture_path());
+        // Modelo SKUs (uppercase) — what the wishlist actually stores
+        assert!(catalog_modelo_sku_exists("ARG-2026-L-FS").unwrap());
+        assert!(catalog_modelo_sku_exists("ARG-2026-L-PS").unwrap());
+        assert!(catalog_modelo_sku_exists("FRA-2026-L-FS").unwrap());
+        assert!(catalog_modelo_sku_exists("BRA-2026-L-FS").unwrap());
+    }
+
+    #[test]
+    fn test_catalog_modelo_sku_exists_unknown() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::env::set_var("ELCLUB_CATALOG_PATH", fixture_path());
+        // Family kebab-parent IDs are NOT modelo SKUs — must return false
+        assert!(!catalog_modelo_sku_exists("argentina-2026-home").unwrap());
+        assert!(!catalog_modelo_sku_exists("FAKE-XXXX-X-XX").unwrap());
+        assert!(!catalog_modelo_sku_exists("").unwrap());
+    }
+
+    #[test]
+    fn test_catalog_modelo_sku_exists_missing_file() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::env::set_var("ELCLUB_CATALOG_PATH", "/nonexistent/path.json");
+        let result = catalog_modelo_sku_exists("ARG-2026-L-FS");
+        assert!(result.is_err());
+        assert!(format!("{:?}", result.unwrap_err()).contains("not found"));
+    }
+
+    #[test]
+    fn test_impl_list_catalog_modelos_sorted_published_first() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::env::set_var("ELCLUB_CATALOG_PATH", fixture_path());
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let modelos = rt.block_on(impl_list_catalog_modelos()).unwrap();
+
+        // Fixture has 3 families with 4 modelos total (ARG has 2)
+        assert_eq!(modelos.len(), 4);
+
+        // Confederation populated correctly
+        let arg = modelos.iter().find(|m| m.sku == "ARG-2026-L-FS").unwrap();
+        assert_eq!(arg.team, "Argentina");
+        assert_eq!(arg.confederation.as_deref(), Some("Conmebol"));
+        assert_eq!(arg.modelo_type.as_deref(), Some("fan_adult"));
+        assert_eq!(arg.sleeve.as_deref(), Some("short"));
+        assert!(arg.published);
+        assert!(arg.display.contains("ARG-2026-L-FS"));
+        assert!(arg.display.contains("fan_adult/short"));
+
+        let fra = modelos.iter().find(|m| m.sku == "FRA-2026-L-FS").unwrap();
+        assert_eq!(fra.confederation.as_deref(), Some("UEFA"));
     }
 }
