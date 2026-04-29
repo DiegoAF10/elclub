@@ -7562,6 +7562,66 @@ fn cmd_update_imp_setting(key: String, value: String) -> std::result::Result<Imp
     impl_update_imp_setting_at(&conn, &key, &value)
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MigrationLog {
+    pub last_migration_run_at: Option<String>,
+    pub imports_count: i64,
+    pub sale_items_linked: i64,
+    pub jerseys_linked: i64,
+    pub wishlist_count: i64,
+    pub free_units_count: i64,
+}
+
+pub fn impl_get_migration_log(conn: &rusqlite::Connection) -> rusqlite::Result<MigrationLog> {
+    let last: Option<String> = conn
+        .query_row(
+            "SELECT MAX(created_at) FROM imports",
+            [],
+            |r| r.get::<_, Option<String>>(0),
+        )
+        .unwrap_or(None);
+
+    let imports_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM imports", [], |r| r.get(0))
+        .unwrap_or(0);
+    let sale_items_linked: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sale_items WHERE import_id IS NOT NULL",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    let jerseys_linked: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM jerseys WHERE import_id IS NOT NULL",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    let wishlist_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM import_wishlist", [], |r| r.get(0))
+        .unwrap_or(0);
+    let free_units_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM import_free_unit", [], |r| r.get(0))
+        .unwrap_or(0);
+
+    Ok(MigrationLog {
+        last_migration_run_at: last,
+        imports_count,
+        sale_items_linked,
+        jerseys_linked,
+        wishlist_count,
+        free_units_count,
+    })
+}
+
+#[tauri::command]
+fn cmd_get_migration_log() -> std::result::Result<MigrationLog, String> {
+    let conn = rusqlite::Connection::open(db_path()).map_err(|e| e.to_string())?;
+    impl_get_migration_log(&conn).map_err(|e| e.to_string())
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -7676,6 +7736,7 @@ pub fn run() {
             // Importaciones R6 (Settings · migration log · integrations)
             cmd_get_imp_settings,
             cmd_update_imp_setting,
+            cmd_get_migration_log,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
