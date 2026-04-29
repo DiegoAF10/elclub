@@ -2845,6 +2845,67 @@ fn read_wishlist_item_by_id(conn: &rusqlite::Connection, wishlist_item_id: i64) 
     ).map_err(ErpError::from)
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListWishlistInput {
+    pub status: Option<String>,  // 'active' | 'promoted' | 'cancelled' | None (all)
+}
+
+/// List wishlist items, optionally filtered by status. Default: all items, ordered by created_at DESC.
+pub async fn impl_list_wishlist(input: ListWishlistInput) -> Result<Vec<WishlistItem>> {
+    let conn = open_db()?;
+    let (sql, params): (&str, Vec<Box<dyn rusqlite::ToSql>>) = match input.status.as_deref() {
+        Some(s) if !s.is_empty() => (
+            "SELECT wishlist_item_id, family_id, jersey_id, size, player_name, player_number,
+                    patch, version, customer_id, expected_usd, status, promoted_to_import_id,
+                    created_at, notes
+             FROM import_wishlist WHERE status = ?1
+             ORDER BY created_at DESC, wishlist_item_id DESC",
+            vec![Box::new(s.to_string())],
+        ),
+        _ => (
+            "SELECT wishlist_item_id, family_id, jersey_id, size, player_name, player_number,
+                    patch, version, customer_id, expected_usd, status, promoted_to_import_id,
+                    created_at, notes
+             FROM import_wishlist
+             ORDER BY created_at DESC, wishlist_item_id DESC",
+            vec![],
+        ),
+    };
+
+    let mut stmt = conn.prepare(sql)?;
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
+    let rows = stmt.query_map(&param_refs[..], |row| {
+        Ok(WishlistItem {
+            wishlist_item_id:      row.get(0)?,
+            family_id:             row.get(1)?,
+            jersey_id:             row.get(2)?,
+            size:                  row.get(3)?,
+            player_name:           row.get(4)?,
+            player_number:         row.get(5)?,
+            patch:                 row.get(6)?,
+            version:               row.get(7)?,
+            customer_id:           row.get(8)?,
+            expected_usd:          row.get(9)?,
+            status:                row.get(10)?,
+            promoted_to_import_id: row.get(11)?,
+            created_at:            row.get(12)?,
+            notes:                 row.get(13)?,
+        })
+    })?;
+
+    let mut items = Vec::new();
+    for r in rows {
+        items.push(r?);
+    }
+    Ok(items)
+}
+
+#[tauri::command]
+async fn cmd_list_wishlist(input: ListWishlistInput) -> Result<Vec<WishlistItem>> {
+    impl_list_wishlist(input).await
+}
+
 // ─── R1.5 Completion: Create / Register Arrival / Update / Cancel ────
 //
 // Convention for IMP-R1.5 commands that need integration testing:
