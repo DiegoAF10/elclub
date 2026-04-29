@@ -7538,6 +7538,10 @@ pub fn run() {
             cmd_list_free_units,
             cmd_assign_free_unit,
             cmd_unassign_free_unit,
+            // Importaciones R5 (Supplier scorecard · Bond + multi-supplier scaffold)
+            cmd_get_supplier_metrics,
+            cmd_get_supplier_detail,
+            cmd_get_most_requested_unpublished,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
