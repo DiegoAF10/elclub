@@ -12,22 +12,28 @@ import type {
 	CommitResult,
 	BackfillMetaResult,
 	CreateImportInput,
+	CreateWishlistItemInput,
 	DeleteFamilyResult,
 	DeleteSkuResult,
 	EditModeloTypeResult,
 	GitStatusInfo,
 	ListFilter,
+	ListWishlistInput,
 	MoveModeloArgs,
 	MoveModeloResult,
 	PhotoAction,
+	PromoteWishlistInput,
+	PromoteWishlistResult,
 	RegisterArrivalInput,
 	RemovePhotosResult,
 	SetFamilyVariantResult,
 	UpdateImportInput,
+	UpdateWishlistItemInput,
 	WatermarkArgs,
 	WatermarkResult
 } from './types';
 import { NotAvailableInBrowser } from './types';
+import type { WishlistItem } from '$lib/data/wishlist';
 import type { Family } from '../data/types';
 import type { Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult } from '../data/comercial';
 import type { Import, ImportItem, ImportPulso, CloseImportResult } from '../data/importaciones';
@@ -407,6 +413,31 @@ export const browserAdapter: Adapter = {
 
 	async exportImportsCsv(): Promise<string> {
 		throw new NotAvailableInBrowser('exportImportsCsv');
+	},
+
+	// ─── Importaciones R2 ──────────────────────────────────────────
+	async listWishlist(_input: ListWishlistInput): Promise<WishlistItem[]> {
+		throw new NotAvailableInBrowser('listWishlist');
+	},
+
+	async createWishlistItem(_input: CreateWishlistItemInput): Promise<WishlistItem> {
+		throw new NotAvailableInBrowser('createWishlistItem');
+	},
+
+	async updateWishlistItem(_input: UpdateWishlistItemInput): Promise<WishlistItem> {
+		throw new NotAvailableInBrowser('updateWishlistItem');
+	},
+
+	async cancelWishlistItem(_wishlistItemId: number): Promise<WishlistItem> {
+		throw new NotAvailableInBrowser('cancelWishlistItem');
+	},
+
+	async promoteWishlistToBatch(_input: PromoteWishlistInput): Promise<PromoteWishlistResult> {
+		throw new NotAvailableInBrowser('promoteWishlistToBatch');
+	},
+
+	async markInTransit(_importId: string, _trackingCode?: string): Promise<Import> {
+		throw new NotAvailableInBrowser('markInTransit');
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────

@@ -238,6 +238,55 @@ export interface UpdateImportInput {
 	carrier?: string;
 }
 
+// ─── R2: Wishlist ───
+import type { WishlistItem } from '$lib/data/wishlist';
+
+export interface ListWishlistInput {
+	status?: 'active' | 'promoted' | 'cancelled';  // omitted = all
+}
+
+export interface CreateWishlistItemInput {
+	familyId:      string;          // D7=B: must exist in catalog.json
+	jerseyId?:     string;
+	size?:         string;
+	playerName?:   string;
+	playerNumber?: number;
+	patch?:        string;          // 'WC' | 'Champions' | undefined
+	version?:      'fan' | 'fan-w' | 'player';
+	customerId?:   string;
+	expectedUsd?:  number;          // >= 0
+	notes?:        string;
+}
+
+export interface UpdateWishlistItemInput {
+	wishlistItemId: number;
+	size?:          string;
+	playerName?:    string;
+	playerNumber?:  number;
+	patch?:         string;
+	version?:       'fan' | 'fan-w' | 'player';
+	customerId?:    string;
+	expectedUsd?:   number;
+	notes?:         string;
+	// Note: familyId NOT editable post-create
+}
+
+export interface PromoteWishlistInput {
+	wishlistItemIds: number[];      // length >= 1
+	importId:        string;        // regex IMP-YYYY-MM-DD enforced server-side
+	status:          'paid' | 'draft';  // Diego decision 2026-04-28: default UI = 'paid'
+	paidAt?:         string;        // YYYY-MM-DD · REQUIRED iff status='paid'
+	supplier?:       string;        // default 'Bond Soccer Jersey' if empty
+	brutoUsd:        number;        // > 0 · sum of expected_usd OR manual override
+	fx:              number;        // > 0 · default 7.73 cliente
+	notes?:          string;
+}
+
+export interface PromoteWishlistResult {
+	import:            Import;
+	importItemsCount:  number;       // count of import_items rows inserted (= wishlistItemIds.length)
+}
+
 // ─── Capabilities — lo que cada adapter puede hacer ──────────────────
 export interface AdapterCapabilities {
 	reads: boolean;
@@ -370,6 +419,14 @@ export interface Adapter {
 	updateImport(input: UpdateImportInput): Promise<Import>;
 	cancelImport(importId: string): Promise<Import>;
 	exportImportsCsv(): Promise<string>;
+
+	// R2 additions
+	listWishlist(input: ListWishlistInput): Promise<WishlistItem[]>;
+	createWishlistItem(input: CreateWishlistItemInput): Promise<WishlistItem>;
+	updateWishlistItem(input: UpdateWishlistItemInput): Promise<WishlistItem>;
+	cancelWishlistItem(wishlistItemId: number): Promise<WishlistItem>;
+	promoteWishlistToBatch(input: PromoteWishlistInput): Promise<PromoteWishlistResult>;
+	markInTransit(importId: string, trackingCode?: string): Promise<Import>;
 
 	// ─── Finanzas (FIN-R1) ──────────────────────────────────────
 	computeProfitSnapshot(

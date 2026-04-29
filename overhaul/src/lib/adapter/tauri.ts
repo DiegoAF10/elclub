@@ -16,21 +16,27 @@ import type {
 	CommitResult,
 	BackfillMetaResult,
 	CreateImportInput,
+	CreateWishlistItemInput,
 	DeleteFamilyResult,
 	DeleteSkuResult,
 	EditModeloTypeResult,
 	GitStatusInfo,
 	ListFilter,
+	ListWishlistInput,
 	MoveModeloArgs,
 	MoveModeloResult,
 	PhotoAction,
+	PromoteWishlistInput,
+	PromoteWishlistResult,
 	RegisterArrivalInput,
 	RemovePhotosResult,
 	SetFamilyVariantResult,
 	UpdateImportInput,
+	UpdateWishlistItemInput,
 	WatermarkArgs,
 	WatermarkResult
 } from './types';
+import type { WishlistItem } from '$lib/data/wishlist';
 import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, CreateOrderItem, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult, UpdateSaleArgs } from '../data/comercial';
 import type { Import, ImportItem, ImportPulso, CloseImportResult } from '../data/importaciones';
 import type { Family } from '../data/types';
@@ -552,6 +558,31 @@ export const tauriAdapter: Adapter = {
 
 	async exportImportsCsv(): Promise<string> {
 		return await invoke<string>('cmd_export_imports_csv');
+	},
+
+	// ─── Importaciones R2 ──────────────────────────────────────────
+	async listWishlist(input: ListWishlistInput): Promise<WishlistItem[]> {
+		return await invoke<WishlistItem[]>('cmd_list_wishlist', { input });
+	},
+
+	async createWishlistItem(input: CreateWishlistItemInput): Promise<WishlistItem> {
+		return await invoke<WishlistItem>('cmd_create_wishlist_item', { input });
+	},
+
+	async updateWishlistItem(input: UpdateWishlistItemInput): Promise<WishlistItem> {
+		return await invoke<WishlistItem>('cmd_update_wishlist_item', { input });
+	},
+
+	async cancelWishlistItem(wishlistItemId: number): Promise<WishlistItem> {
+		return await invoke<WishlistItem>('cmd_cancel_wishlist_item', { wishlistItemId });
+	},
+
+	async promoteWishlistToBatch(input: PromoteWishlistInput): Promise<PromoteWishlistResult> {
+		return await invoke<PromoteWishlistResult>('cmd_promote_wishlist_to_batch', { input });
+	},
+
+	async markInTransit(importId: string, trackingCode?: string): Promise<Import> {
+		return await invoke<Import>('cmd_mark_in_transit', { importId, trackingCode });
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────
