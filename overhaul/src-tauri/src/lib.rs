@@ -7120,6 +7120,10 @@ pub fn run() {
             cmd_cancel_wishlist_item,
             cmd_promote_wishlist_to_batch,
             cmd_mark_in_transit,
+            // Importaciones R3 (Margen Real · cross-Comercial queries)
+            cmd_get_margen_real,
+            cmd_get_batch_margen_breakdown,
+            cmd_get_margen_pulso,
             // Importaciones R4 (Free units ledger)
             cmd_list_free_units,
             cmd_assign_free_unit,
