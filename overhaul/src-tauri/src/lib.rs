@@ -7622,6 +7622,59 @@ fn cmd_get_migration_log() -> std::result::Result<MigrationLog, String> {
     impl_get_migration_log(&conn).map_err(|e| e.to_string())
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct IntegrationStatus {
+    pub name: String,
+    pub status: String,    // 'active' | 'disabled'
+    pub last_read_at: Option<String>,
+    pub note: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct IntegrationsStatus {
+    pub integrations: Vec<IntegrationStatus>,
+}
+
+#[tauri::command]
+fn cmd_get_integrations_status() -> std::result::Result<IntegrationsStatus, String> {
+    // Last DB modification timestamp as proxy for "last read"
+    let last_read = std::fs::metadata(db_path())
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| {
+            let dt = chrono::DateTime::<chrono::Local>::from(
+                std::time::UNIX_EPOCH + d
+            );
+            dt.format("%Y-%m-%d %H:%M:%S").to_string()
+        });
+
+    Ok(IntegrationsStatus {
+        integrations: vec![
+            IntegrationStatus {
+                name: "elclub.db (SQLite local)".to_string(),
+                status: "active".to_string(),
+                last_read_at: last_read,
+                note: Some("Source-of-truth compartido con Streamlit (read-only allá)".to_string()),
+            },
+            IntegrationStatus {
+                name: "PayPal screenshot OCR".to_string(),
+                status: "disabled".to_string(),
+                last_read_at: None,
+                note: Some("v0.5 future · captura bruto_usd automática".to_string()),
+            },
+            IntegrationStatus {
+                name: "DHL tracking API".to_string(),
+                status: "disabled".to_string(),
+                last_read_at: None,
+                note: Some("v0.5 future · webhook DHL para arrived_at + shipping_gtq".to_string()),
+            },
+        ],
+    })
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -7737,6 +7790,7 @@ pub fn run() {
             cmd_get_imp_settings,
             cmd_update_imp_setting,
             cmd_get_migration_log,
+            cmd_get_integrations_status,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
