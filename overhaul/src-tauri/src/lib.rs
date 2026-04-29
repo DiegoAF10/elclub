@@ -2987,6 +2987,59 @@ fn compute_batch_summary(conn: &rusqlite::Connection, import_id: &str) -> Result
     })
 }
 
+/// Returns list of BatchMargenSummary filtered per MargenFilter.
+/// Default: closed only (per spec sec 4.3 line 237).
+/// include_pipeline=true incluye paid+arrived con margen estimado (revenue real · landed null si no closed).
+pub fn impl_get_margen_real(filter: &MargenFilter) -> Result<Vec<BatchMargenSummary>> {
+    let conn = open_db()?;
+
+    // Build WHERE clause dynamically per filter
+    let include_pipeline = filter.include_pipeline.unwrap_or(false);
+    let status_clause = if include_pipeline {
+        "status IN ('paid', 'arrived', 'closed')"
+    } else {
+        "status = 'closed'"
+    };
+
+    let mut sql = format!(
+        "SELECT import_id FROM imports WHERE {} ", status_clause
+    );
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+
+    if let Some(pf) = &filter.period_from {
+        sql.push_str("AND paid_at >= ? ");
+        params.push(Box::new(pf.clone()));
+    }
+    if let Some(pt) = &filter.period_to {
+        sql.push_str("AND paid_at <= ? ");
+        params.push(Box::new(pt.clone()));
+    }
+    if let Some(sup) = &filter.supplier {
+        sql.push_str("AND supplier = ? ");
+        params.push(Box::new(sup.clone()));
+    }
+    sql.push_str("ORDER BY paid_at DESC NULLS LAST, import_id DESC");
+
+    let mut stmt = conn.prepare(&sql)?;
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref() as &dyn rusqlite::ToSql).collect();
+    let import_ids: Vec<String> = stmt
+        .query_map(rusqlite::params_from_iter(param_refs.iter()), |r| r.get::<_, String>(0))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    let mut summaries = Vec::with_capacity(import_ids.len());
+    for id in import_ids {
+        // compute_batch_summary opens its own conn read · thread-safe
+        summaries.push(compute_batch_summary(&conn, &id)?);
+    }
+
+    Ok(summaries)
+}
+
+#[tauri::command]
+async fn cmd_get_margen_real(filter: MargenFilter) -> Result<Vec<BatchMargenSummary>> {
+    impl_get_margen_real(&filter)
+}
+
 // ─── R4: Free units ledger ──────────────────────────────────────────
 //
 // Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
