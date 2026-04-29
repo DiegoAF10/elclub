@@ -2906,6 +2906,85 @@ async fn cmd_list_wishlist(input: ListWishlistInput) -> Result<Vec<WishlistItem>
     impl_list_wishlist(input).await
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateWishlistItemInput {
+    pub family_id:     String,
+    pub jersey_id:     Option<String>,
+    pub size:          Option<String>,
+    pub player_name:   Option<String>,
+    pub player_number: Option<i64>,
+    pub patch:         Option<String>,
+    pub version:       Option<String>,
+    pub customer_id:   Option<String>,
+    pub expected_usd:  Option<f64>,
+    pub notes:         Option<String>,
+}
+
+/// D7=B: family_id must exist in catalog.json. Validates server-side before INSERT.
+pub async fn impl_create_wishlist_item(input: CreateWishlistItemInput) -> Result<WishlistItem> {
+    if input.family_id.trim().is_empty() {
+        return Err(ErpError::Other("family_id is required".into()));
+    }
+
+    // D7=B validation
+    if !catalog_family_exists(&input.family_id)? {
+        return Err(ErpError::Other(format!(
+            "family_id '{}' not in catalog (D7=B) · audit/scrape it first via Vault",
+            input.family_id
+        )));
+    }
+
+    // Validate version if provided
+    if let Some(v) = &input.version {
+        if !["fan", "fan-w", "player"].contains(&v.as_str()) {
+            return Err(ErpError::Other(format!(
+                "version must be one of: fan, fan-w, player (got '{}')",
+                v
+            )));
+        }
+    }
+
+    // Validate expected_usd if provided
+    if let Some(usd) = input.expected_usd {
+        if usd < 0.0 {
+            return Err(ErpError::Other("expected_usd cannot be negative".into()));
+        }
+    }
+
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    tx.execute(
+        "INSERT INTO import_wishlist
+         (family_id, jersey_id, size, player_name, player_number, patch, version,
+          customer_id, expected_usd, status, notes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'active', ?10)",
+        rusqlite::params![
+            input.family_id,
+            input.jersey_id,
+            input.size,
+            input.player_name,
+            input.player_number,
+            input.patch,
+            input.version,
+            input.customer_id,
+            input.expected_usd,
+            input.notes,
+        ],
+    )?;
+
+    let new_id = tx.last_insert_rowid();
+    tx.commit()?;
+
+    read_wishlist_item_by_id(&conn, new_id)
+}
+
+#[tauri::command]
+async fn cmd_create_wishlist_item(input: CreateWishlistItemInput) -> Result<WishlistItem> {
+    impl_create_wishlist_item(input).await
+}
+
 // ─── R1.5 Completion: Create / Register Arrival / Update / Cancel ────
 //
 // Convention for IMP-R1.5 commands that need integration testing:
