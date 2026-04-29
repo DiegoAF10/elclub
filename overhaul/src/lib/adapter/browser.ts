@@ -43,7 +43,11 @@ import type {
 	// R5
 	SupplierMetrics,
 	SupplierDetail,
-	UnpublishedRequest
+	UnpublishedRequest,
+	// R6
+	ImpSetting,
+	MigrationLog,
+	IntegrationsStatus
 } from './types';
 import { NotAvailableInBrowser } from './types';
 import type { WishlistItem } from '$lib/data/wishlist';
@@ -490,6 +494,36 @@ export const browserAdapter: Adapter = {
 
 	async getMostRequestedUnpublished(_limit?: number): Promise<UnpublishedRequest[]> {
 		throw new NotAvailableInBrowser('getMostRequestedUnpublished');
+	},
+
+	// ─── Importaciones R6 (Settings · migration log · integrations) ────
+	async getImpSettings(): Promise<ImpSetting[]> {
+		// Browser dev preview: return defaults so SettingsTab renders
+		return [
+			{ key: 'default_fx', value: '7.73', updatedAt: null, updatedBy: null },
+			{ key: 'default_free_ratio', value: '10', updatedAt: null, updatedBy: null },
+			{ key: 'default_wishlist_target', value: '20', updatedAt: null, updatedBy: null },
+			{ key: 'threshold_wishlist_unbatched_days', value: '30', updatedAt: null, updatedBy: null },
+			{ key: 'threshold_paid_unarrived_days', value: '14', updatedAt: null, updatedBy: null },
+			{ key: 'threshold_cost_overrun_pct', value: '30', updatedAt: null, updatedBy: null },
+			{ key: 'threshold_free_unit_unassigned_days', value: '7', updatedAt: null, updatedBy: null },
+		];
+	},
+
+	async updateImpSetting(_key: string, _value: string): Promise<ImpSetting> {
+		throw new NotAvailableInBrowser('updateImpSetting');
+	},
+
+	async getMigrationLog(): Promise<MigrationLog> {
+		throw new NotAvailableInBrowser('getMigrationLog');
+	},
+
+	async getIntegrationsStatus(): Promise<IntegrationsStatus> {
+		throw new NotAvailableInBrowser('getIntegrationsStatus');
+	},
+
+	async resyncMigration(): Promise<string> {
+		throw new NotAvailableInBrowser('resyncMigration');
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────
