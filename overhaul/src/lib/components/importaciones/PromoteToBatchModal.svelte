@@ -18,6 +18,7 @@
   let paidAt = $state(new Date().toISOString().slice(0, 10));
   let supplier = $state('Bond Soccer Jersey');
   let fx = $state(7.73);
+  let brutoUsdManual = $state<number | null>(null);  // user-entered total · null = use auto-sum fallback
   let selectedIds = $state<Set<number>>(new Set());
 
   let submitting = $state(false);
@@ -46,6 +47,8 @@
   let estimatedBrutoUsd = $derived(
     selectedItems.reduce((sum, i) => sum + (i.expectedUsd ?? 0), 0)
   );
+  // Effective bruto_usd sent to backend: manual override > auto-sum > 0
+  let effectiveBrutoUsd = $derived(brutoUsdManual ?? estimatedBrutoUsd);
   let nUnits = $derived(selectedItems.length);
 
   // paid_at only required when status='paid'
@@ -55,6 +58,7 @@
     idValid &&
     paidAtValid &&
     fx > 0 &&
+    effectiveBrutoUsd > 0 &&
     selectedIds.size >= 1 &&
     !submitting
   );
@@ -84,7 +88,7 @@
         status: importStatus,                            // 'paid' or 'draft'
         paidAt: alreadyPaid ? paidAt : undefined,        // only sent when status='paid'
         supplier: supplier.trim() || undefined,
-        brutoUsd: estimatedBrutoUsd,                     // sum of expected_usd of selected items
+        brutoUsd: effectiveBrutoUsd,                     // user-entered total OR auto-sum fallback
         fx,
       });
       onPromoted(result);
@@ -102,6 +106,7 @@
     paidAt = new Date().toISOString().slice(0, 10);
     supplier = 'Bond Soccer Jersey';
     fx = 7.73;
+    brutoUsdManual = null;
     selectedIds = new Set();
     errorMsg = null;
   }
@@ -199,16 +204,49 @@
           <input type="text" bind:value={supplier} disabled={submitting} class="w-full px-3 py-2 bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-[3px] text-[13px] text-[var(--color-text-primary)]" />
         </div>
 
+        <!-- Bruto USD (lo que te cobra el chino · total del batch) -->
+        <div>
+          <label class="text-mono text-[10px] uppercase text-[var(--color-text-tertiary)] block mb-1" style="letter-spacing: 0.08em;">
+            Bruto USD * <span class="text-[var(--color-text-tertiary)] normal-case" style="letter-spacing: 0;">· lo que te cobra el chino · total del batch</span>
+          </label>
+          <input
+            type="number"
+            bind:value={brutoUsdManual}
+            step="0.01"
+            min="0.01"
+            placeholder={estimatedBrutoUsd > 0 ? `auto: ${estimatedBrutoUsd.toFixed(2)} (suma expected_usd) · podés override` : 'p.ej. 372.64'}
+            disabled={submitting}
+            class="text-mono w-full px-3 py-2 bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-[3px] text-[13px] text-[var(--color-text-primary)] tabular-nums"
+          />
+          {#if brutoUsdManual === null && estimatedBrutoUsd > 0}
+            <p class="text-mono text-[10px] text-[var(--color-text-tertiary)] mt-1" style="letter-spacing: 0.04em;">
+              ● auto-suma: ${estimatedBrutoUsd.toFixed(2)} · entrá manual si el chino te cobra otro total
+            </p>
+          {:else if brutoUsdManual === null && estimatedBrutoUsd === 0}
+            <p class="text-mono text-[10px] text-[var(--color-warning)] mt-1" style="letter-spacing: 0.04em;">
+              ⚠ items sin expected_usd · entrá el bruto USD del chino acá (requerido)
+            </p>
+          {/if}
+        </div>
+
         <!-- Selection summary -->
         <div class="border border-[var(--color-border)] rounded-[3px] p-3 bg-[var(--color-surface-2)]">
-          <div class="flex items-center justify-between mb-2">
+          <div class="mb-1.5">
             <span class="text-mono text-[11px] uppercase text-[var(--color-text-tertiary)]" style="letter-spacing: 0.08em;">
-              Items seleccionados · {nUnits} / {activeItems.length}
+              ¿Qué items mandás al chino en este batch?
+            </span>
+            <p class="text-mono text-[10px] text-[var(--color-text-tertiary)] mt-0.5" style="letter-spacing: 0.04em;">
+              Marcá los items que van · desmarcá los que dejás para otro batch
+            </p>
+          </div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-mono text-[11px] text-[var(--color-text-secondary)]">
+              <span class="tabular-nums text-[var(--color-accent)] font-semibold">{nUnits}</span> / {activeItems.length} marcados
             </span>
             <div class="flex gap-2">
-              <button type="button" onclick={selectAll} disabled={submitting} class="text-mono text-[10px] uppercase text-[var(--color-accent)] hover:underline">todos</button>
+              <button type="button" onclick={selectAll} disabled={submitting} class="text-mono text-[10px] uppercase text-[var(--color-accent)] hover:underline">marcar todos</button>
               <span class="text-[var(--color-text-tertiary)]">·</span>
-              <button type="button" onclick={selectNone} disabled={submitting} class="text-mono text-[10px] uppercase text-[var(--color-text-tertiary)] hover:underline">ninguno</button>
+              <button type="button" onclick={selectNone} disabled={submitting} class="text-mono text-[10px] uppercase text-[var(--color-text-tertiary)] hover:underline">desmarcar todos</button>
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2 text-mono text-[11px]">
