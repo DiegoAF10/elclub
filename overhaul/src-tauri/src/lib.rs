@@ -7431,6 +7431,76 @@ fn list_saved_views(args: ListSavedViewsArgs) -> Result<Vec<SavedViewOut>> {
     Ok(rows.filter_map(|r| r.ok()).collect())
 }
 
+// ─── IMP-R6 Settings ────────────────────────────────────────────
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ImpSetting {
+    pub key: String,
+    pub value: String,
+    pub updated_at: Option<String>,
+    pub updated_by: Option<String>,
+}
+
+/// Default values per key · returned if row doesn't exist in imp_settings.
+fn imp_setting_default(key: &str) -> Option<&'static str> {
+    match key {
+        "default_fx" => Some("7.73"),
+        "default_free_ratio" => Some("10"),
+        "default_wishlist_target" => Some("20"),
+        "threshold_wishlist_unbatched_days" => Some("30"),
+        "threshold_paid_unarrived_days" => Some("14"),
+        "threshold_cost_overrun_pct" => Some("30"),
+        "threshold_free_unit_unassigned_days" => Some("7"),
+        _ => None,
+    }
+}
+
+const ALL_IMP_SETTING_KEYS: &[&str] = &[
+    "default_fx",
+    "default_free_ratio",
+    "default_wishlist_target",
+    "threshold_wishlist_unbatched_days",
+    "threshold_paid_unarrived_days",
+    "threshold_cost_overrun_pct",
+    "threshold_free_unit_unassigned_days",
+];
+
+pub fn impl_get_imp_settings(conn: &rusqlite::Connection) -> rusqlite::Result<Vec<ImpSetting>> {
+    let mut out: Vec<ImpSetting> = Vec::with_capacity(ALL_IMP_SETTING_KEYS.len());
+    let mut stmt = conn.prepare(
+        "SELECT key, value, updated_at, updated_by FROM imp_settings WHERE key = ?1"
+    )?;
+    for &key in ALL_IMP_SETTING_KEYS {
+        let row: Option<ImpSetting> = stmt
+            .query_row([key], |r| {
+                Ok(ImpSetting {
+                    key: r.get(0)?,
+                    value: r.get(1)?,
+                    updated_at: r.get(2)?,
+                    updated_by: r.get(3)?,
+                })
+            })
+            .ok();
+        match row {
+            Some(s) => out.push(s),
+            None => out.push(ImpSetting {
+                key: key.to_string(),
+                value: imp_setting_default(key).unwrap_or("").to_string(),
+                updated_at: None,
+                updated_by: None,
+            }),
+        }
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+fn cmd_get_imp_settings() -> std::result::Result<Vec<ImpSetting>, String> {
+    let conn = rusqlite::Connection::open(db_path()).map_err(|e| e.to_string())?;
+    impl_get_imp_settings(&conn).map_err(|e| e.to_string())
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -7542,6 +7612,8 @@ pub fn run() {
             cmd_get_supplier_metrics,
             cmd_get_supplier_detail,
             cmd_get_most_requested_unpublished,
+            // Importaciones R6 (Settings · migration log · integrations)
+            cmd_get_imp_settings,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
