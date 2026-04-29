@@ -133,21 +133,32 @@
   </div>
 
   {#if loading}
-    <div class="text-mono text-[11px] text-[var(--color-text-tertiary)] py-8 text-center" style="letter-spacing: 0.05em;">
-      ⏳ Cargando free units…
+    <div class="space-y-2">
+      {#each Array(3) as _, i (i)}
+        <div class="h-9 rounded-[3px] bg-[var(--color-surface-2)] animate-pulse"></div>
+      {/each}
     </div>
   {:else if errorMsg}
-    <div class="text-[11px] text-[var(--color-danger)] bg-[rgba(244,63,94,0.10)] border border-[rgba(244,63,94,0.3)] rounded-[3px] px-3 py-2">
-      ⚠️ {errorMsg}
+    <div class="flex items-center justify-between gap-3 text-[11px] text-[var(--color-danger)] bg-[rgba(244,63,94,0.10)] border border-[rgba(244,63,94,0.3)] rounded-[3px] px-3 py-2">
+      <span>⚠️ Error: {errorMsg}</span>
+      <button
+        type="button"
+        onclick={load}
+        class="text-mono text-[10px] uppercase px-2 py-1 bg-[var(--color-danger)] text-white rounded-[2px]"
+        style="letter-spacing: 0.06em;"
+      >
+        Reintentar
+      </button>
     </div>
   {:else if units.length === 0}
-    <div class="border border-[var(--color-border)] rounded-[6px] p-8 text-center bg-[var(--color-surface-1)] space-y-2">
-      <div class="text-[13px] text-[var(--color-text-secondary)]">Sin free units todavía.</div>
-      <div class="text-mono text-[10.5px] text-[var(--color-text-tertiary)] max-w-md mx-auto" style="letter-spacing: 0.05em; line-height: 1.6;">
-        Cuando cerrás un batch con N paid units, el sistema crea automáticamente
-        <span class="text-[var(--color-accent)]">floor(N/10)</span> free units en este ledger.
-        Asignalos a VIP / Mystery / Garantizada / Personal según política.
-      </div>
+    <div class="flex flex-col items-center justify-center text-center py-12 border border-dashed border-[var(--color-border)] rounded-[6px] bg-[var(--color-surface-1)]">
+      <div class="text-[28px] opacity-50 mb-1">🎁</div>
+      <h3 class="text-mono text-[11px] uppercase text-[var(--color-text-secondary)] mb-1" style="letter-spacing: 0.08em;">Sin free units</h3>
+      <p class="text-[11px] text-[var(--color-text-tertiary)] max-w-md mx-auto">
+        Las free units se generan automáticamente al close batch
+        (<span class="text-[var(--color-accent)]">1 cada 10 paid</span>).
+      </p>
+      <p class="text-[10.5px] text-[var(--color-text-muted)] mt-2">Cerrá un batch para ver free units acá.</p>
     </div>
   {:else}
     <div class="border border-[var(--color-border)] rounded-[6px] overflow-hidden bg-[var(--color-surface-1)]">
