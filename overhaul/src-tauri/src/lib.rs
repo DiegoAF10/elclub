@@ -3959,7 +3959,9 @@ async fn cmd_list_catalog_modelos() -> std::result::Result<Vec<ModeloOption>, St
 // Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
 // All 5 R2 commands (list/create/update/cancel/promote) follow this split.
 //
-// D7=B: catalog_family_exists() reads catalog.json server-side via catalog_path() (L53).
+// D7=B (post-v0.4.0 fix): catalog_modelo_sku_exists() validates the modelo SKU
+// (e.g. "ARG-2026-L-FS"), not the family parent ID (e.g. "argentina-2026-home").
+// catalog_family_exists() is retained for any future caller needing parent lookup.
 // Tests override catalog path via env var ELCLUB_CATALOG_PATH for fixture isolation.
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -4173,23 +4175,16 @@ pub async fn impl_create_wishlist_item(input: CreateWishlistItemInput) -> Result
         return Err(ErpError::Other("family_id is required".into()));
     }
 
-    // D7=B validation
-    if !catalog_family_exists(&input.family_id)? {
+    // D7=B validation (corrected · validates modelo SKU, not family parent)
+    if !catalog_modelo_sku_exists(&input.family_id)? {
         return Err(ErpError::Other(format!(
-            "family_id '{}' not in catalog (D7=B) · audit/scrape it first via Vault",
+            "SKU '{}' no existe como modelo en catalog (D7=B) · audit/scrape it first via Vault",
             input.family_id
         )));
     }
 
-    // Validate version if provided
-    if let Some(v) = &input.version {
-        if !["fan", "fan-w", "player"].contains(&v.as_str()) {
-            return Err(ErpError::Other(format!(
-                "version must be one of: fan, fan-w, player (got '{}')",
-                v
-            )));
-        }
-    }
+    // Note: version is now auto-populated from the selected modelo (e.g. "fan_adult/short"),
+    // so the legacy fan/fan-w/player whitelist is gone. Free-form string accepted.
 
     // Validate expected_usd if provided
     if let Some(usd) = input.expected_usd {
@@ -4270,15 +4265,8 @@ pub async fn impl_update_wishlist_item(input: UpdateWishlistItemInput) -> Result
         )));
     }
 
-    if let Some(v) = &input.version {
-        if !["fan", "fan-w", "player"].contains(&v.as_str()) {
-            tx.rollback()?;
-            return Err(ErpError::Other(format!(
-                "version must be one of: fan, fan-w, player (got '{}')",
-                v
-            )));
-        }
-    }
+    // Note: version legacy whitelist (fan/fan-w/player) removed · cascade picker
+    // auto-populates as "{type}/{sleeve}" (e.g. "fan_adult/short") from selected modelo.
     if let Some(usd) = input.expected_usd {
         if usd < 0.0 {
             tx.rollback()?;
