@@ -3123,6 +3123,95 @@ async fn cmd_get_batch_margen_breakdown(import_id: String) -> Result<BatchMargen
     impl_get_batch_margen_breakdown(&import_id)
 }
 
+/// Global aggregates of margen across closed batches YTD (current year).
+/// Powers the header pulso bar of MargenRealTab.
+pub fn impl_get_margen_pulso() -> Result<MargenPulso> {
+    let conn = open_db()?;
+
+    // YTD = current year (substr paid_at vs strftime year)
+    let n_batches: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM imports
+         WHERE status = 'closed'
+           AND substr(COALESCE(arrived_at, paid_at), 1, 4) = strftime('%Y', 'now', 'localtime')",
+        [], |r| r.get(0),
+    ).unwrap_or(0);
+
+    let landed_total: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(total_landed_gtq), 0) FROM imports
+         WHERE status = 'closed'
+           AND substr(COALESCE(arrived_at, paid_at), 1, 4) = strftime('%Y', 'now', 'localtime')",
+        [], |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    let revenue_total: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(si.unit_price), 0)
+         FROM sale_items si
+         INNER JOIN imports i ON i.import_id = si.import_id
+         WHERE i.status = 'closed'
+           AND substr(COALESCE(i.arrived_at, i.paid_at), 1, 4) = strftime('%Y', 'now', 'localtime')",
+        [], |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    // Capital amarrado: SUM(COALESCE(import_items.unit_cost_gtq, imports.unit_cost)) WHERE status='pending'
+    // across all closed batches YTD. Single source post-R6 schema (NO UNION needed).
+    let capital_amarrado: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(COALESCE(ii.unit_cost_gtq, i.unit_cost)), 0)
+         FROM import_items ii
+         INNER JOIN imports i ON i.import_id = ii.import_id
+         WHERE ii.status = 'pending'
+           AND i.status = 'closed'
+           AND substr(COALESCE(i.arrived_at, i.paid_at), 1, 4) = strftime('%Y', 'now', 'localtime')",
+        [], |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    let margen_total = revenue_total - landed_total;
+
+    // Best/worst batch by margen_pct: iterate over all closed batches, compute pct per batch
+    // Cheaper than complex SQL with subquery.
+    let mut stmt = conn.prepare(
+        "SELECT import_id FROM imports WHERE status = 'closed'
+           AND substr(COALESCE(arrived_at, paid_at), 1, 4) = strftime('%Y', 'now', 'localtime')"
+    )?;
+    let import_ids: Vec<String> = stmt
+        .query_map([], |r| r.get::<_, String>(0))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    let mut pcts: Vec<(String, f64)> = vec![];
+    for id in &import_ids {
+        let s = compute_batch_summary(&conn, id)?;
+        if let Some(pct) = s.margen_pct {
+            pcts.push((id.clone(), pct));
+        }
+    }
+
+    let margen_pct_avg = if !pcts.is_empty() {
+        Some(pcts.iter().map(|(_, p)| p).sum::<f64>() / pcts.len() as f64)
+    } else {
+        None
+    };
+
+    let best = pcts.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    let worst = pcts.iter().min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    Ok(MargenPulso {
+        n_batches_closed: n_batches,
+        revenue_total_ytd_gtq: revenue_total,
+        landed_total_ytd_gtq: landed_total,
+        margen_total_ytd_gtq: margen_total,
+        margen_pct_avg,
+        best_batch_id: best.map(|(id, _)| id.clone()),
+        best_batch_margen_pct: best.map(|(_, p)| *p),
+        worst_batch_id: worst.map(|(id, _)| id.clone()),
+        worst_batch_margen_pct: worst.map(|(_, p)| *p),
+        capital_amarrado_gtq: capital_amarrado,
+    })
+}
+
+#[tauri::command]
+async fn cmd_get_margen_pulso() -> Result<MargenPulso> {
+    impl_get_margen_pulso()
+}
+
 // ─── R4: Free units ledger ──────────────────────────────────────────
 //
 // Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
