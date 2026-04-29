@@ -2626,9 +2626,17 @@ pub struct CloseImportResult {
     pub method: &'static str,
 }
 
-#[tauri::command]
-async fn cmd_close_import_proportional(
-    _app: tauri::AppHandle,
+/// Closes an import batch, applying D2=B proportional landed cost prorrateo to all
+/// linked sale_items + jerseys, and updating the imports row to status='closed'.
+///
+/// Pre-condition: status != 'closed' AND bruto_usd IS NOT NULL AND shipping_gtq IS NOT NULL.
+/// Post-condition: all linked items have `unit_cost` set (GTQ landed) · imports.status='closed'
+/// + total_landed_gtq + n_units + unit_cost + lead_time_days populated.
+///
+/// Refactored 2026-04-28 from inline #[tauri::command] to impl/cmd split per
+/// convention block lib.rs:2730-2742 · zero behavior change · prerequisite for
+/// R4 free-units auto-create modification (Task 5).
+pub async fn impl_close_import_proportional(
     import_id: String,
 ) -> Result<CloseImportResult> {
     let mut conn = open_db()?;
@@ -2725,6 +2733,14 @@ async fn cmd_close_import_proportional(
         avg_unit_cost: avg_unit,
         method: "D2=B (proportional by USD)",
     })
+}
+
+#[tauri::command]
+async fn cmd_close_import_proportional(
+    _app: tauri::AppHandle,
+    import_id: String,
+) -> Result<CloseImportResult> {
+    impl_close_import_proportional(import_id).await
 }
 
 /// Re-reads canonical Import row by ID. Used by all impl_X commands after tx.commit().
