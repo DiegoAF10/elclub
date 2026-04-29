@@ -3876,6 +3876,84 @@ async fn cmd_get_most_requested_unpublished(limit: Option<i32>) -> std::result::
     impl_get_most_requested_unpublished(limit).await
 }
 
+// ─── R4.1: Catalog modelos picker (cascade: Tipo → Equipo → Modelo) ────
+//
+// Reads catalog.json (533 families with `modelos[]`) and emits a flat list of
+// ModeloOption rows for the WishlistItemModal cascade picker. Replaces the
+// "memorize the SKU" UX with Tipo de equipo (confederation) → Equipo → Modelo.
+
+pub async fn impl_list_catalog_modelos() -> Result<Vec<ModeloOption>> {
+    let path = std::env::var("ELCLUB_CATALOG_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| catalog_path());
+    if !path.exists() {
+        return Err(ErpError::Other(format!("catalog.json not found at {:?}", path)));
+    }
+    let raw = std::fs::read_to_string(&path)?;
+    let catalog: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|e| ErpError::Other(format!("invalid catalog.json: {}", e)))?;
+    let families = catalog.as_array().ok_or_else(|| ErpError::Other("catalog root not array".into()))?;
+
+    let mut out: Vec<ModeloOption> = Vec::new();
+    for fam in families {
+        let family_parent_id = fam.get("family_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let team = fam.get("team").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let season = fam.get("season").and_then(|v| v.as_str()).map(String::from);
+        let variant = fam.get("variant").and_then(|v| v.as_str()).map(String::from);
+        let published = fam.get("published").and_then(|v| v.as_bool()).unwrap_or(false);
+        let confederation = fam.get("meta_confederation").and_then(|v| v.as_str()).map(String::from);
+        let country = fam.get("meta_country").and_then(|v| v.as_str()).map(String::from);
+
+        if let Some(modelos) = fam.get("modelos").and_then(|m| m.as_array()) {
+            for m in modelos {
+                let sku = match m.get("sku").and_then(|v| v.as_str()) {
+                    Some(s) if !s.is_empty() => s.to_string(),
+                    _ => continue,  // skip modelos without SKU (incomplete data)
+                };
+                let modelo_type = m.get("type").and_then(|v| v.as_str()).map(String::from);
+                let sleeve = m.get("sleeve").and_then(|v| v.as_str()).map(String::from);
+                let price = m.get("price").and_then(|v| v.as_f64());
+                let display = format!(
+                    "{} · {} {} · {}/{}",
+                    sku,
+                    season.as_deref().unwrap_or(""),
+                    variant.as_deref().unwrap_or(""),
+                    modelo_type.as_deref().unwrap_or("?"),
+                    sleeve.as_deref().unwrap_or("?")
+                );
+                out.push(ModeloOption {
+                    sku,
+                    family_parent_id: family_parent_id.clone(),
+                    team: team.clone(),
+                    season: season.clone(),
+                    variant: variant.clone(),
+                    modelo_type,
+                    sleeve,
+                    price,
+                    published,
+                    confederation: confederation.clone(),
+                    country: country.clone(),
+                    display,
+                });
+            }
+        }
+    }
+
+    // Sort: published first, then by team, then by sku
+    out.sort_by(|a, b| {
+        b.published.cmp(&a.published)
+            .then_with(|| a.team.cmp(&b.team))
+            .then_with(|| a.sku.cmp(&b.sku))
+    });
+
+    Ok(out)
+}
+
+#[tauri::command]
+async fn cmd_list_catalog_modelos() -> std::result::Result<Vec<ModeloOption>, String> {
+    impl_list_catalog_modelos().await.map_err(|e| e.to_string())
+}
+
 // ─── R2: Wishlist + Promote-to-batch ────
 //
 // Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
@@ -3903,8 +3981,11 @@ pub struct WishlistItem {
     pub notes:                 Option<String>,
 }
 
-/// D7=B validation: returns true if `family_id` exists in catalog.json.
+/// Legacy D7=B validation (parent-level): returns true if `family_id` exists in catalog.json
+/// at the family level (kebab-case parent like "argentina-2026-home"). Retained for any
+/// future caller needing parent lookup; wishlist now uses catalog_modelo_sku_exists() instead.
 /// Overridable via ELCLUB_CATALOG_PATH env var (tests use fixtures).
+#[allow(dead_code)]
 fn catalog_family_exists(family_id: &str) -> Result<bool> {
     let path = std::env::var("ELCLUB_CATALOG_PATH")
         .map(std::path::PathBuf::from)
@@ -3934,6 +4015,53 @@ fn catalog_family_exists(family_id: &str) -> Result<bool> {
             .map(|s| s == family_id)
             .unwrap_or(false)
     }))
+}
+
+/// D7=B (corrected): validates that `sku` exists as a `modelo.sku` in catalog.json
+/// (NOT as a family.family_id parent). The wishlist stores modelo SKUs.
+fn catalog_modelo_sku_exists(sku: &str) -> Result<bool> {
+    let path = std::env::var("ELCLUB_CATALOG_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| catalog_path());
+    if !path.exists() {
+        return Err(ErpError::Other(format!(
+            "catalog.json not found at {:?} · cannot validate SKU (D7=B)", path
+        )));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|e| {
+        ErpError::Other(format!("failed reading catalog.json: {}", e))
+    })?;
+    let catalog: serde_json::Value = serde_json::from_str(&raw).map_err(|e| {
+        ErpError::Other(format!("invalid catalog.json: {}", e))
+    })?;
+    let families = catalog.as_array().ok_or_else(|| {
+        ErpError::Other("catalog.json root not an array".into())
+    })?;
+    Ok(families.iter().any(|f| {
+        f.get("modelos")
+            .and_then(|m| m.as_array())
+            .map(|modelos| modelos.iter().any(|m| {
+                m.get("sku").and_then(|s| s.as_str()).map(|s| s == sku).unwrap_or(false)
+            }))
+            .unwrap_or(false)
+    }))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModeloOption {
+    pub sku:                String,           // "ARG-2026-L-FS" · the modelo identifier
+    pub family_parent_id:   String,           // "argentina-2026-home" · catalog family_id
+    pub team:               String,           // "Argentina"
+    pub season:             Option<String>,   // "2026"
+    pub variant:            Option<String>,   // "home"/"away"/"third"/"special"
+    pub modelo_type:        Option<String>,   // "fan_adult"/"player_adult"/"woman"/"kid"/"baby"/"retro_adult"
+    pub sleeve:             Option<String>,   // "short"/"long"
+    pub price:              Option<f64>,
+    pub published:          bool,
+    pub confederation:      Option<String>,   // "UEFA"/"Conmebol"/"CAF"/"Concacaf"/"AFC" · null for clubs
+    pub country:            Option<String>,   // meta_country · null for clubs
+    pub display:            String,           // "ARG-2026-L-FS · Argentina 2026 home · fan_adult/short"
 }
 
 /// Re-reads canonical WishlistItem row by id. Used post-tx by impl_X commands.
@@ -7793,6 +7921,8 @@ pub fn run() {
             cmd_get_supplier_metrics,
             cmd_get_supplier_detail,
             cmd_get_most_requested_unpublished,
+            // Importaciones R4.1 (Catalog modelos picker · post-MSI fix)
+            cmd_list_catalog_modelos,
             // Importaciones R6 (Settings · migration log · integrations)
             cmd_get_imp_settings,
             cmd_update_imp_setting,
