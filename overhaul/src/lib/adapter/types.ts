@@ -403,6 +403,65 @@ export interface FreeUnitFilter {
 	status?: 'assigned' | 'unassigned';
 }
 
+// ─── R5: Supplier Scorecard + Feedback Loop ─────────────────────────
+// Rust uses #[serde(rename_all = "camelCase")] so wire format is camelCase.
+
+export interface ContactInfo {
+	label: string;
+	paymentMethod: string;
+	carrier: string;
+}
+
+export interface PriceBand {
+	baseUsd: number | null;
+	patchUsd: number | null;
+	patchNameUsd: number | null;
+	source: string;  // "hardcoded:Bond" | "tbd"
+}
+
+export interface SupplierBatchSummary {
+	importId: string;
+	paidAt: string | null;
+	arrivedAt: string | null;
+	status: string;
+	nUnits: number | null;
+	totalLandedGtq: number | null;
+	leadTimeDays: number | null;
+}
+
+export interface SupplierMetrics {
+	supplier: string;
+	totalBatches: number;
+	closedBatches: number;
+	pipelineBatches: number;
+	leadTimeAvgDays: number | null;
+	leadTimeP50Days: number | null;
+	leadTimeP95Days: number | null;
+	leadTimeN: number;
+	totalLandedGtqYtd: number;
+	costAccuracyPct: number | null;
+	nextExpectedArrival: string | null;
+	lastBatchPaidAt: string | null;
+}
+
+export interface SupplierDetail {
+	metrics: SupplierMetrics;
+	contact: ContactInfo;
+	priceBand: PriceBand;
+	freePolicyText: string;
+	batches: SupplierBatchSummary[];   // sorted DESC by paid_at
+}
+
+export interface UnpublishedRequest {
+	familyId: string;
+	nRequests: number;
+	nPending: number;
+	nAssigned: number;
+	nStock: number;
+	lastRequestedAt: string | null;
+	published: boolean;   // siempre false en el response (filter aplicado server-side)
+}
+
 // ─── Capabilities — lo que cada adapter puede hacer ──────────────────
 export interface AdapterCapabilities {
 	reads: boolean;
@@ -553,6 +612,11 @@ export interface Adapter {
 	listFreeUnits(filter?: FreeUnitFilter): Promise<FreeUnit[]>;
 	assignFreeUnit(input: AssignFreeUnitInput): Promise<FreeUnit>;
 	unassignFreeUnit(freeUnitId: number): Promise<FreeUnit>;
+
+	// R5 additions: Supplier Scorecard + Feedback Loop
+	getSupplierMetrics(): Promise<SupplierMetrics[]>;
+	getSupplierDetail(supplier: string): Promise<SupplierDetail>;
+	getMostRequestedUnpublished(limit?: number): Promise<UnpublishedRequest[]>;
 
 	// ─── Finanzas (FIN-R1) ──────────────────────────────────────
 	computeProfitSnapshot(

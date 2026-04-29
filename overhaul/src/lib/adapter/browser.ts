@@ -39,7 +39,11 @@ import type {
 	// R4
 	FreeUnit,
 	AssignFreeUnitInput,
-	FreeUnitFilter
+	FreeUnitFilter,
+	// R5
+	SupplierMetrics,
+	SupplierDetail,
+	UnpublishedRequest
 } from './types';
 import { NotAvailableInBrowser } from './types';
 import type { WishlistItem } from '$lib/data/wishlist';
@@ -473,6 +477,19 @@ export const browserAdapter: Adapter = {
 
 	async unassignFreeUnit(_freeUnitId: number): Promise<FreeUnit> {
 		throw new NotAvailableInBrowser('unassignFreeUnit');
+	},
+
+	// ─── Importaciones R5 (Supplier Scorecard + Feedback Loop) ─────────
+	async getSupplierMetrics(): Promise<SupplierMetrics[]> {
+		throw new NotAvailableInBrowser('getSupplierMetrics');
+	},
+
+	async getSupplierDetail(_supplier: string): Promise<SupplierDetail> {
+		throw new NotAvailableInBrowser('getSupplierDetail');
+	},
+
+	async getMostRequestedUnpublished(_limit?: number): Promise<UnpublishedRequest[]> {
+		throw new NotAvailableInBrowser('getMostRequestedUnpublished');
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────

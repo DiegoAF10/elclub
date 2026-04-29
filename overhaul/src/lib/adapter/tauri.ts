@@ -43,7 +43,11 @@ import type {
 	// R4
 	FreeUnit,
 	AssignFreeUnitInput,
-	FreeUnitFilter
+	FreeUnitFilter,
+	// R5
+	SupplierMetrics,
+	SupplierDetail,
+	UnpublishedRequest
 } from './types';
 import type { WishlistItem } from '$lib/data/wishlist';
 import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, CreateOrderItem, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult, UpdateSaleArgs } from '../data/comercial';
@@ -619,6 +623,19 @@ export const tauriAdapter: Adapter = {
 
 	async unassignFreeUnit(freeUnitId: number): Promise<FreeUnit> {
 		return await invoke<FreeUnit>('cmd_unassign_free_unit', { freeUnitId });
+	},
+
+	// ─── Importaciones R5 (Supplier Scorecard + Feedback Loop) ─────────
+	async getSupplierMetrics(): Promise<SupplierMetrics[]> {
+		return await invoke<SupplierMetrics[]>('cmd_get_supplier_metrics');
+	},
+
+	async getSupplierDetail(supplier: string): Promise<SupplierDetail> {
+		return await invoke<SupplierDetail>('cmd_get_supplier_detail', { supplier });
+	},
+
+	async getMostRequestedUnpublished(limit?: number): Promise<UnpublishedRequest[]> {
+		return await invoke<UnpublishedRequest[]>('cmd_get_most_requested_unpublished', { limit: limit ?? null });
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────
