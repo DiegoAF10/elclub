@@ -82,6 +82,7 @@
       onClose={handleClose}
       onCancel={handleCancel}
       onEdit={handleEdit}
+      onRefresh={onUpdated}
     />
     <ImportDetailSubtabs bind:activeSubtab itemsCount={items.length} />
 
