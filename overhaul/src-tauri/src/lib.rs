@@ -2985,6 +2985,95 @@ async fn cmd_create_wishlist_item(input: CreateWishlistItemInput) -> Result<Wish
     impl_create_wishlist_item(input).await
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateWishlistItemInput {
+    pub wishlist_item_id: i64,
+    pub size:             Option<String>,
+    pub player_name:      Option<String>,
+    pub player_number:    Option<i64>,
+    pub patch:            Option<String>,
+    pub version:          Option<String>,
+    pub customer_id:      Option<String>,
+    pub expected_usd:     Option<f64>,
+    pub notes:            Option<String>,
+    // Note: family_id NOT editable post-create (would require re-validation + status implications)
+}
+
+/// Edit a wishlist item. Status guard: only 'active' items can be edited.
+pub async fn impl_update_wishlist_item(input: UpdateWishlistItemInput) -> Result<WishlistItem> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    let status: String = tx.query_row(
+        "SELECT status FROM import_wishlist WHERE wishlist_item_id = ?1",
+        rusqlite::params![input.wishlist_item_id],
+        |row| row.get(0),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => {
+            ErpError::NotFound(format!("Wishlist item {}", input.wishlist_item_id))
+        }
+        other => other.into(),
+    })?;
+
+    if status != "active" {
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "cannot update wishlist item with status '{}' (only 'active' is editable)",
+            status
+        )));
+    }
+
+    if let Some(v) = &input.version {
+        if !["fan", "fan-w", "player"].contains(&v.as_str()) {
+            tx.rollback()?;
+            return Err(ErpError::Other(format!(
+                "version must be one of: fan, fan-w, player (got '{}')",
+                v
+            )));
+        }
+    }
+    if let Some(usd) = input.expected_usd {
+        if usd < 0.0 {
+            tx.rollback()?;
+            return Err(ErpError::Other("expected_usd cannot be negative".into()));
+        }
+    }
+
+    tx.execute(
+        "UPDATE import_wishlist
+         SET size          = COALESCE(?1, size),
+             player_name   = COALESCE(?2, player_name),
+             player_number = COALESCE(?3, player_number),
+             patch         = COALESCE(?4, patch),
+             version       = COALESCE(?5, version),
+             customer_id   = COALESCE(?6, customer_id),
+             expected_usd  = COALESCE(?7, expected_usd),
+             notes         = COALESCE(?8, notes)
+         WHERE wishlist_item_id = ?9",
+        rusqlite::params![
+            input.size,
+            input.player_name,
+            input.player_number,
+            input.patch,
+            input.version,
+            input.customer_id,
+            input.expected_usd,
+            input.notes,
+            input.wishlist_item_id,
+        ],
+    )?;
+
+    tx.commit()?;
+
+    read_wishlist_item_by_id(&conn, input.wishlist_item_id)
+}
+
+#[tauri::command]
+async fn cmd_update_wishlist_item(input: UpdateWishlistItemInput) -> Result<WishlistItem> {
+    impl_update_wishlist_item(input).await
+}
+
 // ─── R1.5 Completion: Create / Register Arrival / Update / Cancel ────
 //
 // Convention for IMP-R1.5 commands that need integration testing:
