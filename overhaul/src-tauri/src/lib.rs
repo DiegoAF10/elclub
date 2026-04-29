@@ -2813,6 +2813,99 @@ fn read_import_by_id(conn: &rusqlite::Connection, import_id: &str) -> Result<Imp
     ).map_err(ErpError::from)
 }
 
+// ─── R3 Margen Real: cross-Comercial queries ─────────────────────────
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MargenFilter {
+    pub period_from: Option<String>,    // YYYY-MM-DD · filter on imports.paid_at >= ?
+    pub period_to: Option<String>,      // YYYY-MM-DD · filter on imports.paid_at <= ?
+    pub supplier: Option<String>,       // exact match on imports.supplier
+    pub include_pipeline: Option<bool>, // default false · si true incluye paid+arrived con margen estimado
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchMargenSummary {
+    pub import_id: String,
+    pub supplier: String,
+    pub paid_at: Option<String>,
+    pub arrived_at: Option<String>,
+    pub status: String,                 // 'closed' default · 'paid'/'arrived' si include_pipeline
+    pub n_units: Option<i64>,
+    pub total_landed_gtq: Option<f64>,  // null si pipeline (status != closed)
+    pub n_sales_linked: i64,            // count distinct sale_id en sale_items WHERE import_id = X
+    pub n_items_linked: i64,            // count sale_items WHERE import_id = X
+    pub revenue_total_gtq: f64,         // SUM(sale_items.unit_price) WHERE import_id = X · production col is "total" not "total_gtq"
+    pub margen_bruto_gtq: f64,          // revenue - landed (0 si landed null)
+    pub margen_pct: Option<f64>,        // (margen / landed) * 100 · null si landed = 0 o null
+    pub n_stock_pendiente: i64,         // count import_items WHERE import_id = X AND status = 'pending' (single source post-R6 schema)
+    pub valor_stock_pendiente_gtq: f64, // SUM(COALESCE(import_items.unit_cost_gtq, imports.unit_cost)) WHERE status='pending' · fallback to imports.unit_cost para items pre-prorrateo
+    pub n_free_units: i64,              // count import_free_unit WHERE import_id = X
+    pub valor_free_units_gtq: Option<f64>, // null por ahora (asignación pendiente · D-FREE valuation rule por decidir)
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkedSale {
+    pub sale_id: i64,
+    pub occurred_at: Option<String>,    // production col: sales.occurred_at (NOT created_at)
+    pub customer_id: Option<i64>,       // production col: sales.customer_id is INTEGER
+    pub total: f64,                     // production col: sales.total (NOT total_gtq)
+    pub n_items_from_batch: i64,        // count sale_items WHERE sale_id=X AND import_id=Y
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingItem {
+    pub import_item_id: i64,
+    pub family_id: String,              // production col (NOT sku)
+    pub jersey_id: Option<String>,
+    pub size: Option<String>,
+    pub player_name: Option<String>,
+    pub player_number: Option<i32>,
+    pub patch: Option<String>,
+    pub version: Option<String>,
+    pub customer_id: Option<String>,    // NULL = stock-future · populated = assigned to specific customer
+    pub expected_usd: Option<f64>,
+    pub unit_cost_gtq: Option<f64>,     // null hasta que close (R4) corra prorrateo
+    pub status: String,                 // 'pending' | 'arrived' | 'sold' | 'published' | 'cancelled'
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FreeUnitRow {
+    pub free_unit_id: i64,
+    pub destination: Option<String>,
+    pub destination_ref: Option<String>,
+    pub assigned_at: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchMargenDetail {
+    pub summary: BatchMargenSummary,
+    pub linked_sales: Vec<LinkedSale>,
+    pub pending_items: Vec<PendingItem>,
+    pub free_units: Vec<FreeUnitRow>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MargenPulso {
+    pub n_batches_closed: i64,
+    pub revenue_total_ytd_gtq: f64,
+    pub landed_total_ytd_gtq: f64,
+    pub margen_total_ytd_gtq: f64,
+    pub margen_pct_avg: Option<f64>,         // average margen_pct across closed batches
+    pub best_batch_id: Option<String>,       // import_id with highest margen_pct
+    pub best_batch_margen_pct: Option<f64>,
+    pub worst_batch_id: Option<String>,
+    pub worst_batch_margen_pct: Option<f64>,
+    pub capital_amarrado_gtq: f64,           // SUM(valor_stock_pendiente) across closed batches
+}
+
 // ─── R4: Free units ledger ──────────────────────────────────────────
 //
 // Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
