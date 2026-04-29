@@ -2893,6 +2893,141 @@ async fn cmd_list_free_units(filter: Option<FreeUnitFilter>) -> Result<Vec<FreeU
     impl_list_free_units(filter)
 }
 
+/// Assigns a free unit to a destination. Transactional. Validates:
+/// - destination must be in VALID_FREE_DESTINATIONS (Rust-enforced · spec sec 7)
+/// - free_unit_id must exist + currently unassigned (destination IS NULL)
+/// - if destination='vip', destination_ref must be a valid customer_id
+pub fn impl_assign_free_unit(input: AssignFreeUnitInput) -> Result<FreeUnit> {
+    // 1. validate destination
+    if !VALID_FREE_DESTINATIONS.contains(&input.destination.as_str()) {
+        return Err(ErpError::Other(format!(
+            "invalid destination '{}'; must be one of {:?}",
+            input.destination, VALID_FREE_DESTINATIONS
+        )));
+    }
+
+    // 2. VIP requires destination_ref
+    if input.destination == "vip" && input.destination_ref.is_none() {
+        return Err(ErpError::Other(
+            "destination_ref required when destination='vip' (must be customer_id)".to_string(),
+        ));
+    }
+
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    // 3. fetch + lock current row · ensure exists + unassigned
+    let current_dest: Option<String> = tx.query_row(
+        "SELECT destination FROM import_free_unit WHERE free_unit_id = ?",
+        rusqlite::params![input.free_unit_id],
+        |r| r.get(0),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => {
+            ErpError::NotFound(format!("free_unit_id {}", input.free_unit_id))
+        }
+        other => other.into(),
+    })?;
+    if let Some(existing) = current_dest {
+        return Err(ErpError::Other(format!(
+            "free_unit_id {} already assigned to '{}' · use unassign first",
+            input.free_unit_id, existing
+        )));
+    }
+
+    // 4. if VIP, validate customer_id exists
+    if input.destination == "vip" {
+        let cust_ref = input.destination_ref.as_ref().unwrap();
+        let exists: bool = tx
+            .query_row(
+                "SELECT 1 FROM customers WHERE customer_id = ?",
+                rusqlite::params![cust_ref],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        if !exists {
+            return Err(ErpError::Other(format!(
+                "customer_id '{}' not found",
+                cust_ref
+            )));
+        }
+    }
+
+    // 5. UPDATE row
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    tx.execute(
+        "UPDATE import_free_unit SET \
+           destination = ?, destination_ref = ?, family_id = ?, jersey_id = ?, \
+           assigned_at = ?, assigned_by = 'diego', notes = COALESCE(?, notes) \
+         WHERE free_unit_id = ?",
+        rusqlite::params![
+            input.destination,
+            input.destination_ref,
+            input.family_id,
+            input.jersey_id,
+            now,
+            input.notes,
+            input.free_unit_id
+        ],
+    )?;
+
+    tx.commit()?;
+
+    // 6. re-read + return
+    let target_id = input.free_unit_id;
+    let updated = impl_list_free_units(None)?
+        .into_iter()
+        .find(|fu| fu.free_unit_id == target_id)
+        .ok_or_else(|| ErpError::Other("free unit vanished post-update".to_string()))?;
+    Ok(updated)
+}
+
+#[tauri::command]
+async fn cmd_assign_free_unit(input: AssignFreeUnitInput) -> Result<FreeUnit> {
+    impl_assign_free_unit(input)
+}
+
+/// Resets a free unit to unassigned state. For correcting mistakes.
+/// Idempotent: unassigning an already-unassigned unit returns it unchanged.
+pub fn impl_unassign_free_unit(free_unit_id: i64) -> Result<FreeUnit> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    // verify exists
+    let _: i64 = tx
+        .query_row(
+            "SELECT free_unit_id FROM import_free_unit WHERE free_unit_id = ?",
+            rusqlite::params![free_unit_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => {
+                ErpError::NotFound(format!("free_unit_id {}", free_unit_id))
+            }
+            other => other.into(),
+        })?;
+
+    tx.execute(
+        "UPDATE import_free_unit SET \
+           destination = NULL, destination_ref = NULL, \
+           assigned_at = NULL, assigned_by = NULL \
+         WHERE free_unit_id = ?",
+        rusqlite::params![free_unit_id],
+    )?;
+
+    tx.commit()?;
+
+    let updated = impl_list_free_units(None)?
+        .into_iter()
+        .find(|fu| fu.free_unit_id == free_unit_id)
+        .ok_or_else(|| ErpError::Other("free unit vanished post-update".to_string()))?;
+    Ok(updated)
+}
+
+#[tauri::command]
+async fn cmd_unassign_free_unit(free_unit_id: i64) -> Result<FreeUnit> {
+    impl_unassign_free_unit(free_unit_id)
+}
+
 // ─── R2: Wishlist + Promote-to-batch ────
 //
 // Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
@@ -6549,6 +6684,8 @@ pub fn run() {
             cmd_mark_in_transit,
             // Importaciones R4 (Free units ledger)
             cmd_list_free_units,
+            cmd_assign_free_unit,
+            cmd_unassign_free_unit,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
