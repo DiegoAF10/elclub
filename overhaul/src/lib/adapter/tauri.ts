@@ -39,7 +39,11 @@ import type {
 	MargenFilter,
 	BatchMargenSummary,
 	BatchMargenDetail,
-	MargenPulso
+	MargenPulso,
+	// R4
+	FreeUnit,
+	AssignFreeUnitInput,
+	FreeUnitFilter
 } from './types';
 import type { WishlistItem } from '$lib/data/wishlist';
 import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, CreateOrderItem, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult, UpdateSaleArgs } from '../data/comercial';
@@ -601,6 +605,20 @@ export const tauriAdapter: Adapter = {
 
 	async getMargenPulso(): Promise<MargenPulso> {
 		return await invoke<MargenPulso>('cmd_get_margen_pulso');
+	},
+
+	// ─── Importaciones R4 (Free Units) ─────────────────────────────────
+	// Rust serializes with #[serde(rename_all = "camelCase")] · wire format already camelCase.
+	async listFreeUnits(filter?: FreeUnitFilter): Promise<FreeUnit[]> {
+		return await invoke<FreeUnit[]>('cmd_list_free_units', { filter: filter ?? null });
+	},
+
+	async assignFreeUnit(input: AssignFreeUnitInput): Promise<FreeUnit> {
+		return await invoke<FreeUnit>('cmd_assign_free_unit', { input });
+	},
+
+	async unassignFreeUnit(freeUnitId: number): Promise<FreeUnit> {
+		return await invoke<FreeUnit>('cmd_unassign_free_unit', { freeUnitId });
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────

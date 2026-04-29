@@ -367,6 +367,42 @@ export interface MargenPulso {
 	capitalAmarradoGtq: number;
 }
 
+// ─── R4: Free Units (regalos · scrap · destinos) ────────────────────
+// Rust uses #[serde(rename_all = "camelCase")] so wire format is already camelCase.
+
+export type FreeUnitDestination = 'vip' | 'mystery' | 'garantizada' | 'personal';
+
+export interface FreeUnit {
+	freeUnitId: number;
+	importId: string;
+	familyId: string | null;
+	jerseyId: string | null;
+	destination: FreeUnitDestination | null;
+	destinationRef: string | null;
+	assignedAt: string | null;
+	assignedBy: string | null;
+	notes: string | null;
+	createdAt: string;
+	// Joined display fields (no extra query needed)
+	importSupplier: string | null;
+	importPaidAt: string | null;
+}
+
+export interface AssignFreeUnitInput {
+	freeUnitId: number;
+	destination: FreeUnitDestination;
+	destinationRef?: string | null;   // required if destination='vip'
+	familyId?: string | null;
+	jerseyId?: string | null;
+	notes?: string | null;
+}
+
+export interface FreeUnitFilter {
+	importId?: string;
+	destination?: FreeUnitDestination | 'unassigned';
+	status?: 'assigned' | 'unassigned';
+}
+
 // ─── Capabilities — lo que cada adapter puede hacer ──────────────────
 export interface AdapterCapabilities {
 	reads: boolean;
@@ -512,6 +548,11 @@ export interface Adapter {
 	getMargenReal(filter: MargenFilter): Promise<BatchMargenSummary[]>;
 	getBatchMargenBreakdown(importId: string): Promise<BatchMargenDetail>;
 	getMargenPulso(): Promise<MargenPulso>;
+
+	// R4 additions: Free Units
+	listFreeUnits(filter?: FreeUnitFilter): Promise<FreeUnit[]>;
+	assignFreeUnit(input: AssignFreeUnitInput): Promise<FreeUnit>;
+	unassignFreeUnit(freeUnitId: number): Promise<FreeUnit>;
 
 	// ─── Finanzas (FIN-R1) ──────────────────────────────────────
 	computeProfitSnapshot(

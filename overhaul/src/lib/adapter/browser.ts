@@ -35,7 +35,11 @@ import type {
 	MargenFilter,
 	BatchMargenSummary,
 	BatchMargenDetail,
-	MargenPulso
+	MargenPulso,
+	// R4
+	FreeUnit,
+	AssignFreeUnitInput,
+	FreeUnitFilter
 } from './types';
 import { NotAvailableInBrowser } from './types';
 import type { WishlistItem } from '$lib/data/wishlist';
@@ -456,6 +460,19 @@ export const browserAdapter: Adapter = {
 
 	async getMargenPulso(): Promise<MargenPulso> {
 		throw new NotAvailableInBrowser('getMargenPulso');
+	},
+
+	// ─── Importaciones R4 (Free Units) ─────────────────────────────────
+	async listFreeUnits(_filter?: FreeUnitFilter): Promise<FreeUnit[]> {
+		throw new NotAvailableInBrowser('listFreeUnits');
+	},
+
+	async assignFreeUnit(_input: AssignFreeUnitInput): Promise<FreeUnit> {
+		throw new NotAvailableInBrowser('assignFreeUnit');
+	},
+
+	async unassignFreeUnit(_freeUnitId: number): Promise<FreeUnit> {
+		throw new NotAvailableInBrowser('unassignFreeUnit');
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────
