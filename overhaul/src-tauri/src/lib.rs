@@ -3116,6 +3116,318 @@ async fn cmd_cancel_wishlist_item(wishlist_item_id: i64) -> Result<WishlistItem>
     impl_cancel_wishlist_item(wishlist_item_id).await
 }
 
+// ─── R2: Promote Wishlist → Batch (transactional · CORE COMMAND) ────
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromoteWishlistInput {
+    pub wishlist_item_ids: Vec<i64>,
+    pub import_id:         String,
+    pub status:            String,            // 'paid' (default UI · paid_at required) or 'draft' (paid_at optional)
+    pub paid_at:           Option<String>,    // required iff status='paid'
+    pub supplier:          Option<String>,
+    pub bruto_usd:         f64,               // sum of expected_usd OR manual override (must be > 0)
+    pub fx:                f64,
+    pub notes:             Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromoteWishlistResult {
+    pub import:             Import,
+    pub import_items_count: i64,
+}
+
+/// Promote a set of wishlist items to a new import.
+///
+/// DESTINATION (Diego decision 2026-04-28 ~19:00 · supersedes earlier split):
+/// - ALL items go into single table `import_items` (created by R6 apply_imp_schema.py)
+/// - customer_id nullable column distinguishes: NULL = stock-future · NOT NULL = assigned
+/// - Status defaults to 'pending' on insert (will become 'arrived' on close_import in R4)
+/// - sale_item_id and jersey_id_published populated later by Comercial / Inventario flows (v0.5+)
+///
+/// REASON for single-table redesign: peer review found the earlier split (sale_items vs jerseys)
+/// inejecutable due to schema constraints — sale_items.sale_id NOT NULL · sale_items.customer_id
+/// doesn't exist · jerseys CHECK constraints (variant in {home,away,third,special}) incompatible.
+///
+/// STATUS handling (Diego decision 2026-04-28 ~18:30):
+/// - Default UI: status='paid' + paid_at=today (Diego pays supplier the moment he promotes most of the time)
+/// - Toggle OFF: status='draft' + paid_at=NULL (rare · queue without committing to payment yet)
+/// - After 'paid', Diego can manually call `cmd_mark_in_transit` (paid → in_transit) before arrival.
+///
+/// EVENTS (peer review 2026-04-28 ~19:00): inbox_events table EXISTS in production (Comercial-shipped).
+/// We INSERT a synchronous "import_promoted" row inside the same tx · graceful degradation if the
+/// table is missing (logged, not raised). Time-based events (wishlist > 20 · assigned > 30d) need
+/// cron infrastructure → deferred to post-R6.
+///
+/// Atomic: either all items get linked + import created + wishlist rows updated + event logged, or nothing.
+///
+/// Validations:
+/// - At least 1 wishlist_item_id provided
+/// - import_id format valid (IMP-YYYY-MM-DD)
+/// - import_id does not already exist
+/// - status in {'paid', 'draft'}
+/// - if status='paid' → paid_at REQUIRED (YYYY-MM-DD)
+/// - if status='draft' → paid_at can be None
+/// - All wishlist items exist AND status='active'
+/// - bruto_usd > 0 · fx > 0
+///
+/// On success:
+/// - Inserts imports row (status=input.status, bruto_usd=input.bruto_usd, n_units=count)
+/// - Inserts N rows into import_items (one per promoted wishlist item, status='pending')
+/// - Updates wishlist rows (status='promoted', promoted_to_import_id=new_id)
+/// - Inserts 1 row into inbox_events (type='import_promoted', metadata=summary) · best-effort
+pub async fn impl_promote_wishlist_to_batch(input: PromoteWishlistInput) -> Result<PromoteWishlistResult> {
+    // Validations BEFORE opening tx
+    if input.wishlist_item_ids.is_empty() {
+        return Err(ErpError::Other("must select at least 1 wishlist item to promote".into()));
+    }
+    if !is_valid_import_id(&input.import_id) {
+        return Err(ErpError::Other(format!(
+            "import_id format inválido: '{}' · esperado IMP-YYYY-MM-DD",
+            input.import_id
+        )));
+    }
+    if !["paid", "draft"].contains(&input.status.as_str()) {
+        return Err(ErpError::Other(format!(
+            "status must be 'paid' or 'draft' · got '{}'",
+            input.status
+        )));
+    }
+    if input.status == "paid" {
+        match &input.paid_at {
+            None => return Err(ErpError::Other(
+                "paid_at required when status='paid' (Diego confirmed default toggle ON)".into()
+            )),
+            Some(d) if chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").is_err() => {
+                return Err(ErpError::Other(format!(
+                    "paid_at format inválido: '{}' · esperado YYYY-MM-DD",
+                    d
+                )));
+            }
+            _ => {}
+        }
+    }
+    if let Some(d) = &input.paid_at {
+        // Even when status='draft', if user provided paid_at it must parse
+        if chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").is_err() {
+            return Err(ErpError::Other(format!(
+                "paid_at format inválido: '{}' · esperado YYYY-MM-DD",
+                d
+            )));
+        }
+    }
+    if input.fx <= 0.0 {
+        return Err(ErpError::Other(format!("fx must be > 0 · got {}", input.fx)));
+    }
+    if input.bruto_usd <= 0.0 {
+        return Err(ErpError::Other(format!("bruto_usd must be > 0 · got {}", input.bruto_usd)));
+    }
+
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    // Duplicate import_id guard
+    let import_exists: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM imports WHERE import_id = ?1)",
+        rusqlite::params![&input.import_id],
+        |row| row.get::<_, i64>(0).map(|n| n != 0),
+    )?;
+    if import_exists {
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "Import {} already exists · choose a different import_id",
+            input.import_id
+        )));
+    }
+
+    // Fetch all wishlist items in one query (Vec<WishlistItem>)
+    // Build placeholders for IN clause
+    let placeholders: String = (0..input.wishlist_item_ids.len())
+        .map(|i| format!("?{}", i + 1))
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT wishlist_item_id, family_id, jersey_id, size, player_name, player_number,
+                patch, version, customer_id, expected_usd, status, promoted_to_import_id,
+                created_at, notes
+         FROM import_wishlist
+         WHERE wishlist_item_id IN ({})",
+        placeholders
+    );
+    let mut stmt = tx.prepare(&sql)?;
+    let params_vec: Vec<Box<dyn rusqlite::ToSql>> = input
+        .wishlist_item_ids
+        .iter()
+        .map(|id| Box::new(*id) as Box<dyn rusqlite::ToSql>)
+        .collect();
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| b.as_ref()).collect();
+    let rows = stmt.query_map(&param_refs[..], |row| {
+        Ok(WishlistItem {
+            wishlist_item_id:      row.get(0)?,
+            family_id:             row.get(1)?,
+            jersey_id:             row.get(2)?,
+            size:                  row.get(3)?,
+            player_name:           row.get(4)?,
+            player_number:         row.get(5)?,
+            patch:                 row.get(6)?,
+            version:               row.get(7)?,
+            customer_id:           row.get(8)?,
+            expected_usd:          row.get(9)?,
+            status:                row.get(10)?,
+            promoted_to_import_id: row.get(11)?,
+            created_at:            row.get(12)?,
+            notes:                 row.get(13)?,
+        })
+    })?;
+
+    let mut items: Vec<WishlistItem> = Vec::new();
+    for r in rows {
+        items.push(r?);
+    }
+    drop(stmt);
+
+    // Verify ALL requested IDs were found
+    if items.len() != input.wishlist_item_ids.len() {
+        let found_ids: std::collections::HashSet<i64> =
+            items.iter().map(|i| i.wishlist_item_id).collect();
+        let missing: Vec<i64> = input
+            .wishlist_item_ids
+            .iter()
+            .filter(|id| !found_ids.contains(id))
+            .copied()
+            .collect();
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "wishlist items not found: {:?}",
+            missing
+        )));
+    }
+
+    // Verify ALL items have status='active'
+    let non_active: Vec<(i64, String)> = items
+        .iter()
+        .filter(|i| i.status != "active")
+        .map(|i| (i.wishlist_item_id, i.status.clone()))
+        .collect();
+    if !non_active.is_empty() {
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "cannot promote items not active: {:?} (only 'active' items can be promoted)",
+            non_active
+        )));
+    }
+
+    // Compute aggregate stats
+    let n_units: i64 = items.len() as i64;
+    let supplier = input
+        .supplier
+        .as_ref()
+        .filter(|s| !s.trim().is_empty())
+        .cloned()
+        .unwrap_or_else(|| "Bond Soccer Jersey".to_string());
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+    // INSERT imports row · status + bruto_usd come from input (Diego decision: default 'paid', toggle for 'draft')
+    tx.execute(
+        "INSERT INTO imports
+         (import_id, paid_at, supplier, bruto_usd, fx, n_units, status, notes, created_at, carrier)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'DHL')",
+        rusqlite::params![
+            input.import_id,
+            input.paid_at,             // Option<String> — NULL if status='draft' and toggle OFF
+            supplier,
+            input.bruto_usd,
+            input.fx,
+            n_units,
+            input.status,              // 'paid' or 'draft'
+            input.notes,
+            now,
+        ],
+    )?;
+
+    // INSERT all items into single destination table import_items (Diego decision 2026-04-28 ~19:00):
+    // - Single table for ALL promoted items (assigned + stock-future)
+    // - customer_id nullable column distinguishes them (NULL = stock-future · NOT NULL = assigned)
+    // - status='pending' on insert · close_import (R4) flips to 'arrived' + sets unit_cost_usd/gtq
+    // - sale_item_id and jersey_id_published get populated by Comercial / Inventario flows later
+    let mut import_items_count: i64 = 0;
+    let mut n_assigned: i64 = 0;
+    let mut n_stock: i64 = 0;
+    for item in &items {
+        tx.execute(
+            "INSERT INTO import_items
+             (import_id, wishlist_item_id, family_id, jersey_id, size, player_name, player_number,
+              patch, version, customer_id, expected_usd, status, notes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'pending', ?12)",
+            rusqlite::params![
+                input.import_id,
+                item.wishlist_item_id,
+                item.family_id,
+                item.jersey_id,
+                item.size,
+                item.player_name,
+                item.player_number,
+                item.patch,
+                item.version,
+                item.customer_id,        // nullable: NULL = stock-future · NOT NULL = assigned
+                item.expected_usd,
+                item.notes,
+            ],
+        )?;
+        import_items_count += 1;
+        if item.customer_id.is_some() { n_assigned += 1; } else { n_stock += 1; }
+
+        // UPDATE wishlist row · status='promoted' · promoted_to_import_id=new_id
+        tx.execute(
+            "UPDATE import_wishlist
+             SET status = 'promoted',
+                 promoted_to_import_id = ?1
+             WHERE wishlist_item_id = ?2",
+            rusqlite::params![input.import_id, item.wishlist_item_id],
+        )?;
+    }
+
+    // BONUS: log inbox_events row (type='import_promoted'). Best-effort: if the table doesn't exist
+    // (older deployment), we silently skip rather than failing the entire promote.
+    // Real production schema: id/type/severity/title/description/module/metadata/action_label/action_target/created_at(unixepoch)/...
+    let metadata_json = serde_json::json!({
+        "import_id":   &input.import_id,
+        "n_items":     import_items_count,
+        "n_assigned":  n_assigned,
+        "n_stock":     n_stock,
+        "supplier":    &supplier,
+        "status":      &input.status,
+    }).to_string();
+    let title = format!("{} promovido", &input.import_id);
+    let description = format!(
+        "{} items movidos a batch ({} assigned · {} stock-future)",
+        import_items_count, n_assigned, n_stock
+    );
+    let action_target = format!("importaciones:{}", &input.import_id);
+    let _ = tx.execute(
+        "INSERT INTO inbox_events
+         (type, severity, title, description, module, metadata, action_label, action_target)
+         VALUES ('import_promoted', 'info', ?1, ?2, 'importaciones', ?3, 'Ver batch', ?4)",
+        rusqlite::params![title, description, metadata_json, action_target],
+    ); // intentionally swallow error — graceful degradation if inbox_events missing
+
+    tx.commit()?;
+
+    // Re-read canonical Import using same connection
+    let import = read_import_by_id(&conn, &input.import_id)?;
+
+    Ok(PromoteWishlistResult {
+        import,
+        import_items_count,
+    })
+}
+
+#[tauri::command]
+async fn cmd_promote_wishlist_to_batch(input: PromoteWishlistInput) -> Result<PromoteWishlistResult> {
+    impl_promote_wishlist_to_batch(input).await
+}
+
 // ─── R1.5 Completion: Create / Register Arrival / Update / Cancel ────
 //
 // Convention for IMP-R1.5 commands that need integration testing:
