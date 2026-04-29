@@ -96,7 +96,7 @@
   }
   .w-30 { width: 30%; } .w-40 { width: 40%; } .w-50 { width: 50%; }
   @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-  .err-banner { padding: 10px 14px; background: rgba(244,63,94,0.1); border: 1px solid var(--alert, #f43f5e); border-radius: 3px; color: var(--alert, #f43f5e); }
+  /* .err-banner moved to app.css · shared across IMP tabs (Task 22) */
   .ro-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 12px; }
   .ro-row .lbl { text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2, #aaa); font-size: 11px; }
   .ro-row .val { color: var(--text-3, #777); font-style: italic; }
