@@ -3040,6 +3040,89 @@ async fn cmd_get_margen_real(filter: MargenFilter) -> Result<Vec<BatchMargenSumm
     impl_get_margen_real(&filter)
 }
 
+/// Returns BatchMargenDetail for a single import_id: summary + linked sales + pending items + free units.
+/// Used in drilldown when Diego clicks "Ver ventas linkeadas" or "Ver items pendientes".
+pub fn impl_get_batch_margen_breakdown(import_id: &str) -> Result<BatchMargenDetail> {
+    let conn = open_db()?;
+    let summary = compute_batch_summary(&conn, import_id)?;
+
+    // 1. Linked sales: distinct sale_id from sale_items × sales JOIN.
+    //    Production schema cols: sales.occurred_at (NOT created_at), sales.total (NOT total_gtq), sales.customer_id (INTEGER).
+    let mut stmt = conn.prepare(
+        "SELECT s.sale_id, s.occurred_at, s.customer_id, s.total,
+                COUNT(si.item_id) AS n_items
+         FROM sales s
+         INNER JOIN sale_items si ON si.sale_id = s.sale_id
+         WHERE si.import_id = ?1
+         GROUP BY s.sale_id, s.occurred_at, s.customer_id, s.total
+         ORDER BY s.occurred_at DESC"
+    )?;
+    let linked_sales: Vec<LinkedSale> = stmt
+        .query_map(rusqlite::params![import_id], |r| Ok(LinkedSale {
+            sale_id: r.get(0)?,
+            occurred_at: r.get(1)?,
+            customer_id: r.get(2)?,
+            total: r.get(3)?,
+            n_items_from_batch: r.get(4)?,
+        }))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    // 2. Pending items: read from import_items WHERE status='pending' (single source post-R6 schema).
+    //    customer_id NULL = stock-future · populated = assigned. Both flavors counted as pending.
+    let mut stmt = conn.prepare(
+        "SELECT import_item_id, family_id, jersey_id, size, player_name, player_number,
+                patch, version, customer_id, expected_usd, unit_cost_gtq, status
+         FROM import_items
+         WHERE import_id = ?1 AND status = 'pending'
+         ORDER BY import_item_id"
+    )?;
+    let pending_items: Vec<PendingItem> = stmt
+        .query_map(rusqlite::params![import_id], |r| Ok(PendingItem {
+            import_item_id: r.get(0)?,
+            family_id: r.get(1)?,
+            jersey_id: r.get(2)?,
+            size: r.get(3)?,
+            player_name: r.get(4)?,
+            player_number: r.get(5)?,
+            patch: r.get(6)?,
+            version: r.get(7)?,
+            customer_id: r.get(8)?,
+            expected_usd: r.get(9)?,
+            unit_cost_gtq: r.get(10)?,
+            status: r.get(11)?,
+        }))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    // 3. Free units rows
+    let mut stmt = conn.prepare(
+        "SELECT free_unit_id, destination, destination_ref, assigned_at, notes
+         FROM import_free_unit
+         WHERE import_id = ?1
+         ORDER BY free_unit_id"
+    )?;
+    let free_units: Vec<FreeUnitRow> = stmt
+        .query_map(rusqlite::params![import_id], |r| Ok(FreeUnitRow {
+            free_unit_id: r.get(0)?,
+            destination: r.get(1)?,
+            destination_ref: r.get(2)?,
+            assigned_at: r.get(3)?,
+            notes: r.get(4)?,
+        }))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    Ok(BatchMargenDetail {
+        summary,
+        linked_sales,
+        pending_items,
+        free_units,
+    })
+}
+
+#[tauri::command]
+async fn cmd_get_batch_margen_breakdown(import_id: String) -> Result<BatchMargenDetail> {
+    impl_get_batch_margen_breakdown(&import_id)
+}
+
 // ─── R4: Free units ledger ──────────────────────────────────────────
 //
 // Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
