@@ -2906,6 +2906,87 @@ pub struct MargenPulso {
     pub capital_amarrado_gtq: f64,           // SUM(valor_stock_pendiente) across closed batches
 }
 
+/// Compute BatchMargenSummary for a single import_id from existing DB rows.
+/// Reads imports + aggregates from sale_items + import_items (R6 table) + import_free_unit.
+/// Used by cmd_get_margen_real (list) and cmd_get_batch_margen_breakdown (detail).
+fn compute_batch_summary(conn: &rusqlite::Connection, import_id: &str) -> Result<BatchMargenSummary> {
+    // 1. Read import row (canonical fields · incl unit_cost per-unit landed for stock pendiente fallback proxy)
+    let (supplier, paid_at, arrived_at, status, n_units, total_landed, unit_cost_landed): (String, Option<String>, Option<String>, String, Option<i64>, Option<f64>, Option<f64>) = conn.query_row(
+        "SELECT supplier, paid_at, arrived_at, status, n_units, total_landed_gtq, unit_cost
+         FROM imports WHERE import_id = ?1",
+        rusqlite::params![import_id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => ErpError::NotFound(format!("Import {}", import_id)),
+        other => other.into(),
+    })?;
+
+    // 2. Aggregate sales linked: count distinct sale_id, count items, SUM unit_price (revenue from Comercial)
+    //    Production schema: sale_items.import_id is FK · sale_id NOT NULL (always linked to a sale row).
+    //    Items "promovidos pero no vendidos" viven en import_items (NOT sale_items) post-R6.
+    let (n_sales_linked, n_items_linked, revenue_total): (i64, i64, f64) = conn.query_row(
+        "SELECT COUNT(DISTINCT sale_id), COUNT(*), COALESCE(SUM(unit_price), 0)
+         FROM sale_items
+         WHERE import_id = ?1",
+        rusqlite::params![import_id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    ).unwrap_or((0, 0, 0.0));
+
+    // 3. Stock pendiente: count import_items WHERE status='pending' (single source post-R6 schema)
+    //    customer_id NULL = stock-future · customer_id populated = assigned to specific customer.
+    //    Both flavors count as "pending" until promoted to actual sale (status transitions to 'sold').
+    let n_pendiente: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM import_items WHERE import_id = ?1 AND status = 'pending'",
+        rusqlite::params![import_id],
+        |r| r.get(0),
+    ).unwrap_or(0);
+
+    // Valor stock pendiente: SUM(COALESCE(import_items.unit_cost_gtq, imports.unit_cost))
+    // Per-item unit_cost_gtq is set when R4 close runs prorrateo · null otherwise.
+    // Fallback to imports.unit_cost (per-unit landed shared across batch · D2=B aggregate proxy).
+    let valor_pendiente: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(COALESCE(unit_cost_gtq, ?2)), 0)
+         FROM import_items WHERE import_id = ?1 AND status = 'pending'",
+        rusqlite::params![import_id, unit_cost_landed.unwrap_or(0.0)],
+        |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    // 4. Free units count (valor diferido · spec ambiguous)
+    let n_free: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM import_free_unit WHERE import_id = ?1",
+        rusqlite::params![import_id],
+        |r| r.get(0),
+    ).unwrap_or(0);
+
+    // 5. Margen bruto + pct (only meaningful if landed exists)
+    let landed = total_landed.unwrap_or(0.0);
+    let margen_bruto = revenue_total - landed;
+    let margen_pct = if landed > 0.0 {
+        Some((margen_bruto / landed) * 100.0)
+    } else {
+        None
+    };
+
+    Ok(BatchMargenSummary {
+        import_id: import_id.to_string(),
+        supplier,
+        paid_at,
+        arrived_at,
+        status,
+        n_units,
+        total_landed_gtq: total_landed,
+        n_sales_linked,
+        n_items_linked,
+        revenue_total_gtq: revenue_total,
+        margen_bruto_gtq: margen_bruto,
+        margen_pct,
+        n_stock_pendiente: n_pendiente,
+        valor_stock_pendiente_gtq: valor_pendiente,
+        n_free_units: n_free,
+        valor_free_units_gtq: None, // TBD per spec ambiguity (open question for Diego)
+    })
+}
+
 // ─── R4: Free units ledger ──────────────────────────────────────────
 //
 // Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
