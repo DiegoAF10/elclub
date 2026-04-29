@@ -5084,6 +5084,68 @@ async fn cmd_cancel_import(import_id: String) -> Result<Import> {
     impl_cancel_import(import_id).await
 }
 
+/// Hard delete an import + cascade child rows. Only allowed when status='draft' or 'cancelled'.
+/// - Deletes import_items + import_free_unit cascade
+/// - Restores import_wishlist rows (status='active', promoted_to_import_id=NULL)
+/// - Decouples sale_items.import_id and jerseys.import_id (preserves sales/catalog)
+/// - Deletes the imports row
+/// pub so integration tests can call directly.
+pub async fn impl_delete_import(import_id: String) -> Result<()> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    let status: String = tx.query_row(
+        "SELECT status FROM imports WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+        |row| row.get(0),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => ErpError::NotFound(format!("Import {}", import_id)),
+        other => other.into(),
+    })?;
+
+    if status != "draft" && status != "cancelled" {
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "cannot delete import with status '{}' · cancel first or it must be draft",
+            status
+        )));
+    }
+
+    tx.execute(
+        "DELETE FROM import_items WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+    )?;
+    tx.execute(
+        "DELETE FROM import_free_unit WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+    )?;
+    tx.execute(
+        "UPDATE import_wishlist SET status='active', promoted_to_import_id=NULL WHERE promoted_to_import_id = ?1",
+        rusqlite::params![&import_id],
+    )?;
+    tx.execute(
+        "UPDATE sale_items SET import_id=NULL WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+    )?;
+    tx.execute(
+        "UPDATE jerseys SET import_id=NULL WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+    )?;
+    tx.execute(
+        "DELETE FROM imports WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+    )?;
+
+    tx.commit()?;
+    Ok(())
+}
+
+/// Tauri command — delegates to impl_delete_import.
+#[tauri::command]
+async fn cmd_delete_import(import_id: String) -> Result<()> {
+    impl_delete_import(import_id).await
+}
+
 #[tauri::command]
 async fn cmd_export_imports_csv() -> Result<String> {
     let conn = open_db()?;
@@ -7930,6 +7992,7 @@ pub fn run() {
             cmd_register_arrival,
             cmd_update_import,
             cmd_cancel_import,
+            cmd_delete_import,
             cmd_export_imports_csv,
             // Importaciones R2 (Wishlist + Promote-to-batch + state machine)
             cmd_list_wishlist,
