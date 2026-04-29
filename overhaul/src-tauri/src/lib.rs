@@ -6122,6 +6122,13 @@ mod imp_r15_helper_tests {
 #[cfg(test)]
 mod imp_r2_helper_tests {
     use super::*;
+    use std::sync::Mutex;
+
+    // Race-fix: ELCLUB_CATALOG_PATH is process-global. Without serialization,
+    // parallel test threads pollute each other's env (e.g., the missing-file
+    // test sets a bad path and the known/unknown tests then fail intermittently).
+    // ENV_LOCK serializes any test that mutates this env var.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn fixture_path() -> std::path::PathBuf {
         let mut p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -6131,6 +6138,7 @@ mod imp_r2_helper_tests {
 
     #[test]
     fn test_catalog_family_exists_known() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         std::env::set_var("ELCLUB_CATALOG_PATH", fixture_path());
         assert!(catalog_family_exists("ARG-2026-L-FS").unwrap());
         assert!(catalog_family_exists("FRA-2026-L-FS").unwrap());
@@ -6138,6 +6146,7 @@ mod imp_r2_helper_tests {
 
     #[test]
     fn test_catalog_family_exists_unknown() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         std::env::set_var("ELCLUB_CATALOG_PATH", fixture_path());
         assert!(!catalog_family_exists("FAKE-XXXX-X-XX").unwrap());
         assert!(!catalog_family_exists("").unwrap());
@@ -6145,6 +6154,7 @@ mod imp_r2_helper_tests {
 
     #[test]
     fn test_catalog_family_exists_missing_file() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
         std::env::set_var("ELCLUB_CATALOG_PATH", "/nonexistent/path.json");
         let result = catalog_family_exists("ARG-2026-L-FS");
         assert!(result.is_err());
