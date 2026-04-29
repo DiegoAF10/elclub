@@ -2540,6 +2540,15 @@ async fn cmd_get_import_items(_app: tauri::AppHandle, import_id: String) -> Resu
                 0 as is_free_unit
          FROM jerseys j
          WHERE j.import_id = ?1
+         UNION ALL
+         SELECT 'import_items' as source_table, ii.import_item_id as source_id, ii.import_id,
+                ii.family_id, ii.jersey_id, ii.size,
+                ii.player_name, ii.player_number, ii.patch, ii.version,
+                ii.unit_cost_usd, ii.unit_cost_gtq as unit_cost,
+                ii.customer_id, NULL as customer_name,
+                0 as is_free_unit
+         FROM import_items ii
+         WHERE ii.import_id = ?1
          ORDER BY source_table, source_id"
     )?;
 
