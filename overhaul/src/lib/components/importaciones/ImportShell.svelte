@@ -27,6 +27,8 @@
   let exportingCsv = $state(false);
   // Bumped on handleImportCreated · PedidosTab listens via $effect to force re-fetch
   let pedidosRefreshTrigger = $state(0);
+  // R2: bumped on wishlist CRUD + promote-to-batch
+  let wishlistRefreshTrigger = $state(0);
 
   $effect(() => {
     if (typeof localStorage !== 'undefined') {
@@ -40,6 +42,13 @@
 
   async function refreshPulso() {
     pulso = await adapter.getImportPulso();
+  }
+
+  // R2: when wishlist promotes to batch, both Pedidos AND Wishlist need re-fetch
+  function handleWishlistPulsoRefresh() {
+    refreshPulso();
+    pedidosRefreshTrigger++;
+    wishlistRefreshTrigger++;
   }
 
   function handleImportCreated(_imp: Import) {
@@ -117,7 +126,7 @@
     {#if activeTab === 'pedidos'}
       <PedidosTab onPulsoRefresh={refreshPulso} refreshTrigger={pedidosRefreshTrigger} />
     {:else if activeTab === 'wishlist'}
-      <WishlistTab />
+      <WishlistTab onPulsoRefresh={handleWishlistPulsoRefresh} refreshTrigger={wishlistRefreshTrigger} />
     {:else if activeTab === 'margen'}
       <MargenRealTab />
     {:else if activeTab === 'free'}
