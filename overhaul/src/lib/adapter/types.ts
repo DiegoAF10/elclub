@@ -462,6 +462,35 @@ export interface UnpublishedRequest {
 	published: boolean;   // siempre false en el response (filter aplicado server-side)
 }
 
+// ─── IMP-R6 Settings ────────────────────────────────────────────────────
+
+export interface ImpSetting {
+	key: string;
+	value: string;
+	updatedAt: string | null;
+	updatedBy: string | null;
+}
+
+export interface MigrationLog {
+	lastMigrationRunAt: string | null;
+	importsCount: number;
+	saleItemsLinked: number;
+	jerseysLinked: number;
+	wishlistCount: number;
+	freeUnitsCount: number;
+}
+
+export interface IntegrationStatus {
+	name: string;
+	status: 'active' | 'disabled';
+	lastReadAt: string | null;
+	note: string | null;
+}
+
+export interface IntegrationsStatus {
+	integrations: IntegrationStatus[];
+}
+
 // ─── Capabilities — lo que cada adapter puede hacer ──────────────────
 export interface AdapterCapabilities {
 	reads: boolean;
@@ -617,6 +646,13 @@ export interface Adapter {
 	getSupplierMetrics(): Promise<SupplierMetrics[]>;
 	getSupplierDetail(supplier: string): Promise<SupplierDetail>;
 	getMostRequestedUnpublished(limit?: number): Promise<UnpublishedRequest[]>;
+
+	// R6 additions: Settings · migration log · integrations
+	getImpSettings(): Promise<ImpSetting[]>;
+	updateImpSetting(key: string, value: string): Promise<ImpSetting>;
+	getMigrationLog(): Promise<MigrationLog>;
+	getIntegrationsStatus(): Promise<IntegrationsStatus>;
+	resyncMigration(): Promise<string>;  // throws on call (stub) · UI displays error
 
 	// ─── Finanzas (FIN-R1) ──────────────────────────────────────
 	computeProfitSnapshot(
