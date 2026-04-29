@@ -14,6 +14,8 @@
   let notes = $state('');
   let trackingCode = $state('');
   let carrier = $state('DHL');
+  let paidAt = $state('');
+  let arrivedAt = $state('');
   let submitting = $state(false);
   let errorMsg = $state<string | null>(null);
   // Tracks which import_id we last pre-filled for · prevents clobbering user
@@ -26,6 +28,8 @@
       notes = imp.notes ?? '';
       trackingCode = imp.tracking_code ?? '';
       carrier = imp.carrier ?? 'DHL';
+      paidAt = imp.paid_at ?? '';
+      arrivedAt = imp.arrived_at ?? '';
       errorMsg = null;
       lastOpenedFor = imp.import_id;
     } else if (!open) {
@@ -44,6 +48,8 @@
         notes: notes.trim() || undefined,
         trackingCode: trackingCode.trim() || undefined,
         carrier: carrier.trim() || undefined,
+        paidAt: paidAt.trim() || undefined,
+        arrivedAt: arrivedAt.trim() || undefined,
       });
       onUpdated(updated);
       onClose();
@@ -72,10 +78,20 @@
     <div class="bg-[var(--color-surface-1)] border border-[var(--color-border)] rounded-[6px] p-6 w-[440px] shadow-2xl">
       <h2 id="edit-modal-title" class="text-[16px] font-semibold text-[var(--color-text-primary)] mb-1">📝 Editar pedido</h2>
       <p class="text-mono text-[10.5px] text-[var(--color-text-tertiary)] mb-4" style="letter-spacing: 0.05em;">
-        {imp.import_id} · status={imp.status} · solo notes/tracking/carrier editables
+        {imp.import_id} · status={imp.status} · fechas + notes/tracking/carrier
       </p>
 
       <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="edit-paid-at" class="text-mono text-[10px] uppercase text-[var(--color-text-tertiary)] block mb-1" style="letter-spacing: 0.08em;">Paid at</label>
+            <input id="edit-paid-at" type="date" bind:value={paidAt} disabled={submitting} class="text-mono w-full px-3 py-2 bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-[3px] text-[13px] text-[var(--color-text-primary)]" />
+          </div>
+          <div>
+            <label for="edit-arrived-at" class="text-mono text-[10px] uppercase text-[var(--color-text-tertiary)] block mb-1" style="letter-spacing: 0.08em;">Arrived at</label>
+            <input id="edit-arrived-at" type="date" bind:value={arrivedAt} disabled={submitting} class="text-mono w-full px-3 py-2 bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-[3px] text-[13px] text-[var(--color-text-primary)]" />
+          </div>
+        </div>
         <div>
           <label for="edit-notes" class="text-mono text-[10px] uppercase text-[var(--color-text-tertiary)] block mb-1" style="letter-spacing: 0.08em;">Notes</label>
           <textarea id="edit-notes" bind:value={notes} rows="3" disabled={submitting} class="w-full px-3 py-2 bg-[var(--color-surface-2)] border border-[var(--color-border)] rounded-[3px] text-[13px] text-[var(--color-text-primary)] resize-none"></textarea>
