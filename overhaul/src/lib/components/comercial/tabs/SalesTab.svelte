@@ -22,6 +22,46 @@
   type SortKey = 'date' | 'total' | 'customer' | 'status';
   let sortBy = $state<SortKey>('date');
 
+  // Sa1: view mode toggle · default 'grouped' por status (FM-style) · 'flat' como alterna
+  type ViewMode = 'grouped' | 'flat';
+  const VIEW_MODE_KEY = 'com.salestab.viewmode';
+  function readViewMode(): ViewMode {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(VIEW_MODE_KEY) : null;
+      return raw === 'flat' ? 'flat' : 'grouped';
+    } catch { return 'grouped'; }
+  }
+  let viewMode = $state<ViewMode>(readViewMode());
+  $effect(() => {
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem(VIEW_MODE_KEY, viewMode); } catch { /* noop */ }
+  });
+
+  // Status priority order para grouping · actionable arriba · archive abajo
+  const STATUS_PRIORITY: string[] = [
+    'pending',
+    'sent_to_supplier',
+    'in_production',
+    'shipped',
+    'delivered',
+    'cancelled',
+  ];
+  const STATUS_FULL_LABEL: Record<string, string> = {
+    pending: 'Pendientes',
+    sent_to_supplier: 'En proveedor',
+    in_production: 'En producción',
+    shipped: 'Enviados',
+    delivered: 'Entregados',
+    cancelled: 'Cancelados',
+  };
+
+  // Collapsed groups (cancelled colapsado por default · ruido archive)
+  let collapsedGroups = $state<Set<string>>(new Set(['cancelled']));
+  function toggleCollapsed(status: string) {
+    const next = new Set(collapsedGroups);
+    if (next.has(status)) next.delete(status); else next.add(status);
+    collapsedGroups = next;
+  }
+
   async function loadSales() {
     loading = true;
     try {
@@ -69,6 +109,26 @@
       case 'customer': return arr.sort((a, b) => (a.customerName ?? '').localeCompare(b.customerName ?? ''));
       case 'status': return arr.sort((a, b) => a.fulfillmentStatus.localeCompare(b.fulfillmentStatus));
     }
+  });
+
+  // Grouped view · agrupa por fulfillment_status · orden por STATUS_PRIORITY · totales por grupo
+  let grouped = $derived.by(() => {
+    const groups: Record<string, { sales: SaleRow[]; totalQ: number }> = {};
+    for (const s of sorted) {
+      const k = s.fulfillmentStatus || 'pending';
+      if (!groups[k]) groups[k] = { sales: [], totalQ: 0 };
+      groups[k].sales.push(s);
+      groups[k].totalQ += s.totalGtq;
+    }
+    const ordered: Array<[string, { sales: SaleRow[]; totalQ: number }]> = [];
+    for (const st of STATUS_PRIORITY) {
+      if (groups[st]) ordered.push([st, groups[st]]);
+    }
+    // Status no listados en priority (legacy/futuros) van al final
+    for (const [k, v] of Object.entries(groups)) {
+      if (!STATUS_PRIORITY.includes(k)) ordered.push([k, v]);
+    }
+    return ordered;
   });
 
   function fmtDate(iso: string | null): string {
@@ -251,8 +311,8 @@
       />
     </div>
 
-    <!-- Sort pills -->
-    <div class="flex flex-wrap gap-1.5">
+    <!-- Sort pills + view toggle (Sa1) -->
+    <div class="flex flex-wrap items-center gap-1.5">
       {#each [['date','Fecha'],['total','Q total'],['customer','Cliente'],['status','Status']] as [key, lbl]}
         {@const active = sortBy === key}
         <button
@@ -266,17 +326,129 @@
           "
         >Sort: {lbl}</button>
       {/each}
+
+      <!-- View mode toggle: agrupado por status (default) ↔ plano -->
+      <button
+        type="button"
+        onclick={() => (viewMode = viewMode === 'grouped' ? 'flat' : 'grouped')}
+        class="text-display ml-auto rounded-[3px] border px-2.5 py-0.5 text-[10px]"
+        title={viewMode === 'grouped' ? 'Cambiar a vista plana' : 'Cambiar a vista agrupada por status'}
+        style="
+          background: var(--color-surface-1);
+          border-color: var(--color-border);
+          color: var(--color-text-secondary);
+        "
+      >Vista: {viewMode === 'grouped' ? 'AGRUPADO' : 'PLANO'}</button>
     </div>
   </div>
 
-  <!-- Table header -->
-  <div class="text-display flex border-b border-[var(--color-border)] bg-[var(--color-surface-0)] px-6 py-1.5 text-[9px] text-[var(--color-text-tertiary)]">
-    <div class="w-28">REF · FECHA</div>
-    <div class="flex-1 min-w-0">CLIENTE · ITEM</div>
-    <div class="w-52 text-right">STATUS · TOTAL</div>
-  </div>
+  <!-- Table header (solo flat view) -->
+  {#if viewMode === 'flat'}
+    <div class="text-display flex border-b border-[var(--color-border)] bg-[var(--color-surface-0)] px-6 py-1.5 text-[9px] text-[var(--color-text-tertiary)]">
+      <div class="w-28">REF · FECHA</div>
+      <div class="flex-1 min-w-0">CLIENTE · ITEM</div>
+      <div class="w-52 text-right">STATUS · TOTAL</div>
+    </div>
+  {/if}
 
-  <!-- List -->
+  <!-- Sales row snippet · reused en flat + grouped views -->
+  {#snippet salesRow(s: SaleRow)}
+    <button
+      type="button"
+      onclick={() => (openOrderRef = s.ref)}
+      class="flex w-full items-start gap-3 border-b border-[var(--color-border)] px-6 py-2 text-left transition-colors hover:bg-[var(--color-surface-1)]"
+      style="border-left: 3px solid {statusColor(s.fulfillmentStatus)};"
+    >
+      <!-- LEFT: REF + FECHA stacked -->
+      <div class="w-28 flex-shrink-0">
+        <div class="text-mono truncate text-[11px] text-[var(--color-text-primary)]" title={s.ref}>{s.ref}</div>
+        <div class="text-mono text-[9.5px] text-[var(--color-text-muted)]">{fmtDate(s.occurredAt)}</div>
+      </div>
+
+      <!-- CENTER: cliente + items + address -->
+      <div class="flex-1 min-w-0">
+        <div class="flex items-baseline gap-1.5 truncate">
+          <span class="truncate text-[11.5px] font-medium text-[var(--color-text-primary)]">{s.customerName ?? '—'}</span>
+          {#if s.customerPhone}
+            <span class="text-mono flex-shrink-0 text-[9.5px] text-[var(--color-text-muted)]">{s.customerPhone}</span>
+          {/if}
+        </div>
+        {#if s.itemsAllLabels && s.itemsAllLabels.length > 0}
+          <div class="truncate text-[10.5px] text-[var(--color-text-tertiary)]">
+            {joinItems(s.itemsAllLabels)}
+          </div>
+        {:else if s.firstItemLabel}
+          <div class="truncate text-[10.5px] text-[var(--color-text-tertiary)]">
+            {beautifyLabel(s.firstItemLabel)}{#if s.itemsCount > 1}<span class="text-[var(--color-text-muted)]"> · +{s.itemsCount - 1} más</span>{/if}
+          </div>
+        {:else}
+          <div class="text-[10px] text-[var(--color-text-muted)] italic">sin items</div>
+        {/if}
+        {#if s.shippingAddress}
+          {@const addr = parseAddress(s.shippingAddress)}
+          {#if addr && (addr.zone || addr.municipality)}
+            <div class="text-[9.5px] text-[var(--color-text-muted)] truncate">
+              📍 {[addr.zone ? `Zona ${addr.zone}` : null, addr.municipality, addr.department].filter(Boolean).join(' · ')}
+            </div>
+          {/if}
+        {/if}
+      </div>
+
+      <!-- RIGHT: pills row + total stacked -->
+      <div class="w-52 flex-shrink-0 text-right">
+        <!-- Pills row -->
+        <div class="flex items-center justify-end gap-1 flex-wrap">
+          <span class="text-display text-[9px]" style="color: {statusColor(s.fulfillmentStatus)};">
+            ● {statusLabel(s.fulfillmentStatus)}
+          </span>
+          {#if s.modality}
+            <span class="text-display rounded-[2px] px-1 py-0.5 text-[8.5px]" style="background: {modalityBg(s.modality)}; color: {modalityFg(s.modality)};">
+              {modalityLabel(s.modality)}
+            </span>
+          {/if}
+          {#if s.paymentMethod}
+            <span class="text-mono text-[9px] text-[var(--color-text-muted)]">{paymentLabel(s.paymentMethod)}</span>
+          {/if}
+          {#if s.origin}
+            <span class="text-mono text-[9px] text-[var(--color-text-muted)]">· {s.origin}</span>
+          {/if}
+        </div>
+        <!-- Total row -->
+        <div class="mt-1 flex items-baseline justify-end gap-2">
+          <span class="text-mono text-[9.5px] text-[var(--color-text-tertiary)]">{s.itemsCount}×</span>
+          <span class="text-mono text-[13px] font-semibold" style="color: {s.totalGtq > 0 ? 'var(--color-accent)' : 'var(--color-text-muted)'};">
+            Q{s.totalGtq.toFixed(0)}
+          </span>
+        </div>
+      </div>
+    </button>
+  {/snippet}
+
+  <!-- Group header snippet · clickable para collapse/expand · counter + total Q -->
+  {#snippet groupHeader(status: string, group: { sales: SaleRow[]; totalQ: number })}
+    {@const isCollapsed = collapsedGroups.has(status)}
+    <button
+      type="button"
+      onclick={() => toggleCollapsed(status)}
+      class="flex w-full items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface-1)] px-6 py-1.5 text-left transition-colors hover:bg-[var(--color-surface-2)]"
+      style="border-left: 3px solid {statusColor(status)};"
+    >
+      <div class="flex items-center gap-2">
+        <span class="text-mono w-3 text-[9px] text-[var(--color-text-tertiary)]">{isCollapsed ? '▶' : '▼'}</span>
+        <span class="text-display text-[10.5px]" style="color: {statusColor(status)};">
+          ● {STATUS_FULL_LABEL[status] ?? status.toUpperCase()}
+        </span>
+        <span class="text-mono text-[10px] text-[var(--color-text-secondary)]">
+          {group.sales.length} {group.sales.length === 1 ? 'orden' : 'órdenes'}
+        </span>
+      </div>
+      <span class="text-mono text-[11px] font-semibold" style="color: {group.totalQ > 0 ? 'var(--color-accent)' : 'var(--color-text-muted)'};">
+        Q{group.totalQ.toFixed(0)}
+      </span>
+    </button>
+  {/snippet}
+
+  <!-- List · flat o grouped según viewMode -->
   <div class="flex-1 overflow-y-auto">
     {#if loading}
       <div class="px-6 py-4 text-[11px] text-[var(--color-text-tertiary)]">Cargando sales…</div>
@@ -284,77 +456,18 @@
       <div class="px-6 py-4 text-mono text-[11.5px] text-[var(--color-text-tertiary)]">
         > 0 sales que matchean los filtros · Importá histórico desde Settings.
       </div>
-    {:else}
+    {:else if viewMode === 'flat'}
       {#each sorted as s (s.saleId)}
-        <button
-          type="button"
-          onclick={() => (openOrderRef = s.ref)}
-          class="flex w-full items-start gap-3 border-b border-[var(--color-border)] px-6 py-2 text-left transition-colors hover:bg-[var(--color-surface-1)]"
-          style="border-left: 3px solid {statusColor(s.fulfillmentStatus)};"
-        >
-          <!-- LEFT: REF + FECHA stacked -->
-          <div class="w-28 flex-shrink-0">
-            <div class="text-mono truncate text-[11px] text-[var(--color-text-primary)]" title={s.ref}>{s.ref}</div>
-            <div class="text-mono text-[9.5px] text-[var(--color-text-muted)]">{fmtDate(s.occurredAt)}</div>
-          </div>
-
-          <!-- CENTER: cliente + items + address -->
-          <div class="flex-1 min-w-0">
-            <div class="flex items-baseline gap-1.5 truncate">
-              <span class="truncate text-[11.5px] font-medium text-[var(--color-text-primary)]">{s.customerName ?? '—'}</span>
-              {#if s.customerPhone}
-                <span class="text-mono flex-shrink-0 text-[9.5px] text-[var(--color-text-muted)]">{s.customerPhone}</span>
-              {/if}
-            </div>
-            {#if s.itemsAllLabels && s.itemsAllLabels.length > 0}
-              <div class="truncate text-[10.5px] text-[var(--color-text-tertiary)]">
-                {joinItems(s.itemsAllLabels)}
-              </div>
-            {:else if s.firstItemLabel}
-              <div class="truncate text-[10.5px] text-[var(--color-text-tertiary)]">
-                {beautifyLabel(s.firstItemLabel)}{#if s.itemsCount > 1}<span class="text-[var(--color-text-muted)]"> · +{s.itemsCount - 1} más</span>{/if}
-              </div>
-            {:else}
-              <div class="text-[10px] text-[var(--color-text-muted)] italic">sin items</div>
-            {/if}
-            {#if s.shippingAddress}
-              {@const addr = parseAddress(s.shippingAddress)}
-              {#if addr && (addr.zone || addr.municipality)}
-                <div class="text-[9.5px] text-[var(--color-text-muted)] truncate">
-                  📍 {[addr.zone ? `Zona ${addr.zone}` : null, addr.municipality, addr.department].filter(Boolean).join(' · ')}
-                </div>
-              {/if}
-            {/if}
-          </div>
-
-          <!-- RIGHT: pills row + total stacked -->
-          <div class="w-52 flex-shrink-0 text-right">
-            <!-- Pills row -->
-            <div class="flex items-center justify-end gap-1 flex-wrap">
-              <span class="text-display text-[9px]" style="color: {statusColor(s.fulfillmentStatus)};">
-                ● {statusLabel(s.fulfillmentStatus)}
-              </span>
-              {#if s.modality}
-                <span class="text-display rounded-[2px] px-1 py-0.5 text-[8.5px]" style="background: {modalityBg(s.modality)}; color: {modalityFg(s.modality)};">
-                  {modalityLabel(s.modality)}
-                </span>
-              {/if}
-              {#if s.paymentMethod}
-                <span class="text-mono text-[9px] text-[var(--color-text-muted)]">{paymentLabel(s.paymentMethod)}</span>
-              {/if}
-              {#if s.origin}
-                <span class="text-mono text-[9px] text-[var(--color-text-muted)]">· {s.origin}</span>
-              {/if}
-            </div>
-            <!-- Total row -->
-            <div class="mt-1 flex items-baseline justify-end gap-2">
-              <span class="text-mono text-[9.5px] text-[var(--color-text-tertiary)]">{s.itemsCount}×</span>
-              <span class="text-mono text-[13px] font-semibold" style="color: {s.totalGtq > 0 ? 'var(--color-accent)' : 'var(--color-text-muted)'};">
-                Q{s.totalGtq.toFixed(0)}
-              </span>
-            </div>
-          </div>
-        </button>
+        {@render salesRow(s)}
+      {/each}
+    {:else}
+      {#each grouped as [status, group] (status)}
+        {@render groupHeader(status, group)}
+        {#if !collapsedGroups.has(status)}
+          {#each group.sales as s (s.saleId)}
+            {@render salesRow(s)}
+          {/each}
+        {/if}
       {/each}
     {/if}
   </div>
