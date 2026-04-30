@@ -167,6 +167,10 @@ pub struct ImportItem {
     pub customer_id: Option<String>,
     pub customer_name: Option<String>,
     pub is_free_unit: bool,
+    // Supplier WA mini-feature (v0.4.6) · only populated for source_table='import_items'.
+    // sale_items + jerseys legacy sources always return None for both fields.
+    pub sent_to_supplier_at: Option<String>,
+    pub sent_to_supplier_via: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -2517,6 +2521,7 @@ async fn cmd_get_import_items(_app: tauri::AppHandle, import_id: String) -> Resu
 
     // TODO(IMP-R4): replace `is_free_unit` heuristic with JOIN against
     // import_free_unit. Current heuristic flags ANY zero-cost item as free.
+    // sent_to_supplier_* only populated for source_table='import_items' (post v0.4.6 · supplier WA feature).
     let mut stmt = conn.prepare(
         "SELECT 'sale_items' as source_table, i.item_id as source_id, i.import_id,
                 i.family_id, i.jersey_id, i.size,
@@ -2526,7 +2531,8 @@ async fn cmd_get_import_items(_app: tauri::AppHandle, import_id: String) -> Resu
                 i.version,
                 i.unit_cost_usd, i.unit_cost,
                 s.customer_id, c.name as customer_name,
-                CASE WHEN i.unit_cost_usd = 0 OR i.unit_cost = 0 THEN 1 ELSE 0 END as is_free_unit
+                CASE WHEN i.unit_cost_usd = 0 OR i.unit_cost = 0 THEN 1 ELSE 0 END as is_free_unit,
+                NULL as sent_to_supplier_at, NULL as sent_to_supplier_via
          FROM sale_items i
          LEFT JOIN sales s ON s.sale_id = i.sale_id
          LEFT JOIN customers c ON c.customer_id = s.customer_id
@@ -2537,7 +2543,8 @@ async fn cmd_get_import_items(_app: tauri::AppHandle, import_id: String) -> Resu
                 j.player_name, j.player_number, j.patches as patch, j.variant as version,
                 j.unit_cost_usd, j.cost as unit_cost,
                 NULL as customer_id, NULL as customer_name,
-                0 as is_free_unit
+                0 as is_free_unit,
+                NULL as sent_to_supplier_at, NULL as sent_to_supplier_via
          FROM jerseys j
          WHERE j.import_id = ?1
          UNION ALL
@@ -2546,7 +2553,8 @@ async fn cmd_get_import_items(_app: tauri::AppHandle, import_id: String) -> Resu
                 ii.player_name, ii.player_number, ii.patch, ii.version,
                 ii.unit_cost_usd, ii.unit_cost_gtq as unit_cost,
                 ii.customer_id, NULL as customer_name,
-                0 as is_free_unit
+                0 as is_free_unit,
+                ii.sent_to_supplier_at, ii.sent_to_supplier_via
          FROM import_items ii
          WHERE ii.import_id = ?1
          ORDER BY source_table, source_id"
@@ -2554,21 +2562,23 @@ async fn cmd_get_import_items(_app: tauri::AppHandle, import_id: String) -> Resu
 
     let rows = stmt.query_map(rusqlite::params![import_id], |row| {
         Ok(ImportItem {
-            source_table:   row.get(0)?,
-            source_id:      row.get(1)?,
-            import_id:      row.get(2)?,
-            family_id:      row.get(3)?,
-            jersey_id:      row.get(4)?,
-            size:           row.get(5)?,
-            player_name:    row.get(6)?,
-            player_number:  row.get(7)?,
-            patch:          row.get(8)?,
-            version:        row.get(9)?,
-            unit_cost_usd:  row.get(10)?,
-            unit_cost:      row.get(11)?,
-            customer_id:    row.get(12)?,
-            customer_name:  row.get(13)?,
-            is_free_unit:   row.get::<_, i64>(14)? != 0,
+            source_table:         row.get(0)?,
+            source_id:            row.get(1)?,
+            import_id:            row.get(2)?,
+            family_id:            row.get(3)?,
+            jersey_id:            row.get(4)?,
+            size:                 row.get(5)?,
+            player_name:          row.get(6)?,
+            player_number:        row.get(7)?,
+            patch:                row.get(8)?,
+            version:              row.get(9)?,
+            unit_cost_usd:        row.get(10)?,
+            unit_cost:            row.get(11)?,
+            customer_id:          row.get(12)?,
+            customer_name:        row.get(13)?,
+            is_free_unit:         row.get::<_, i64>(14)? != 0,
+            sent_to_supplier_at:  row.get(15)?,
+            sent_to_supplier_via: row.get(16)?,
         })
     })?;
 
@@ -7928,6 +7938,167 @@ fn cmd_resync_migration() -> std::result::Result<String, String> {
     Err("Re-sync deshabilitado en v0.4.0 · Streamlit migration ya corrió en R1. Para v0.5 con merge logic.".to_string())
 }
 
+// ─── Importaciones · Supplier WA mini-feature (v0.4.6) ───────────────────
+//
+// Habilita 2 botones por item en ItemsSubtab.svelte (China · HK) que:
+//   1. Generan mensaje formateado replicando screenshot del supplier (Bond)
+//   2. Copian hero JPG al clipboard (Diego pega Ctrl+V en WA Web)
+//   3. Abren wa.me con texto pre-llenado
+//   4. Marcan el item con sent_to_supplier_at + sent_to_supplier_via solo si
+//      toda la chain succeeds (decisión Q=B · 2026-04-30 Diego).
+//
+// Suppliers Bond Soccer Jersey (hardcoded · v0.5+ → settings table per asterisco *19):
+
+const SUPPLIER_WA_CHINA: &str = "8615361409693";
+const SUPPLIER_WA_HK: &str = "85294204985";
+
+#[derive(Debug, Serialize)]
+pub struct SupplierMessage {
+    pub item_id: i64,
+    pub text: String,
+    pub hero_url: String,
+    pub wa_china_url: String,
+    pub wa_hk_url: String,
+}
+
+/// Format the supplier message replicating the screenshot pattern Bond expects.
+/// Empty fields render as '-' to match supplier convention.
+pub fn format_supplier_message(
+    player_name: Option<&str>,
+    player_number: Option<i64>,
+    size: Option<&str>,
+    patch: Option<&str>,
+    version: Option<&str>,
+) -> String {
+    let name = player_name.unwrap_or("-");
+    let number = player_number.map(|n| n.to_string()).unwrap_or_else(|| "-".to_string());
+    let size_str = size.unwrap_or("-");
+    let patch_str = patch.unwrap_or("-");
+    let version_str = version.unwrap_or("-");
+
+    format!(
+        "Name: {}\nNumber: {}\nSize: {}\nPatch: {}\nVersion: {}",
+        name, number, size_str, patch_str, version_str
+    )
+}
+
+/// URL-encode for wa.me ?text= param (RFC 3986 unreserved chars unescaped).
+pub fn url_encode_wa_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len() * 3);
+    for byte in text.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char);
+            }
+            _ => {
+                out.push_str(&format!("%{:02X}", byte));
+            }
+        }
+    }
+    out
+}
+
+pub fn impl_get_supplier_message(item_id: i64) -> std::result::Result<SupplierMessage, String> {
+    let conn = open_db().map_err(|e| e.to_string())?;
+    let row: (Option<String>, Option<String>, Option<String>, Option<i64>, Option<String>, Option<String>) = conn
+        .query_row(
+            "SELECT family_id, size, player_name, player_number, patch, version
+             FROM import_items
+             WHERE import_item_id = ?1",
+            rusqlite::params![item_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?)),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => format!("import_item_id {} not found", item_id),
+            other => other.to_string(),
+        })?;
+
+    let (family_id, size, player_name, player_number, patch, version) = row;
+
+    let text = format_supplier_message(
+        player_name.as_deref(),
+        player_number,
+        size.as_deref(),
+        patch.as_deref(),
+        version.as_deref(),
+    );
+
+    let hero_url = match family_id.as_ref() {
+        Some(fid) => format!("https://img.elclub.club/families/{}/01.jpg", fid),
+        None => return Err(format!("import_item_id {} has no family_id", item_id)),
+    };
+
+    let encoded = url_encode_wa_text(&text);
+    let wa_china_url = format!("https://wa.me/{}?text={}", SUPPLIER_WA_CHINA, encoded);
+    let wa_hk_url = format!("https://wa.me/{}?text={}", SUPPLIER_WA_HK, encoded);
+
+    Ok(SupplierMessage { item_id, text, hero_url, wa_china_url, wa_hk_url })
+}
+
+#[tauri::command]
+fn cmd_get_supplier_message(item_id: i64) -> std::result::Result<SupplierMessage, String> {
+    impl_get_supplier_message(item_id)
+}
+
+pub fn impl_copy_hero_to_clipboard(hero_url: &str) -> std::result::Result<(), String> {
+    use arboard::{Clipboard, ImageData};
+    use std::borrow::Cow;
+
+    let bytes = reqwest::blocking::get(hero_url)
+        .map_err(|e| format!("HTTP fetch failed for {}: {}", hero_url, e))?
+        .bytes()
+        .map_err(|e| format!("HTTP body read failed: {}", e))?;
+
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| format!("Image decode failed: {}", e))?
+        .to_rgba8();
+    let (w, h) = img.dimensions();
+
+    let mut cb = Clipboard::new().map_err(|e| format!("Clipboard init failed: {}", e))?;
+    cb.set_image(ImageData {
+        width: w as usize,
+        height: h as usize,
+        bytes: Cow::Borrowed(img.as_raw()),
+    })
+    .map_err(|e| format!("Clipboard set_image failed: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn cmd_copy_hero_to_clipboard(hero_url: String) -> std::result::Result<(), String> {
+    // arboard + reqwest::blocking are sync · WinAPI clipboard call must run on
+    // a blocking thread to avoid stalling Tauri's async runtime.
+    tauri::async_runtime::spawn_blocking(move || impl_copy_hero_to_clipboard(&hero_url))
+        .await
+        .map_err(|e| format!("spawn_blocking: {}", e))?
+}
+
+pub fn impl_mark_item_sent(item_id: i64, supplier: &str) -> std::result::Result<(), String> {
+    if supplier != "china" && supplier != "hk" {
+        return Err(format!("invalid supplier '{}': must be 'china' or 'hk'", supplier));
+    }
+    let conn = open_db().map_err(|e| e.to_string())?;
+    let n = conn
+        .execute(
+            "UPDATE import_items
+             SET sent_to_supplier_at = datetime('now', 'localtime'),
+                 sent_to_supplier_via = ?1
+             WHERE import_item_id = ?2",
+            rusqlite::params![supplier, item_id],
+        )
+        .map_err(|e| e.to_string())?;
+    if n == 0 {
+        return Err(format!("import_item_id {} not found", item_id));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn cmd_mark_item_sent(item_id: i64, supplier: String) -> std::result::Result<(), String> {
+    impl_mark_item_sent(item_id, &supplier)
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -8048,6 +8219,10 @@ pub fn run() {
             cmd_get_migration_log,
             cmd_get_integrations_status,
             cmd_resync_migration,
+            // Importaciones · Supplier WA mini-feature (v0.4.6)
+            cmd_get_supplier_message,
+            cmd_copy_hero_to_clipboard,
+            cmd_mark_item_sent,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
