@@ -15,6 +15,23 @@ Antes de tocar cualquiera de:
 ### Strategy coordination
 Strategy mantiene docs en el repo hermano `elclub-catalogo-priv/docs/` — PROGRESS.md, LOG.md, PARKED.md, HANDOFF.md. Consultalos antes de tomar decisiones cross-cutting.
 
+### Módulo Importaciones (IMP) · v0.5+ backlog
+Antes de tocar:
+- `overhaul/src-tauri/src/lib.rs` IMP commands (cmd_*_import · cmd_*_wishlist · cmd_*_free_unit · cmd_*_supplier · cmd_get_imp_settings · cmd_*_catalog_modelos)
+- `overhaul/src/lib/components/importaciones/**`
+- `overhaul/src/lib/adapter/{types,tauri,browser}.ts` IMP sections
+- `erp/scripts/apply_imp_schema.py`
+
+**LEÉ COMPLETO:** [`overhaul/docs/IMP-V0.5-BACKLOG.md`](overhaul/docs/IMP-V0.5-BACKLOG.md)
+
+21 asteriscos deferred a v0.5+ post módulo cerrado v0.4.5 (2026-04-29). Incluye cross-module dependencies para sesiones de Comercial / Inventario / FÉNIX / Cron / Catalog. Aprendizajes meta de la sesión IMP-R2-R6 BUILD (TS interface drift · migration debt patterns · plan vs acceptance test humano).
+
+**Aplica también si arrancás sesión de:**
+- **Comercial** (asterisco *1: sale flow → import_items link)
+- **Inventario** futuro (asterisco *2: materialize stock from import_items)
+- **Cron infra** futura (asteriscos *4-7: 4 inbox events thresholds ya almacenados)
+- **Catalog/Vault** (queries IMP dependen del schema modelos[])
+
 ---
 
 ## Repos hermanos
