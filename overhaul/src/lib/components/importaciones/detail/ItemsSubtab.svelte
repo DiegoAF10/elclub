@@ -52,8 +52,11 @@
   }
 
   async function sendToSupplier(item: ImportItem, supplier: 'china' | 'hk') {
+    // [DIAG v0.4.8] instrumentation visible — borrar post-debug
+    console.log('[supplier] click handler invoked', { itemId: item.source_id, supplier, item });
+    showToast(`[DIAG] Click ${supplier.toUpperCase()} item=${item.source_id}`, 'ok');
+
     const itemId = item.source_id;
-    // Q=C: confirm dialog si re-send al mismo supplier (Diego decision 2026-04-30)
     if (item.sent_to_supplier_at && item.sent_to_supplier_via === supplier) {
       const ago = timeAgo(item.sent_to_supplier_at);
       const ok = confirm(`Ya enviado a ${supplier.toUpperCase()} hace ${ago}. ¿Re-enviar?`);
@@ -61,15 +64,27 @@
     }
     busy = new Set([...busy, itemId]);
     try {
+      console.log('[supplier] step 1: getSupplierMessage');
       const msg = await adapter.getSupplierMessage(itemId);
+      console.log('[supplier] step 1 OK', msg);
+
+      console.log('[supplier] step 2: copyHeroToClipboard', msg.hero_url);
       await adapter.copyHeroToClipboard(msg.hero_url);
+      console.log('[supplier] step 2 OK');
+
       const url = supplier === 'china' ? msg.wa_china_url : msg.wa_hk_url;
-      window.open(url, '_blank');
-      // Q=B: marcar SOLO al final si toda la chain succeeded
+      console.log('[supplier] step 3: window.open', url);
+      const opened = window.open(url, '_blank');
+      console.log('[supplier] step 3 result (null = blocked):', opened);
+
+      console.log('[supplier] step 4: markItemSent');
       await adapter.markItemSent(itemId, supplier);
+      console.log('[supplier] step 4 OK · all done');
+
       showToast(`Imagen copiada · pegá en WA con Ctrl+V`, 'ok');
       onRefresh?.();
     } catch (e) {
+      console.error('[supplier] CHAIN FAILED', e);
       const errMsg = e instanceof Error ? e.message : String(e);
       showToast(`Error: ${errMsg}`, 'err');
     } finally {
