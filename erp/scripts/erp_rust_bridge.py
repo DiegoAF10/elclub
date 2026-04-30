@@ -2738,7 +2738,9 @@ def cmd_list_sales(args):
                s.modality, s.origin, s.shipped_at, s.shipping_address,
                c.customer_id, c.name, c.phone, c.email,
                (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.sale_id) AS items_count,
-               (SELECT (COALESCE(team, '') || ' ' || COALESCE(variant_label, '') || ' ' || COALESCE(size, ''))
+               (SELECT COALESCE(
+                    NULLIF(TRIM(COALESCE(team, '') || ' ' || COALESCE(variant_label, '') || ' ' || COALESCE(size, '')), ''),
+                    family_id)
                 FROM sale_items si WHERE si.sale_id = s.sale_id LIMIT 1) AS first_item_label
         FROM sales s
         LEFT JOIN customers c ON c.customer_id = s.customer_id
@@ -2764,7 +2766,9 @@ def cmd_list_sales(args):
             placeholders = ",".join("?" * len(sale_ids))
             item_rows = conn.execute(
                 f"""SELECT sale_id,
-                           TRIM(COALESCE(team, '') || ' ' || COALESCE(variant_label, '') || ' ' || COALESCE(size, ''))
+                           COALESCE(
+                               NULLIF(TRIM(COALESCE(team, '') || ' ' || COALESCE(variant_label, '') || ' ' || COALESCE(size, '')), ''),
+                               family_id)
                     FROM sale_items
                     WHERE sale_id IN ({placeholders})
                     ORDER BY sale_id, item_id ASC""",
