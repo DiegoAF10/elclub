@@ -117,10 +117,37 @@
     }
   }
 
+  // Sa4: beautify family_id codes returned by Python query fallback.
+  // MB-CLASICA → "Mystery Box · Clásica" · JRS-BARCELONA-201415-H → "Barcelona 2014/15 H" · CUSTOM-* → "Personalizado".
+  function beautifyLabel(label: string | null | undefined): string {
+    if (!label) return '';
+    const raw = label.trim();
+    if (!raw) return '';
+    if (raw.startsWith('MB-')) {
+      const variant = raw.slice(3).toLowerCase();
+      const cap = variant.charAt(0).toUpperCase() + variant.slice(1);
+      return `Mystery Box · ${cap}`;
+    }
+    if (raw.startsWith('CUSTOM-')) return 'Personalizado';
+    if (raw.startsWith('JRS-')) {
+      const parts = raw.slice(4).split('-');
+      if (parts.length >= 2) {
+        const team = parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase();
+        const season = parts[1];
+        const variantSuffix = parts.slice(2).join('-');
+        const seasonFmt = season.length === 6 ? `${season.slice(0, 4)}/${season.slice(4)}` : season;
+        return `${team} ${seasonFmt}${variantSuffix ? ' ' + variantSuffix : ''}`;
+      }
+    }
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  }
+
   function joinItems(labels: string[] | null, max = 3): string {
     if (!labels || labels.length === 0) return '';
-    const head = labels.slice(0, max).join(' · ');
-    return labels.length > max ? `${head} · +${labels.length - max} más` : head;
+    const beautified = labels.map(beautifyLabel).filter(Boolean);
+    if (beautified.length === 0) return '';
+    const head = beautified.slice(0, max).join(' · ');
+    return beautified.length > max ? `${head} · +${beautified.length - max} más` : head;
   }
 
   function modalityLabel(m: string): string {
@@ -285,7 +312,7 @@
               </div>
             {:else if s.firstItemLabel}
               <div class="truncate text-[10.5px] text-[var(--color-text-tertiary)]">
-                {s.firstItemLabel}{#if s.itemsCount > 1}<span class="text-[var(--color-text-muted)]"> · +{s.itemsCount - 1} más</span>{/if}
+                {beautifyLabel(s.firstItemLabel)}{#if s.itemsCount > 1}<span class="text-[var(--color-text-muted)]"> · +{s.itemsCount - 1} más</span>{/if}
               </div>
             {:else}
               <div class="text-[10px] text-[var(--color-text-muted)] italic">sin items</div>
