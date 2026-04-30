@@ -2682,8 +2682,9 @@ async fn cmd_get_import_pulso(_app: tauri::AppHandle) -> Result<ImportPulso> {
 #[derive(Debug, Serialize)]
 pub struct CloseImportResult {
     pub ok: bool,
-    pub n_items_updated: usize,
-    pub n_jerseys_updated: usize,
+    pub n_items_updated: usize,           // sale_items count (legacy R1 source)
+    pub n_jerseys_updated: usize,         // jerseys count (legacy R1 source)
+    pub n_import_items_updated: usize,    // import_items count (R2 promote-to-batch source)
     pub total_landed_gtq: f64,
     pub avg_unit_cost: f64,
     pub method: &'static str,
@@ -2738,14 +2739,23 @@ pub async fn impl_close_import_proportional(
     )?.query_map(rusqlite::params![&import_id], |r| Ok((r.get(0)?, r.get(1)?)))?
        .collect::<std::result::Result<Vec<_>, _>>()?;
 
-    let n_total = sale_items.len() + jerseys.len();
+    // R2 promote-to-batch destination · single-source bridge table (Diego dec Q2 2026-04-28).
+    // Read import_items as 3rd source for prorrateo + status transition pending→arrived at close.
+    let import_items_rows: Vec<(i64, Option<f64>)> = tx.prepare(
+        "SELECT import_item_id, unit_cost_usd FROM import_items WHERE import_id = ?1"
+    )?.query_map(rusqlite::params![&import_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+       .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    let n_total = sale_items.len() + jerseys.len() + import_items_rows.len();
     if n_total == 0 {
         return Err(ErpError::Other("No items linkeados a este import".into()));
     }
 
     // 3. Compute total USD (D2=B). Items con unit_cost_usd null → default uniforme = bruto/n
     let usd_default = bruto / n_total as f64;
-    let total_usd_present: f64 = sale_items.iter().chain(jerseys.iter())
+    let total_usd_present: f64 = sale_items.iter()
+        .chain(jerseys.iter())
+        .chain(import_items_rows.iter())
         .map(|(_, usd)| usd.unwrap_or(usd_default)).sum();
 
     // 4. Aplicar prorrateo proporcional al USD chino per item
@@ -2763,6 +2773,16 @@ pub async fn impl_close_import_proportional(
         tx.execute(
             "UPDATE jerseys SET cost = ? WHERE rowid = ?",
             rusqlite::params![landed_gtq.round() as i64, rowid],
+        )?;
+    }
+    // import_items: REAL columns (unit_cost_gtq + unit_cost_usd) + state transition pending→arrived
+    for (id, usd_opt) in &import_items_rows {
+        let usd = usd_opt.unwrap_or(usd_default);
+        let landed_gtq = (usd / total_usd_present) * total_landed;
+        tx.execute(
+            "UPDATE import_items SET unit_cost_gtq = ?, unit_cost_usd = ?, status = 'arrived' \
+             WHERE import_item_id = ?",
+            rusqlite::params![landed_gtq, usd, id],
         )?;
     }
 
@@ -2810,7 +2830,13 @@ pub async fn impl_close_import_proportional(
             rusqlite::params![&import_id],
             |r| r.get(0),
         )?;
-        let n_paid = n_paid_sale_items + n_paid_jerseys;
+        // R2 promote-to-batch single-source: count import_items too (matches spec D-FREE)
+        let n_paid_import_items: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM import_items WHERE import_id = ?",
+            rusqlite::params![&import_id],
+            |r| r.get(0),
+        )?;
+        let n_paid = n_paid_sale_items + n_paid_jerseys + n_paid_import_items;
 
         let n_free = n_paid / 10; // integer division = floor
         if n_free > 0 {
@@ -2831,6 +2857,7 @@ pub async fn impl_close_import_proportional(
         ok: true,
         n_items_updated: sale_items.len(),
         n_jerseys_updated: jerseys.len(),
+        n_import_items_updated: import_items_rows.len(),
         total_landed_gtq: total_landed,
         avg_unit_cost: avg_unit,
         method: "D2=B (proportional by USD)",

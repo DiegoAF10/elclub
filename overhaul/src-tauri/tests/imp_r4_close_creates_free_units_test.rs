@@ -47,6 +47,17 @@ fn setup_db_with_n_items(import_id: &str, n_paid: usize, label: &str) -> PathBuf
           assigned_at TEXT, assigned_by TEXT, notes TEXT,
           created_at TEXT DEFAULT (datetime('now', 'localtime'))
         );
+        CREATE TABLE import_items (
+          import_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          import_id TEXT NOT NULL, wishlist_item_id INTEGER,
+          family_id TEXT NOT NULL, jersey_id TEXT, size TEXT,
+          player_name TEXT, player_number INTEGER, patch TEXT, version TEXT,
+          customer_id TEXT, expected_usd REAL,
+          unit_cost_usd REAL, unit_cost_gtq REAL,
+          status TEXT DEFAULT 'pending',
+          sale_item_id INTEGER, jersey_id_published TEXT,
+          notes TEXT, created_at TEXT DEFAULT (datetime('now', 'localtime'))
+        );
         "#,
     )
     .unwrap();

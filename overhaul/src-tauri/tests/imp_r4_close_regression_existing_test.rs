@@ -52,6 +52,17 @@ fn setup_canary_db(label: &str) -> PathBuf {
           assigned_at TEXT, assigned_by TEXT, notes TEXT,
           created_at TEXT DEFAULT (datetime('now', 'localtime'))
         );
+        CREATE TABLE import_items (
+          import_item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          import_id TEXT NOT NULL, wishlist_item_id INTEGER,
+          family_id TEXT NOT NULL, jersey_id TEXT, size TEXT,
+          player_name TEXT, player_number INTEGER, patch TEXT, version TEXT,
+          customer_id TEXT, expected_usd REAL,
+          unit_cost_usd REAL, unit_cost_gtq REAL,
+          status TEXT DEFAULT 'pending',
+          sale_item_id INTEGER, jersey_id_published TEXT,
+          notes TEXT, created_at TEXT DEFAULT (datetime('now', 'localtime'))
+        );
         -- Seed canary fixture: 22 paid items uniform at $5 each.
         -- Expected total_landed = bruto_usd * fx + shipping_gtq = 100 * 7.73 + 200 = 973.0
         -- Expected avg unit_cost = 973 / 22 = 44.227... → rounded = 44
