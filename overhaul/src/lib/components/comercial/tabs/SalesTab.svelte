@@ -1,6 +1,6 @@
 <script lang="ts">
   import { adapter } from '$lib/adapter';
-  import type { SaleRow } from '$lib/data/comercial';
+  import type { SaleRow, UpdateSaleArgs } from '$lib/data/comercial';
   import { Search, RefreshCw, Plus } from 'lucide-svelte';
   import OrderDetailModal from '../modals/OrderDetailModal.svelte';
   import SaleFormModal from '../modals/SaleFormModal.svelte';
@@ -61,6 +61,56 @@
     if (next.has(status)) next.delete(status); else next.add(status);
     collapsedGroups = next;
   }
+
+  // Sa3: inline status dropdown · sale_id del row con dropdown abierto (null = ninguno)
+  let openStatusEditFor = $state<number | null>(null);
+  let statusUpdating = $state<number | null>(null);
+
+  type FulfillmentStatus = NonNullable<UpdateSaleArgs['fulfillmentStatus']>;
+
+  async function handleStatusChange(saleId: number, newStatus: FulfillmentStatus) {
+    openStatusEditFor = null;
+    const idx = sales.findIndex((s) => s.saleId === saleId);
+    if (idx < 0) return;
+    const oldStatus = sales[idx].fulfillmentStatus;
+    if (oldStatus === newStatus) return;
+    statusUpdating = saleId;
+    // Optimistic update
+    sales = sales.map((s) => (s.saleId === saleId ? { ...s, fulfillmentStatus: newStatus } : s));
+    try {
+      const result = await adapter.updateSale({ saleId, fulfillmentStatus: newStatus });
+      if (!result.ok) throw new Error(result.error ?? 'updateSale failed');
+      // Refresh to pick up any side effects (KPIs, attribution, etc.)
+      void loadSales();
+    } catch (e) {
+      console.warn('[sales-tab] status update failed', e);
+      // Revert
+      sales = sales.map((s) => (s.saleId === saleId ? { ...s, fulfillmentStatus: oldStatus } : s));
+      alert(`Error actualizando status: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      statusUpdating = null;
+    }
+  }
+
+  // Click-outside + Escape: cierra dropdown
+  $effect(() => {
+    if (openStatusEditFor === null) return;
+    function clickHandler(e: MouseEvent) {
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest('[data-status-dropdown]')) {
+        openStatusEditFor = null;
+      }
+    }
+    function keyHandler(e: KeyboardEvent) {
+      if (e.key === 'Escape') openStatusEditFor = null;
+    }
+    window.addEventListener('click', clickHandler, true);
+    window.addEventListener('keydown', keyHandler);
+    return () => {
+      window.removeEventListener('click', clickHandler, true);
+      window.removeEventListener('keydown', keyHandler);
+    };
+  });
 
   async function loadSales() {
     loading = true;
@@ -352,11 +402,14 @@
   {/if}
 
   <!-- Sales row snippet · reused en flat + grouped views -->
+  <!-- Sa3: outer cambia de <button> a <div role="button"> para permitir nested <button> en status pill (HTML válido) -->
   {#snippet salesRow(s: SaleRow)}
-    <button
-      type="button"
+    <div
+      role="button"
+      tabindex="0"
       onclick={() => (openOrderRef = s.ref)}
-      class="flex w-full items-start gap-3 border-b border-[var(--color-border)] px-6 py-2 text-left transition-colors hover:bg-[var(--color-surface-1)]"
+      onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openOrderRef = s.ref; } }}
+      class="flex w-full cursor-pointer items-start gap-3 border-b border-[var(--color-border)] px-6 py-2 text-left transition-colors hover:bg-[var(--color-surface-1)] focus:outline-none focus:bg-[var(--color-surface-1)]"
       style="border-left: 3px solid {statusColor(s.fulfillmentStatus)};"
     >
       <!-- LEFT: REF + FECHA stacked -->
@@ -398,9 +451,40 @@
       <div class="w-52 flex-shrink-0 text-right">
         <!-- Pills row -->
         <div class="flex items-center justify-end gap-1 flex-wrap">
-          <span class="text-display text-[9px]" style="color: {statusColor(s.fulfillmentStatus)};">
-            ● {statusLabel(s.fulfillmentStatus)}
-          </span>
+          <!-- Sa3: status pill clickable · abre dropdown inline para cambiar status sin abrir modal -->
+          <div class="relative inline-block" data-status-dropdown>
+            <button
+              type="button"
+              onclick={(e) => { e.stopPropagation(); openStatusEditFor = (openStatusEditFor === s.saleId ? null : s.saleId); }}
+              disabled={statusUpdating === s.saleId}
+              class="text-display text-[9px] transition-opacity hover:opacity-70 disabled:opacity-50"
+              style="color: {statusColor(s.fulfillmentStatus)};"
+              title="Click para cambiar status"
+            >
+              ● {statusLabel(s.fulfillmentStatus)}{statusUpdating === s.saleId ? '…' : ''}
+            </button>
+            {#if openStatusEditFor === s.saleId}
+              <div
+                class="absolute right-0 top-full z-20 mt-1 min-w-[150px] rounded border border-[var(--color-border)] bg-[var(--color-surface-1)] py-1 text-left shadow-lg"
+              >
+                <div class="text-display border-b border-[var(--color-border)] px-3 pb-1 pt-0.5 text-[8.5px] text-[var(--color-text-tertiary)]">
+                  CAMBIAR STATUS
+                </div>
+                {#each STATUS_PRIORITY as st}
+                  {@const isCurrent = st === s.fulfillmentStatus}
+                  <button
+                    type="button"
+                    onclick={(e) => { e.stopPropagation(); void handleStatusChange(s.saleId, st as FulfillmentStatus); }}
+                    disabled={isCurrent}
+                    class="text-display block w-full px-3 py-1 text-left text-[10px] transition-colors hover:bg-[var(--color-surface-2)] disabled:cursor-default disabled:bg-[var(--color-surface-2)]"
+                    style="color: {statusColor(st)};"
+                  >
+                    ● {statusLabel(st)}{isCurrent ? ' · actual' : ''}
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
           {#if s.modality}
             <span class="text-display rounded-[2px] px-1 py-0.5 text-[8.5px]" style="background: {modalityBg(s.modality)}; color: {modalityFg(s.modality)};">
               {modalityLabel(s.modality)}
@@ -421,7 +505,7 @@
           </span>
         </div>
       </div>
-    </button>
+    </div>
   {/snippet}
 
   <!-- Group header snippet · clickable para collapse/expand · counter + total Q -->
