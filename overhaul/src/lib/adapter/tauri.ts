@@ -16,21 +16,46 @@ import type {
 	CommitResult,
 	BackfillMetaResult,
 	CreateImportInput,
+	CreateWishlistItemInput,
 	DeleteFamilyResult,
 	DeleteSkuResult,
 	EditModeloTypeResult,
 	GitStatusInfo,
 	ListFilter,
+	ListWishlistInput,
 	MoveModeloArgs,
 	MoveModeloResult,
 	PhotoAction,
+	PromoteWishlistInput,
+	PromoteWishlistResult,
 	RegisterArrivalInput,
 	RemovePhotosResult,
 	SetFamilyVariantResult,
 	UpdateImportInput,
+	UpdateWishlistItemInput,
 	WatermarkArgs,
-	WatermarkResult
+	WatermarkResult,
+	// R3
+	MargenFilter,
+	BatchMargenSummary,
+	BatchMargenDetail,
+	MargenPulso,
+	// R4
+	FreeUnit,
+	AssignFreeUnitInput,
+	FreeUnitFilter,
+	// R5
+	SupplierMetrics,
+	SupplierDetail,
+	UnpublishedRequest,
+	// R4.1
+	ModeloOption,
+	// R6
+	ImpSetting,
+	MigrationLog,
+	IntegrationsStatus
 } from './types';
+import type { WishlistItem } from '$lib/data/wishlist';
 import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, CreateOrderItem, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult, UpdateSaleArgs } from '../data/comercial';
 import type { Import, ImportItem, ImportPulso, CloseImportResult } from '../data/importaciones';
 import type { Family } from '../data/types';
@@ -550,8 +575,103 @@ export const tauriAdapter: Adapter = {
 		return await invoke<Import>('cmd_cancel_import', { importId });
 	},
 
+	async deleteImport(importId: string): Promise<void> {
+		await invoke<void>('cmd_delete_import', { importId });
+	},
+
 	async exportImportsCsv(): Promise<string> {
 		return await invoke<string>('cmd_export_imports_csv');
+	},
+
+	// ─── Importaciones R2 ──────────────────────────────────────────
+	async listWishlist(input: ListWishlistInput): Promise<WishlistItem[]> {
+		return await invoke<WishlistItem[]>('cmd_list_wishlist', { input });
+	},
+
+	async createWishlistItem(input: CreateWishlistItemInput): Promise<WishlistItem> {
+		return await invoke<WishlistItem>('cmd_create_wishlist_item', { input });
+	},
+
+	async updateWishlistItem(input: UpdateWishlistItemInput): Promise<WishlistItem> {
+		return await invoke<WishlistItem>('cmd_update_wishlist_item', { input });
+	},
+
+	async cancelWishlistItem(wishlistItemId: number): Promise<WishlistItem> {
+		return await invoke<WishlistItem>('cmd_cancel_wishlist_item', { wishlistItemId });
+	},
+
+	async promoteWishlistToBatch(input: PromoteWishlistInput): Promise<PromoteWishlistResult> {
+		return await invoke<PromoteWishlistResult>('cmd_promote_wishlist_to_batch', { input });
+	},
+
+	async markInTransit(importId: string, trackingCode?: string): Promise<Import> {
+		return await invoke<Import>('cmd_mark_in_transit', { importId, trackingCode });
+	},
+
+	// ─── Importaciones R3 (Margen Real) ────────────────────────────────
+	async getMargenReal(filter: MargenFilter): Promise<BatchMargenSummary[]> {
+		return await invoke<BatchMargenSummary[]>('cmd_get_margen_real', { filter });
+	},
+
+	async getBatchMargenBreakdown(importId: string): Promise<BatchMargenDetail> {
+		return await invoke<BatchMargenDetail>('cmd_get_batch_margen_breakdown', { importId });
+	},
+
+	async getMargenPulso(): Promise<MargenPulso> {
+		return await invoke<MargenPulso>('cmd_get_margen_pulso');
+	},
+
+	// ─── Importaciones R4 (Free Units) ─────────────────────────────────
+	// Rust serializes with #[serde(rename_all = "camelCase")] · wire format already camelCase.
+	async listFreeUnits(filter?: FreeUnitFilter): Promise<FreeUnit[]> {
+		return await invoke<FreeUnit[]>('cmd_list_free_units', { filter: filter ?? null });
+	},
+
+	async assignFreeUnit(input: AssignFreeUnitInput): Promise<FreeUnit> {
+		return await invoke<FreeUnit>('cmd_assign_free_unit', { input });
+	},
+
+	async unassignFreeUnit(freeUnitId: number): Promise<FreeUnit> {
+		return await invoke<FreeUnit>('cmd_unassign_free_unit', { freeUnitId });
+	},
+
+	// ─── Importaciones R5 (Supplier Scorecard + Feedback Loop) ─────────
+	async getSupplierMetrics(): Promise<SupplierMetrics[]> {
+		return await invoke<SupplierMetrics[]>('cmd_get_supplier_metrics');
+	},
+
+	async getSupplierDetail(supplier: string): Promise<SupplierDetail> {
+		return await invoke<SupplierDetail>('cmd_get_supplier_detail', { supplier });
+	},
+
+	async getMostRequestedUnpublished(limit?: number): Promise<UnpublishedRequest[]> {
+		return await invoke<UnpublishedRequest[]>('cmd_get_most_requested_unpublished', { limit: limit ?? null });
+	},
+
+	// ─── R4.1: Catalog modelos picker (cascade UI · post-MSI fix) ──────
+	async listCatalogModelos(): Promise<ModeloOption[]> {
+		return await invoke<ModeloOption[]>('cmd_list_catalog_modelos');
+	},
+
+	// ─── Importaciones R6 (Settings · migration log · integrations) ────
+	async getImpSettings(): Promise<ImpSetting[]> {
+		return await invoke<ImpSetting[]>('cmd_get_imp_settings');
+	},
+
+	async updateImpSetting(key: string, value: string): Promise<ImpSetting> {
+		return await invoke<ImpSetting>('cmd_update_imp_setting', { key, value });
+	},
+
+	async getMigrationLog(): Promise<MigrationLog> {
+		return await invoke<MigrationLog>('cmd_get_migration_log');
+	},
+
+	async getIntegrationsStatus(): Promise<IntegrationsStatus> {
+		return await invoke<IntegrationsStatus>('cmd_get_integrations_status');
+	},
+
+	async resyncMigration(): Promise<string> {
+		return await invoke<string>('cmd_resync_migration');  // throws "Re-sync deshabilitado..."
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────

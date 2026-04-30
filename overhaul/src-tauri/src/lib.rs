@@ -2540,6 +2540,15 @@ async fn cmd_get_import_items(_app: tauri::AppHandle, import_id: String) -> Resu
                 0 as is_free_unit
          FROM jerseys j
          WHERE j.import_id = ?1
+         UNION ALL
+         SELECT 'import_items' as source_table, ii.import_item_id as source_id, ii.import_id,
+                ii.family_id, ii.jersey_id, ii.size,
+                ii.player_name, ii.player_number, ii.patch, ii.version,
+                ii.unit_cost_usd, ii.unit_cost_gtq as unit_cost,
+                ii.customer_id, NULL as customer_name,
+                0 as is_free_unit
+         FROM import_items ii
+         WHERE ii.import_id = ?1
          ORDER BY source_table, source_id"
     )?;
 
@@ -2565,6 +2574,60 @@ async fn cmd_get_import_items(_app: tauri::AppHandle, import_id: String) -> Resu
 
     Ok(rows.collect::<std::result::Result<Vec<_>, _>>()?)
 }
+
+// ─── R5 Supplier Scorecard helpers ──────────────────────────────────
+
+/// Calcula percentil al ratio dado (0.0..1.0) sobre vector ordenado de valores f64.
+/// Usa nearest-rank method (sin interpolación) — suficiente para n pequeños (n<100).
+/// Retorna `None` si el vector está vacío.
+fn percentile_at(values: &[f64], ratio: f64) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    let mut sorted: Vec<f64> = values.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let n = sorted.len();
+    // Nearest-rank: idx = ceil(ratio * n) - 1, clamped to [0, n-1]
+    let idx = ((ratio * n as f64).ceil() as usize).saturating_sub(1).min(n - 1);
+    Some(sorted[idx])
+}
+
+#[cfg(test)]
+mod imp_r5_helper_tests {
+    use super::*;
+
+    #[test]
+    fn test_percentile_empty() {
+        assert_eq!(percentile_at(&[], 0.5), None);
+    }
+
+    #[test]
+    fn test_percentile_single() {
+        assert_eq!(percentile_at(&[42.0], 0.5), Some(42.0));
+        assert_eq!(percentile_at(&[42.0], 0.95), Some(42.0));
+    }
+
+    #[test]
+    fn test_percentile_known_values() {
+        // Lead times: 5, 7, 8, 10, 12 — avg 8.4
+        let v = vec![5.0, 7.0, 8.0, 10.0, 12.0];
+        // p50: nearest-rank idx = ceil(0.5 * 5) - 1 = 2 → sorted[2] = 8
+        assert_eq!(percentile_at(&v, 0.50), Some(8.0));
+        // p95: nearest-rank idx = ceil(0.95 * 5) - 1 = 4 → sorted[4] = 12
+        assert_eq!(percentile_at(&v, 0.95), Some(12.0));
+    }
+}
+
+// Bond Soccer Jersey hardcoded card data (per spec sec 4.5 line 269-278)
+// Move to suppliers table when v0.5 adds multi-supplier proper.
+const BOND_SUPPLIER_NAME: &str = "Bond Soccer Jersey";
+const BOND_CONTACT_LABEL: &str = "WhatsApp · 志鵬 黎";
+const BOND_PAYMENT_METHOD: &str = "PayPal upfront";
+const BOND_CARRIER: &str = "DHL door-to-door";
+const BOND_FREE_POLICY_TEXT: &str = "1 unit cada 10 paid units";
+const BOND_PRICE_BASE_USD: f64 = 11.0;
+const BOND_PRICE_PATCH_USD: f64 = 13.0;
+const BOND_PRICE_PATCH_NAME_USD: f64 = 15.0;
 
 #[tauri::command]
 async fn cmd_get_import_pulso(_app: tauri::AppHandle) -> Result<ImportPulso> {
@@ -2619,16 +2682,25 @@ async fn cmd_get_import_pulso(_app: tauri::AppHandle) -> Result<ImportPulso> {
 #[derive(Debug, Serialize)]
 pub struct CloseImportResult {
     pub ok: bool,
-    pub n_items_updated: usize,
-    pub n_jerseys_updated: usize,
+    pub n_items_updated: usize,           // sale_items count (legacy R1 source)
+    pub n_jerseys_updated: usize,         // jerseys count (legacy R1 source)
+    pub n_import_items_updated: usize,    // import_items count (R2 promote-to-batch source)
     pub total_landed_gtq: f64,
     pub avg_unit_cost: f64,
     pub method: &'static str,
 }
 
-#[tauri::command]
-async fn cmd_close_import_proportional(
-    _app: tauri::AppHandle,
+/// Closes an import batch, applying D2=B proportional landed cost prorrateo to all
+/// linked sale_items + jerseys, and updating the imports row to status='closed'.
+///
+/// Pre-condition: status != 'closed' AND bruto_usd IS NOT NULL AND shipping_gtq IS NOT NULL.
+/// Post-condition: all linked items have `unit_cost` set (GTQ landed) · imports.status='closed'
+/// + total_landed_gtq + n_units + unit_cost + lead_time_days populated.
+///
+/// Refactored 2026-04-28 from inline #[tauri::command] to impl/cmd split per
+/// convention block lib.rs:2730-2742 · zero behavior change · prerequisite for
+/// R4 free-units auto-create modification (Task 5).
+pub async fn impl_close_import_proportional(
     import_id: String,
 ) -> Result<CloseImportResult> {
     let mut conn = open_db()?;
@@ -2667,14 +2739,23 @@ async fn cmd_close_import_proportional(
     )?.query_map(rusqlite::params![&import_id], |r| Ok((r.get(0)?, r.get(1)?)))?
        .collect::<std::result::Result<Vec<_>, _>>()?;
 
-    let n_total = sale_items.len() + jerseys.len();
+    // R2 promote-to-batch destination · single-source bridge table (Diego dec Q2 2026-04-28).
+    // Read import_items as 3rd source for prorrateo + status transition pending→arrived at close.
+    let import_items_rows: Vec<(i64, Option<f64>)> = tx.prepare(
+        "SELECT import_item_id, unit_cost_usd FROM import_items WHERE import_id = ?1"
+    )?.query_map(rusqlite::params![&import_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+       .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    let n_total = sale_items.len() + jerseys.len() + import_items_rows.len();
     if n_total == 0 {
         return Err(ErpError::Other("No items linkeados a este import".into()));
     }
 
     // 3. Compute total USD (D2=B). Items con unit_cost_usd null → default uniforme = bruto/n
     let usd_default = bruto / n_total as f64;
-    let total_usd_present: f64 = sale_items.iter().chain(jerseys.iter())
+    let total_usd_present: f64 = sale_items.iter()
+        .chain(jerseys.iter())
+        .chain(import_items_rows.iter())
         .map(|(_, usd)| usd.unwrap_or(usd_default)).sum();
 
     // 4. Aplicar prorrateo proporcional al USD chino per item
@@ -2692,6 +2773,16 @@ async fn cmd_close_import_proportional(
         tx.execute(
             "UPDATE jerseys SET cost = ? WHERE rowid = ?",
             rusqlite::params![landed_gtq.round() as i64, rowid],
+        )?;
+    }
+    // import_items: REAL columns (unit_cost_gtq + unit_cost_usd) + state transition pending→arrived
+    for (id, usd_opt) in &import_items_rows {
+        let usd = usd_opt.unwrap_or(usd_default);
+        let landed_gtq = (usd / total_usd_present) * total_landed;
+        tx.execute(
+            "UPDATE import_items SET unit_cost_gtq = ?, unit_cost_usd = ?, status = 'arrived' \
+             WHERE import_item_id = ?",
+            rusqlite::params![landed_gtq, usd, id],
         )?;
     }
 
@@ -2715,16 +2806,70 @@ async fn cmd_close_import_proportional(
         rusqlite::params![total_landed, n_total as i64, avg_unit.round(), lead_time, import_id],
     )?;
 
+    // === IMP-R4 · Auto-create free units (floor(n_paid / 10)) ===
+    // Idempotency guard: skip if free units already exist for this import_id.
+    // Free units are created unassigned (destination NULL · D-FREE=A) · Diego asigna
+    // destino caso a caso vía cmd_assign_free_unit (Task 2).
+    let existing_free_count: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM import_free_unit WHERE import_id = ?",
+        rusqlite::params![&import_id],
+        |r| r.get(0),
+    )?;
+
+    if existing_free_count == 0 {
+        // Count items NOT already flagged as 'free' (sale_items + jerseys).
+        // Per spec sec 4.4 line 256, n_paid = closed paid items used as ratio basis.
+        let n_paid_sale_items: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM sale_items \
+             WHERE import_id = ? AND (item_type IS NULL OR item_type != 'free')",
+            rusqlite::params![&import_id],
+            |r| r.get(0),
+        )?;
+        let n_paid_jerseys: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM jerseys WHERE import_id = ?",
+            rusqlite::params![&import_id],
+            |r| r.get(0),
+        )?;
+        // R2 promote-to-batch single-source: count import_items too (matches spec D-FREE)
+        let n_paid_import_items: i64 = tx.query_row(
+            "SELECT COUNT(*) FROM import_items WHERE import_id = ?",
+            rusqlite::params![&import_id],
+            |r| r.get(0),
+        )?;
+        let n_paid = n_paid_sale_items + n_paid_jerseys + n_paid_import_items;
+
+        let n_free = n_paid / 10; // integer division = floor
+        if n_free > 0 {
+            let now_ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            for _ in 0..n_free {
+                tx.execute(
+                    "INSERT INTO import_free_unit (import_id, created_at) VALUES (?, ?)",
+                    rusqlite::params![&import_id, &now_ts],
+                )?;
+            }
+        }
+    }
+    // === end IMP-R4 ===
+
     tx.commit()?;
 
     Ok(CloseImportResult {
         ok: true,
         n_items_updated: sale_items.len(),
         n_jerseys_updated: jerseys.len(),
+        n_import_items_updated: import_items_rows.len(),
         total_landed_gtq: total_landed,
         avg_unit_cost: avg_unit,
         method: "D2=B (proportional by USD)",
     })
+}
+
+#[tauri::command]
+async fn cmd_close_import_proportional(
+    _app: tauri::AppHandle,
+    import_id: String,
+) -> Result<CloseImportResult> {
+    impl_close_import_proportional(import_id).await
 }
 
 /// Re-reads canonical Import row by ID. Used by all impl_X commands after tx.commit().
@@ -2756,6 +2901,1864 @@ fn read_import_by_id(conn: &rusqlite::Connection, import_id: &str) -> Result<Imp
             lead_time_days:   row.get(15)?,
         }),
     ).map_err(ErpError::from)
+}
+
+// ─── R3 Margen Real: cross-Comercial queries ─────────────────────────
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MargenFilter {
+    pub period_from: Option<String>,    // YYYY-MM-DD · filter on imports.paid_at >= ?
+    pub period_to: Option<String>,      // YYYY-MM-DD · filter on imports.paid_at <= ?
+    pub supplier: Option<String>,       // exact match on imports.supplier
+    pub include_pipeline: Option<bool>, // default false · si true incluye paid+arrived con margen estimado
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchMargenSummary {
+    pub import_id: String,
+    pub supplier: String,
+    pub paid_at: Option<String>,
+    pub arrived_at: Option<String>,
+    pub status: String,                 // 'closed' default · 'paid'/'arrived' si include_pipeline
+    pub n_units: Option<i64>,
+    pub total_landed_gtq: Option<f64>,  // null si pipeline (status != closed)
+    pub n_sales_linked: i64,            // count distinct sale_id en sale_items WHERE import_id = X
+    pub n_items_linked: i64,            // count sale_items WHERE import_id = X
+    pub revenue_total_gtq: f64,         // SUM(sale_items.unit_price) WHERE import_id = X · production col is "total" not "total_gtq"
+    pub margen_bruto_gtq: f64,          // revenue - landed (0 si landed null)
+    pub margen_pct: Option<f64>,        // (margen / landed) * 100 · null si landed = 0 o null
+    pub n_stock_pendiente: i64,         // count import_items WHERE import_id = X AND status = 'pending' (single source post-R6 schema)
+    pub valor_stock_pendiente_gtq: f64, // SUM(COALESCE(import_items.unit_cost_gtq, imports.unit_cost)) WHERE status='pending' · fallback to imports.unit_cost para items pre-prorrateo
+    pub n_free_units: i64,              // count import_free_unit WHERE import_id = X
+    pub valor_free_units_gtq: Option<f64>, // null por ahora (asignación pendiente · D-FREE valuation rule por decidir)
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkedSale {
+    pub sale_id: i64,
+    pub occurred_at: Option<String>,    // production col: sales.occurred_at (NOT created_at)
+    pub customer_id: Option<i64>,       // production col: sales.customer_id is INTEGER
+    pub total: f64,                     // production col: sales.total (NOT total_gtq)
+    pub n_items_from_batch: i64,        // count sale_items WHERE sale_id=X AND import_id=Y
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingItem {
+    pub import_item_id: i64,
+    pub family_id: String,              // production col (NOT sku)
+    pub jersey_id: Option<String>,
+    pub size: Option<String>,
+    pub player_name: Option<String>,
+    pub player_number: Option<i32>,
+    pub patch: Option<String>,
+    pub version: Option<String>,
+    pub customer_id: Option<String>,    // NULL = stock-future · populated = assigned to specific customer
+    pub expected_usd: Option<f64>,
+    pub unit_cost_gtq: Option<f64>,     // null hasta que close (R4) corra prorrateo
+    pub status: String,                 // 'pending' | 'arrived' | 'sold' | 'published' | 'cancelled'
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FreeUnitRow {
+    pub free_unit_id: i64,
+    pub destination: Option<String>,
+    pub destination_ref: Option<String>,
+    pub assigned_at: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchMargenDetail {
+    pub summary: BatchMargenSummary,
+    pub linked_sales: Vec<LinkedSale>,
+    pub pending_items: Vec<PendingItem>,
+    pub free_units: Vec<FreeUnitRow>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MargenPulso {
+    pub n_batches_closed: i64,
+    pub revenue_total_ytd_gtq: f64,
+    pub landed_total_ytd_gtq: f64,
+    pub margen_total_ytd_gtq: f64,
+    pub margen_pct_avg: Option<f64>,         // average margen_pct across closed batches
+    pub best_batch_id: Option<String>,       // import_id with highest margen_pct
+    pub best_batch_margen_pct: Option<f64>,
+    pub worst_batch_id: Option<String>,
+    pub worst_batch_margen_pct: Option<f64>,
+    pub capital_amarrado_gtq: f64,           // SUM(valor_stock_pendiente) across closed batches
+}
+
+/// Compute BatchMargenSummary for a single import_id from existing DB rows.
+/// Reads imports + aggregates from sale_items + import_items (R6 table) + import_free_unit.
+/// Used by cmd_get_margen_real (list) and cmd_get_batch_margen_breakdown (detail).
+fn compute_batch_summary(conn: &rusqlite::Connection, import_id: &str) -> Result<BatchMargenSummary> {
+    // 1. Read import row (canonical fields · incl unit_cost per-unit landed for stock pendiente fallback proxy)
+    let (supplier, paid_at, arrived_at, status, n_units, total_landed, unit_cost_landed): (String, Option<String>, Option<String>, String, Option<i64>, Option<f64>, Option<f64>) = conn.query_row(
+        "SELECT supplier, paid_at, arrived_at, status, n_units, total_landed_gtq, unit_cost
+         FROM imports WHERE import_id = ?1",
+        rusqlite::params![import_id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?)),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => ErpError::NotFound(format!("Import {}", import_id)),
+        other => other.into(),
+    })?;
+
+    // 2. Aggregate sales linked: count distinct sale_id, count items, SUM unit_price (revenue from Comercial)
+    //    Production schema: sale_items.import_id is FK · sale_id NOT NULL (always linked to a sale row).
+    //    Items "promovidos pero no vendidos" viven en import_items (NOT sale_items) post-R6.
+    let (n_sales_linked, n_items_linked, revenue_total): (i64, i64, f64) = conn.query_row(
+        "SELECT COUNT(DISTINCT sale_id), COUNT(*), COALESCE(SUM(unit_price), 0)
+         FROM sale_items
+         WHERE import_id = ?1",
+        rusqlite::params![import_id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    ).unwrap_or((0, 0, 0.0));
+
+    // 3. Stock pendiente: count import_items WHERE status='pending' (single source post-R6 schema)
+    //    customer_id NULL = stock-future · customer_id populated = assigned to specific customer.
+    //    Both flavors count as "pending" until promoted to actual sale (status transitions to 'sold').
+    let n_pendiente: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM import_items WHERE import_id = ?1 AND status = 'pending'",
+        rusqlite::params![import_id],
+        |r| r.get(0),
+    ).unwrap_or(0);
+
+    // Valor stock pendiente: SUM(COALESCE(import_items.unit_cost_gtq, imports.unit_cost))
+    // Per-item unit_cost_gtq is set when R4 close runs prorrateo · null otherwise.
+    // Fallback to imports.unit_cost (per-unit landed shared across batch · D2=B aggregate proxy).
+    let valor_pendiente: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(COALESCE(unit_cost_gtq, ?2)), 0)
+         FROM import_items WHERE import_id = ?1 AND status = 'pending'",
+        rusqlite::params![import_id, unit_cost_landed.unwrap_or(0.0)],
+        |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    // 4. Free units count (valor diferido · spec ambiguous)
+    let n_free: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM import_free_unit WHERE import_id = ?1",
+        rusqlite::params![import_id],
+        |r| r.get(0),
+    ).unwrap_or(0);
+
+    // 5. Margen bruto + pct (only meaningful if landed exists)
+    let landed = total_landed.unwrap_or(0.0);
+    let margen_bruto = revenue_total - landed;
+    let margen_pct = if landed > 0.0 {
+        Some((margen_bruto / landed) * 100.0)
+    } else {
+        None
+    };
+
+    Ok(BatchMargenSummary {
+        import_id: import_id.to_string(),
+        supplier,
+        paid_at,
+        arrived_at,
+        status,
+        n_units,
+        total_landed_gtq: total_landed,
+        n_sales_linked,
+        n_items_linked,
+        revenue_total_gtq: revenue_total,
+        margen_bruto_gtq: margen_bruto,
+        margen_pct,
+        n_stock_pendiente: n_pendiente,
+        valor_stock_pendiente_gtq: valor_pendiente,
+        n_free_units: n_free,
+        valor_free_units_gtq: None, // TBD per spec ambiguity (open question for Diego)
+    })
+}
+
+/// Returns list of BatchMargenSummary filtered per MargenFilter.
+/// Default: closed only (per spec sec 4.3 line 237).
+/// include_pipeline=true incluye paid+arrived con margen estimado (revenue real · landed null si no closed).
+pub fn impl_get_margen_real(filter: &MargenFilter) -> Result<Vec<BatchMargenSummary>> {
+    let conn = open_db()?;
+
+    // Build WHERE clause dynamically per filter
+    let include_pipeline = filter.include_pipeline.unwrap_or(false);
+    let status_clause = if include_pipeline {
+        "status IN ('paid', 'arrived', 'closed')"
+    } else {
+        "status = 'closed'"
+    };
+
+    let mut sql = format!(
+        "SELECT import_id FROM imports WHERE {} ", status_clause
+    );
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+
+    if let Some(pf) = &filter.period_from {
+        sql.push_str("AND paid_at >= ? ");
+        params.push(Box::new(pf.clone()));
+    }
+    if let Some(pt) = &filter.period_to {
+        sql.push_str("AND paid_at <= ? ");
+        params.push(Box::new(pt.clone()));
+    }
+    if let Some(sup) = &filter.supplier {
+        sql.push_str("AND supplier = ? ");
+        params.push(Box::new(sup.clone()));
+    }
+    sql.push_str("ORDER BY paid_at DESC NULLS LAST, import_id DESC");
+
+    let mut stmt = conn.prepare(&sql)?;
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref() as &dyn rusqlite::ToSql).collect();
+    let import_ids: Vec<String> = stmt
+        .query_map(rusqlite::params_from_iter(param_refs.iter()), |r| r.get::<_, String>(0))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    let mut summaries = Vec::with_capacity(import_ids.len());
+    for id in import_ids {
+        // compute_batch_summary opens its own conn read · thread-safe
+        summaries.push(compute_batch_summary(&conn, &id)?);
+    }
+
+    Ok(summaries)
+}
+
+#[tauri::command]
+async fn cmd_get_margen_real(filter: MargenFilter) -> Result<Vec<BatchMargenSummary>> {
+    impl_get_margen_real(&filter)
+}
+
+/// Returns BatchMargenDetail for a single import_id: summary + linked sales + pending items + free units.
+/// Used in drilldown when Diego clicks "Ver ventas linkeadas" or "Ver items pendientes".
+pub fn impl_get_batch_margen_breakdown(import_id: &str) -> Result<BatchMargenDetail> {
+    let conn = open_db()?;
+    let summary = compute_batch_summary(&conn, import_id)?;
+
+    // 1. Linked sales: distinct sale_id from sale_items × sales JOIN.
+    //    Production schema cols: sales.occurred_at (NOT created_at), sales.total (NOT total_gtq), sales.customer_id (INTEGER).
+    let mut stmt = conn.prepare(
+        "SELECT s.sale_id, s.occurred_at, s.customer_id, s.total,
+                COUNT(si.item_id) AS n_items
+         FROM sales s
+         INNER JOIN sale_items si ON si.sale_id = s.sale_id
+         WHERE si.import_id = ?1
+         GROUP BY s.sale_id, s.occurred_at, s.customer_id, s.total
+         ORDER BY s.occurred_at DESC"
+    )?;
+    let linked_sales: Vec<LinkedSale> = stmt
+        .query_map(rusqlite::params![import_id], |r| Ok(LinkedSale {
+            sale_id: r.get(0)?,
+            occurred_at: r.get(1)?,
+            customer_id: r.get(2)?,
+            total: r.get(3)?,
+            n_items_from_batch: r.get(4)?,
+        }))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    // 2. Pending items: read from import_items WHERE status='pending' (single source post-R6 schema).
+    //    customer_id NULL = stock-future · populated = assigned. Both flavors counted as pending.
+    let mut stmt = conn.prepare(
+        "SELECT import_item_id, family_id, jersey_id, size, player_name, player_number,
+                patch, version, customer_id, expected_usd, unit_cost_gtq, status
+         FROM import_items
+         WHERE import_id = ?1 AND status = 'pending'
+         ORDER BY import_item_id"
+    )?;
+    let pending_items: Vec<PendingItem> = stmt
+        .query_map(rusqlite::params![import_id], |r| Ok(PendingItem {
+            import_item_id: r.get(0)?,
+            family_id: r.get(1)?,
+            jersey_id: r.get(2)?,
+            size: r.get(3)?,
+            player_name: r.get(4)?,
+            player_number: r.get(5)?,
+            patch: r.get(6)?,
+            version: r.get(7)?,
+            customer_id: r.get(8)?,
+            expected_usd: r.get(9)?,
+            unit_cost_gtq: r.get(10)?,
+            status: r.get(11)?,
+        }))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    // 3. Free units rows
+    let mut stmt = conn.prepare(
+        "SELECT free_unit_id, destination, destination_ref, assigned_at, notes
+         FROM import_free_unit
+         WHERE import_id = ?1
+         ORDER BY free_unit_id"
+    )?;
+    let free_units: Vec<FreeUnitRow> = stmt
+        .query_map(rusqlite::params![import_id], |r| Ok(FreeUnitRow {
+            free_unit_id: r.get(0)?,
+            destination: r.get(1)?,
+            destination_ref: r.get(2)?,
+            assigned_at: r.get(3)?,
+            notes: r.get(4)?,
+        }))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    Ok(BatchMargenDetail {
+        summary,
+        linked_sales,
+        pending_items,
+        free_units,
+    })
+}
+
+#[tauri::command]
+async fn cmd_get_batch_margen_breakdown(import_id: String) -> Result<BatchMargenDetail> {
+    impl_get_batch_margen_breakdown(&import_id)
+}
+
+/// Global aggregates of margen across closed batches YTD (current year).
+/// Powers the header pulso bar of MargenRealTab.
+pub fn impl_get_margen_pulso() -> Result<MargenPulso> {
+    let conn = open_db()?;
+
+    // YTD = current year (substr paid_at vs strftime year)
+    let n_batches: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM imports
+         WHERE status = 'closed'
+           AND substr(COALESCE(arrived_at, paid_at), 1, 4) = strftime('%Y', 'now', 'localtime')",
+        [], |r| r.get(0),
+    ).unwrap_or(0);
+
+    let landed_total: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(total_landed_gtq), 0) FROM imports
+         WHERE status = 'closed'
+           AND substr(COALESCE(arrived_at, paid_at), 1, 4) = strftime('%Y', 'now', 'localtime')",
+        [], |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    let revenue_total: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(si.unit_price), 0)
+         FROM sale_items si
+         INNER JOIN imports i ON i.import_id = si.import_id
+         WHERE i.status = 'closed'
+           AND substr(COALESCE(i.arrived_at, i.paid_at), 1, 4) = strftime('%Y', 'now', 'localtime')",
+        [], |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    // Capital amarrado: SUM(COALESCE(import_items.unit_cost_gtq, imports.unit_cost)) WHERE status='pending'
+    // across all closed batches YTD. Single source post-R6 schema (NO UNION needed).
+    let capital_amarrado: f64 = conn.query_row(
+        "SELECT COALESCE(SUM(COALESCE(ii.unit_cost_gtq, i.unit_cost)), 0)
+         FROM import_items ii
+         INNER JOIN imports i ON i.import_id = ii.import_id
+         WHERE ii.status = 'pending'
+           AND i.status = 'closed'
+           AND substr(COALESCE(i.arrived_at, i.paid_at), 1, 4) = strftime('%Y', 'now', 'localtime')",
+        [], |r| r.get(0),
+    ).unwrap_or(0.0);
+
+    let margen_total = revenue_total - landed_total;
+
+    // Best/worst batch by margen_pct: iterate over all closed batches, compute pct per batch
+    // Cheaper than complex SQL with subquery.
+    let mut stmt = conn.prepare(
+        "SELECT import_id FROM imports WHERE status = 'closed'
+           AND substr(COALESCE(arrived_at, paid_at), 1, 4) = strftime('%Y', 'now', 'localtime')"
+    )?;
+    let import_ids: Vec<String> = stmt
+        .query_map([], |r| r.get::<_, String>(0))?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    let mut pcts: Vec<(String, f64)> = vec![];
+    for id in &import_ids {
+        let s = compute_batch_summary(&conn, id)?;
+        if let Some(pct) = s.margen_pct {
+            pcts.push((id.clone(), pct));
+        }
+    }
+
+    let margen_pct_avg = if !pcts.is_empty() {
+        Some(pcts.iter().map(|(_, p)| p).sum::<f64>() / pcts.len() as f64)
+    } else {
+        None
+    };
+
+    let best = pcts.iter().max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    let worst = pcts.iter().min_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    Ok(MargenPulso {
+        n_batches_closed: n_batches,
+        revenue_total_ytd_gtq: revenue_total,
+        landed_total_ytd_gtq: landed_total,
+        margen_total_ytd_gtq: margen_total,
+        margen_pct_avg,
+        best_batch_id: best.map(|(id, _)| id.clone()),
+        best_batch_margen_pct: best.map(|(_, p)| *p),
+        worst_batch_id: worst.map(|(id, _)| id.clone()),
+        worst_batch_margen_pct: worst.map(|(_, p)| *p),
+        capital_amarrado_gtq: capital_amarrado,
+    })
+}
+
+#[tauri::command]
+async fn cmd_get_margen_pulso() -> Result<MargenPulso> {
+    impl_get_margen_pulso()
+}
+
+// ─── R4: Free units ledger ──────────────────────────────────────────
+//
+// Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
+//
+// NULL convention para `destination` (decisión Diego 2026-04-28):
+// - destination: None  = sin asignar (default al INSERT desde close_import_proportional)
+// - destination: Some(s) = asignada a 'vip' | 'mystery' | 'garantizada' | 'personal'
+// - destination_ref: customer_id si destination='vip' · texto libre para los demás
+// - cmd_unassign_free_unit resetea destination a NULL (NO a la string 'unassigned')
+// - VALID_FREE_DESTINATIONS Rust constant SOLO contiene los 4 destinos reales (no 'unassigned')
+
+const VALID_FREE_DESTINATIONS: &[&str] = &["vip", "mystery", "garantizada", "personal"];
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FreeUnit {
+    pub free_unit_id: i64,
+    pub import_id: String,
+    pub family_id: Option<String>,
+    pub jersey_id: Option<String>,
+    pub destination: Option<String>,
+    pub destination_ref: Option<String>,
+    pub assigned_at: Option<String>,
+    pub assigned_by: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: String,
+    // Joined fields del import (display sin extra query)
+    pub import_supplier: Option<String>,
+    pub import_paid_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FreeUnitFilter {
+    pub import_id: Option<String>,
+    pub destination: Option<String>,
+    pub status: Option<String>, // 'assigned' (NOT NULL) / 'unassigned' (NULL)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AssignFreeUnitInput {
+    pub free_unit_id: i64,
+    pub destination: String,
+    pub destination_ref: Option<String>,
+    pub family_id: Option<String>,
+    pub jersey_id: Option<String>,
+    pub notes: Option<String>,
+}
+
+/// Reads free units with optional filter. Joins `imports` for supplier/paid_at display.
+/// Pure read · no transaction needed.
+pub fn impl_list_free_units(filter: Option<FreeUnitFilter>) -> Result<Vec<FreeUnit>> {
+    let conn = open_db()?;
+
+    let mut sql = String::from(
+        "SELECT fu.free_unit_id, fu.import_id, fu.family_id, fu.jersey_id, \
+                fu.destination, fu.destination_ref, fu.assigned_at, fu.assigned_by, \
+                fu.notes, fu.created_at, i.supplier, i.paid_at \
+         FROM import_free_unit fu \
+         LEFT JOIN imports i ON i.import_id = fu.import_id \
+         WHERE 1=1"
+    );
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+
+    if let Some(ref f) = filter {
+        if let Some(ref imp_id) = f.import_id {
+            sql.push_str(" AND fu.import_id = ?");
+            params.push(Box::new(imp_id.clone()));
+        }
+        if let Some(ref status) = f.status {
+            match status.as_str() {
+                "assigned" => sql.push_str(" AND fu.destination IS NOT NULL"),
+                "unassigned" => sql.push_str(" AND fu.destination IS NULL"),
+                _ => return Err(ErpError::Other(format!("invalid status filter: {}", status))),
+            }
+        }
+        if let Some(ref dest) = f.destination {
+            if dest == "unassigned" {
+                sql.push_str(" AND fu.destination IS NULL");
+            } else {
+                sql.push_str(" AND fu.destination = ?");
+                params.push(Box::new(dest.clone()));
+            }
+        }
+    }
+    sql.push_str(" ORDER BY fu.created_at DESC, fu.free_unit_id DESC");
+
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params_refs.as_slice(), |row| {
+        Ok(FreeUnit {
+            free_unit_id: row.get(0)?,
+            import_id: row.get(1)?,
+            family_id: row.get(2)?,
+            jersey_id: row.get(3)?,
+            destination: row.get(4)?,
+            destination_ref: row.get(5)?,
+            assigned_at: row.get(6)?,
+            assigned_by: row.get(7)?,
+            notes: row.get(8)?,
+            created_at: row.get(9)?,
+            import_supplier: row.get(10)?,
+            import_paid_at: row.get(11)?,
+        })
+    })?;
+
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+async fn cmd_list_free_units(filter: Option<FreeUnitFilter>) -> Result<Vec<FreeUnit>> {
+    impl_list_free_units(filter)
+}
+
+/// Assigns a free unit to a destination. Transactional. Validates:
+/// - destination must be in VALID_FREE_DESTINATIONS (Rust-enforced · spec sec 7)
+/// - free_unit_id must exist + currently unassigned (destination IS NULL)
+/// - if destination='vip', destination_ref must be a valid customer_id
+pub fn impl_assign_free_unit(input: AssignFreeUnitInput) -> Result<FreeUnit> {
+    // 1. validate destination
+    if !VALID_FREE_DESTINATIONS.contains(&input.destination.as_str()) {
+        return Err(ErpError::Other(format!(
+            "invalid destination '{}'; must be one of {:?}",
+            input.destination, VALID_FREE_DESTINATIONS
+        )));
+    }
+
+    // 2. VIP requires destination_ref
+    if input.destination == "vip" && input.destination_ref.is_none() {
+        return Err(ErpError::Other(
+            "destination_ref required when destination='vip' (must be customer_id)".to_string(),
+        ));
+    }
+
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    // 3. fetch + lock current row · ensure exists + unassigned
+    let current_dest: Option<String> = tx.query_row(
+        "SELECT destination FROM import_free_unit WHERE free_unit_id = ?",
+        rusqlite::params![input.free_unit_id],
+        |r| r.get(0),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => {
+            ErpError::NotFound(format!("free_unit_id {}", input.free_unit_id))
+        }
+        other => other.into(),
+    })?;
+    if let Some(existing) = current_dest {
+        return Err(ErpError::Other(format!(
+            "free_unit_id {} already assigned to '{}' · use unassign first",
+            input.free_unit_id, existing
+        )));
+    }
+
+    // 4. if VIP, validate customer_id exists
+    if input.destination == "vip" {
+        let cust_ref = input.destination_ref.as_ref().unwrap();
+        let exists: bool = tx
+            .query_row(
+                "SELECT 1 FROM customers WHERE customer_id = ?",
+                rusqlite::params![cust_ref],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        if !exists {
+            return Err(ErpError::Other(format!(
+                "customer_id '{}' not found",
+                cust_ref
+            )));
+        }
+    }
+
+    // 5. UPDATE row
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    tx.execute(
+        "UPDATE import_free_unit SET \
+           destination = ?, destination_ref = ?, family_id = ?, jersey_id = ?, \
+           assigned_at = ?, assigned_by = 'diego', notes = COALESCE(?, notes) \
+         WHERE free_unit_id = ?",
+        rusqlite::params![
+            input.destination,
+            input.destination_ref,
+            input.family_id,
+            input.jersey_id,
+            now,
+            input.notes,
+            input.free_unit_id
+        ],
+    )?;
+
+    tx.commit()?;
+
+    // 6. re-read + return
+    let target_id = input.free_unit_id;
+    let updated = impl_list_free_units(None)?
+        .into_iter()
+        .find(|fu| fu.free_unit_id == target_id)
+        .ok_or_else(|| ErpError::Other("free unit vanished post-update".to_string()))?;
+    Ok(updated)
+}
+
+#[tauri::command]
+async fn cmd_assign_free_unit(input: AssignFreeUnitInput) -> Result<FreeUnit> {
+    impl_assign_free_unit(input)
+}
+
+/// Resets a free unit to unassigned state. For correcting mistakes.
+/// Idempotent: unassigning an already-unassigned unit returns it unchanged.
+pub fn impl_unassign_free_unit(free_unit_id: i64) -> Result<FreeUnit> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    // verify exists
+    let _: i64 = tx
+        .query_row(
+            "SELECT free_unit_id FROM import_free_unit WHERE free_unit_id = ?",
+            rusqlite::params![free_unit_id],
+            |r| r.get(0),
+        )
+        .map_err(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => {
+                ErpError::NotFound(format!("free_unit_id {}", free_unit_id))
+            }
+            other => other.into(),
+        })?;
+
+    tx.execute(
+        "UPDATE import_free_unit SET \
+           destination = NULL, destination_ref = NULL, \
+           assigned_at = NULL, assigned_by = NULL \
+         WHERE free_unit_id = ?",
+        rusqlite::params![free_unit_id],
+    )?;
+
+    tx.commit()?;
+
+    let updated = impl_list_free_units(None)?
+        .into_iter()
+        .find(|fu| fu.free_unit_id == free_unit_id)
+        .ok_or_else(|| ErpError::Other("free unit vanished post-update".to_string()))?;
+    Ok(updated)
+}
+
+#[tauri::command]
+async fn cmd_unassign_free_unit(free_unit_id: i64) -> Result<FreeUnit> {
+    impl_unassign_free_unit(free_unit_id)
+}
+
+// ─── R5: Supplier Scorecard ─────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContactInfo {
+    pub label: String,           // "WhatsApp · 志鵬 黎"
+    pub payment_method: String,  // "PayPal upfront"
+    pub carrier: String,         // "DHL door-to-door"
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PriceBand {
+    pub base_usd: Option<f64>,         // $11
+    pub patch_usd: Option<f64>,        // $13
+    pub patch_name_usd: Option<f64>,   // $15
+    pub source: String,                // "hardcoded:Bond" | "tbd"
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupplierMetrics {
+    pub supplier: String,
+    pub total_batches: i64,
+    pub closed_batches: i64,
+    pub pipeline_batches: i64,            // status in (paid, in_transit, arrived)
+    pub lead_time_avg_days: Option<f64>,
+    pub lead_time_p50_days: Option<f64>,
+    pub lead_time_p95_days: Option<f64>,
+    pub lead_time_n: i64,                 // sample size for transparency
+    pub total_landed_gtq_ytd: f64,        // sum closed batches · current year
+    pub cost_accuracy_pct: Option<f64>,   // None hasta que existan disputes log (R5 escalado)
+    pub next_expected_arrival: Option<String>,  // earliest paid_at + avg_lead among non-closed
+    pub last_batch_paid_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupplierBatchSummary {
+    pub import_id: String,
+    pub paid_at: Option<String>,
+    pub arrived_at: Option<String>,
+    pub status: String,
+    pub n_units: Option<i64>,
+    pub total_landed_gtq: Option<f64>,
+    pub lead_time_days: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SupplierDetail {
+    pub metrics: SupplierMetrics,
+    pub contact: ContactInfo,
+    pub price_band: PriceBand,
+    pub free_policy_text: String,
+    pub batches: Vec<SupplierBatchSummary>,  // sorted DESC by paid_at
+}
+
+/// Aggregates metrics per DISTINCT supplier from `imports.supplier`.
+/// Returns one row per supplier (today: only Bond · multi-supplier scaffold for v0.5).
+pub fn impl_get_supplier_metrics() -> Result<Vec<SupplierMetrics>> {
+    let conn = open_db()?;
+
+    // 1. Get DISTINCT suppliers (skip NULL/empty)
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT supplier FROM imports
+         WHERE supplier IS NOT NULL AND supplier != ''
+         ORDER BY supplier"
+    )?;
+    let supplier_iter = stmt.query_map([], |row| row.get::<_, String>(0))?;
+    let suppliers: Vec<String> = supplier_iter.collect::<rusqlite::Result<Vec<_>>>()?;
+
+    let mut out = Vec::with_capacity(suppliers.len());
+
+    for supplier in suppliers {
+        // 2. Counts per status bucket
+        let total_batches: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM imports WHERE supplier = ?1",
+            rusqlite::params![&supplier],
+            |row| row.get(0),
+        )?;
+        let closed_batches: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM imports WHERE supplier = ?1 AND status = 'closed'",
+            rusqlite::params![&supplier],
+            |row| row.get(0),
+        )?;
+        let pipeline_batches: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM imports WHERE supplier = ?1
+             AND status IN ('paid', 'in_transit', 'arrived')",
+            rusqlite::params![&supplier],
+            |row| row.get(0),
+        )?;
+
+        // 3. Collect lead_time_days for closed batches → Rust-side percentile
+        let mut lt_stmt = conn.prepare(
+            "SELECT lead_time_days FROM imports
+             WHERE supplier = ?1 AND status = 'closed' AND lead_time_days IS NOT NULL"
+        )?;
+        let lt_iter = lt_stmt.query_map(rusqlite::params![&supplier], |row| row.get::<_, i64>(0))?;
+        let lead_times: Vec<f64> = lt_iter
+            .filter_map(|r| r.ok())
+            .map(|v| v as f64)
+            .collect();
+        let lead_time_n = lead_times.len() as i64;
+
+        let lead_time_avg_days = if lead_times.is_empty() {
+            None
+        } else {
+            Some(lead_times.iter().sum::<f64>() / lead_times.len() as f64)
+        };
+        let lead_time_p50_days = percentile_at(&lead_times, 0.50);
+        let lead_time_p95_days = percentile_at(&lead_times, 0.95);
+
+        // 4. Total landed GTQ YTD (current year closed)
+        let total_landed_gtq_ytd: f64 = conn.query_row(
+            "SELECT COALESCE(SUM(total_landed_gtq), 0.0) FROM imports
+             WHERE supplier = ?1 AND status = 'closed'
+             AND strftime('%Y', paid_at) = strftime('%Y', 'now', 'localtime')",
+            rusqlite::params![&supplier],
+            |row| row.get(0),
+        )?;
+
+        // 5. Last batch paid_at
+        let last_batch_paid_at: Option<String> = conn.query_row(
+            "SELECT MAX(paid_at) FROM imports WHERE supplier = ?1 AND paid_at IS NOT NULL",
+            rusqlite::params![&supplier],
+            |row| row.get(0),
+        ).ok().flatten();
+
+        // 6. Next expected arrival: earliest paid_at + avg_lead among non-closed/non-cancelled
+        // Only computable if avg_lead exists.
+        let next_expected_arrival: Option<String> = if let Some(avg) = lead_time_avg_days {
+            let earliest_paid: Option<String> = conn.query_row(
+                "SELECT MIN(paid_at) FROM imports
+                 WHERE supplier = ?1
+                 AND status IN ('paid', 'in_transit', 'arrived')
+                 AND paid_at IS NOT NULL",
+                rusqlite::params![&supplier],
+                |row| row.get(0),
+            ).ok().flatten();
+            earliest_paid.and_then(|paid| {
+                chrono::NaiveDate::parse_from_str(&paid, "%Y-%m-%d").ok().map(|d| {
+                    let eta = d + chrono::Duration::days(avg.round() as i64);
+                    eta.format("%Y-%m-%d").to_string()
+                })
+            })
+        } else {
+            None
+        };
+
+        // 7. cost_accuracy_pct: None until disputes log exists (per spec ambiguity escalation)
+        // See "Open questions for Diego" section · displayed as "Datos insuficientes" in UI.
+        let cost_accuracy_pct: Option<f64> = None;
+
+        out.push(SupplierMetrics {
+            supplier,
+            total_batches,
+            closed_batches,
+            pipeline_batches,
+            lead_time_avg_days,
+            lead_time_p50_days,
+            lead_time_p95_days,
+            lead_time_n,
+            total_landed_gtq_ytd,
+            cost_accuracy_pct,
+            next_expected_arrival,
+            last_batch_paid_at,
+        });
+    }
+
+    Ok(out)
+}
+
+#[tauri::command]
+async fn cmd_get_supplier_metrics() -> Result<Vec<SupplierMetrics>> {
+    impl_get_supplier_metrics()
+}
+
+/// Returns rich detail for a single supplier: metrics + contact + price_band + free_policy + batches[].
+/// For Bond: price_band hardcoded per spec sec 4.5 line 274.
+/// For unknown suppliers: price_band returned con source="tbd" + None values (UI muestra "datos pendientes").
+pub fn impl_get_supplier_detail(supplier: String) -> Result<SupplierDetail> {
+    // Reuse list aggregator + filter
+    let all = impl_get_supplier_metrics()?;
+    let metrics = all
+        .into_iter()
+        .find(|m| m.supplier == supplier)
+        .ok_or_else(|| ErpError::NotFound(format!("Supplier '{}'", supplier)))?;
+
+    // Contact info (hardcoded for Bond · placeholder for others)
+    let (contact, free_policy_text, price_band) = if supplier == BOND_SUPPLIER_NAME {
+        (
+            ContactInfo {
+                label: BOND_CONTACT_LABEL.to_string(),
+                payment_method: BOND_PAYMENT_METHOD.to_string(),
+                carrier: BOND_CARRIER.to_string(),
+            },
+            BOND_FREE_POLICY_TEXT.to_string(),
+            PriceBand {
+                base_usd: Some(BOND_PRICE_BASE_USD),
+                patch_usd: Some(BOND_PRICE_PATCH_USD),
+                patch_name_usd: Some(BOND_PRICE_PATCH_NAME_USD),
+                source: "hardcoded:Bond".to_string(),
+            },
+        )
+    } else {
+        (
+            ContactInfo {
+                label: "Datos pendientes".to_string(),
+                payment_method: "n/a".to_string(),
+                carrier: "n/a".to_string(),
+            },
+            "n/a".to_string(),
+            PriceBand {
+                base_usd: None,
+                patch_usd: None,
+                patch_name_usd: None,
+                source: "tbd".to_string(),
+            },
+        )
+    };
+
+    // Batches list (DESC by paid_at, NULLS LAST)
+    let conn = open_db()?;
+    let mut stmt = conn.prepare(
+        "SELECT import_id, paid_at, arrived_at, status, n_units, total_landed_gtq, lead_time_days
+         FROM imports
+         WHERE supplier = ?1
+         ORDER BY paid_at DESC NULLS LAST, created_at DESC"
+    )?;
+    let batches_iter = stmt.query_map(rusqlite::params![&supplier], |row| {
+        Ok(SupplierBatchSummary {
+            import_id: row.get(0)?,
+            paid_at: row.get(1)?,
+            arrived_at: row.get(2)?,
+            status: row.get(3)?,
+            n_units: row.get(4)?,
+            total_landed_gtq: row.get(5)?,
+            lead_time_days: row.get(6)?,
+        })
+    })?;
+    let batches: Vec<SupplierBatchSummary> = batches_iter.collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(SupplierDetail {
+        metrics,
+        contact,
+        price_band,
+        free_policy_text,
+        batches,
+    })
+}
+
+#[tauri::command]
+async fn cmd_get_supplier_detail(supplier: String) -> Result<SupplierDetail> {
+    impl_get_supplier_detail(supplier)
+}
+
+// ─── R5 BONUS: "Más pedidos sin publicar" widget (feedback loop publishing) ───
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnpublishedRequest {
+    pub family_id: String,
+    pub n_requests: i32,        // count across all import_items (any status)
+    pub n_pending: i32,         // count where status='pending'
+    pub n_assigned: i32,        // count where customer_id IS NOT NULL
+    pub n_stock: i32,           // count where customer_id IS NULL
+    pub last_requested_at: Option<String>,
+    pub published: bool,        // computed: family_id present in catalog.json
+}
+
+/// Helper: lee `catalog.json` (path via catalog_path() en lib.rs) y devuelve set de family_ids publicados.
+/// Si el archivo no existe o falla parse, retorna Err (caller decide fallback).
+/// Soporta ELCLUB_CATALOG_PATH env override (ya usado en R2 tests).
+fn read_catalog_family_ids() -> std::result::Result<std::collections::HashSet<String>, String> {
+    use std::collections::HashSet;
+    let path = std::env::var("ELCLUB_CATALOG_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| catalog_path());
+    let content = std::fs::read_to_string(&path).map_err(|e| format!("read catalog.json: {e}"))?;
+    let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| format!("parse catalog.json: {e}"))?;
+    let families = json.get("families").and_then(|v| v.as_array())
+        .ok_or_else(|| "catalog.json missing 'families' array".to_string())?;
+    let mut set = HashSet::new();
+    for f in families {
+        if let Some(fid) = f.get("family_id").and_then(|v| v.as_str()) {
+            set.insert(fid.to_string());
+        }
+    }
+    Ok(set)
+}
+
+/// Aggregates import_items by family_id + cross-references catalog.json para identificar
+/// los family_ids con más pedidos pendientes de publicar (loop de feedback prioridad publishing).
+///
+/// `limit` default = 10 si None. Filtra a `published=false` antes de retornar (UI no muestra ya-publicados).
+pub async fn impl_get_most_requested_unpublished(limit: Option<i32>) -> std::result::Result<Vec<UnpublishedRequest>, String> {
+    let take = limit.unwrap_or(10).max(1).min(100);
+    let conn = open_db().map_err(|e| e.to_string())?;
+
+    // 1. Aggregate by family_id (any status) · ORDER BY count DESC
+    let mut stmt = conn.prepare(
+        "SELECT family_id,
+                COUNT(*) AS n_requests,
+                SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS n_pending,
+                SUM(CASE WHEN customer_id IS NOT NULL THEN 1 ELSE 0 END) AS n_assigned,
+                SUM(CASE WHEN customer_id IS NULL THEN 1 ELSE 0 END) AS n_stock,
+                MAX(created_at) AS last_requested_at
+         FROM import_items
+         GROUP BY family_id
+         ORDER BY n_requests DESC, last_requested_at DESC
+         LIMIT ?1"
+    ).map_err(|e| e.to_string())?;
+
+    let rows = stmt.query_map(rusqlite::params![take * 3], |row| {  // 3x buffer pre-filter
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, i32>(1)?,
+            row.get::<_, i32>(2)?,
+            row.get::<_, i32>(3)?,
+            row.get::<_, i32>(4)?,
+            row.get::<_, Option<String>>(5)?,
+        ))
+    }).map_err(|e| e.to_string())?;
+
+    let raw: Vec<_> = rows.collect::<rusqlite::Result<Vec<_>>>().map_err(|e| e.to_string())?;
+
+    // 2. Read catalog.json to identify published family_ids
+    let catalog_families: std::collections::HashSet<String> = read_catalog_family_ids()
+        .unwrap_or_else(|_| std::collections::HashSet::new());
+
+    // 3. Build response · filter to unpublished only
+    let mut out = Vec::new();
+    for (family_id, n_requests, n_pending, n_assigned, n_stock, last_requested_at) in raw {
+        let published = catalog_families.contains(&family_id);
+        if !published {
+            out.push(UnpublishedRequest {
+                family_id,
+                n_requests,
+                n_pending,
+                n_assigned,
+                n_stock,
+                last_requested_at,
+                published,
+            });
+        }
+        if out.len() >= take as usize { break; }
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+async fn cmd_get_most_requested_unpublished(limit: Option<i32>) -> std::result::Result<Vec<UnpublishedRequest>, String> {
+    impl_get_most_requested_unpublished(limit).await
+}
+
+// ─── R4.1: Catalog modelos picker (cascade: Tipo → Equipo → Modelo) ────
+//
+// Reads catalog.json (533 families with `modelos[]`) and emits a flat list of
+// ModeloOption rows for the WishlistItemModal cascade picker. Replaces the
+// "memorize the SKU" UX with Tipo de equipo (confederation) → Equipo → Modelo.
+
+pub async fn impl_list_catalog_modelos() -> Result<Vec<ModeloOption>> {
+    let path = std::env::var("ELCLUB_CATALOG_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| catalog_path());
+    if !path.exists() {
+        return Err(ErpError::Other(format!("catalog.json not found at {:?}", path)));
+    }
+    let raw = std::fs::read_to_string(&path)?;
+    let catalog: serde_json::Value = serde_json::from_str(&raw)
+        .map_err(|e| ErpError::Other(format!("invalid catalog.json: {}", e)))?;
+    let families = catalog.as_array().ok_or_else(|| ErpError::Other("catalog root not array".into()))?;
+
+    let mut out: Vec<ModeloOption> = Vec::new();
+    for fam in families {
+        let family_parent_id = fam.get("family_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let team = fam.get("team").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let season = fam.get("season").and_then(|v| v.as_str()).map(String::from);
+        let variant = fam.get("variant").and_then(|v| v.as_str()).map(String::from);
+        let published = fam.get("published").and_then(|v| v.as_bool()).unwrap_or(false);
+        let confederation = fam.get("meta_confederation").and_then(|v| v.as_str()).map(String::from);
+        let country = fam.get("meta_country").and_then(|v| v.as_str()).map(String::from);
+
+        if let Some(modelos) = fam.get("modelos").and_then(|m| m.as_array()) {
+            for m in modelos {
+                let sku = match m.get("sku").and_then(|v| v.as_str()) {
+                    Some(s) if !s.is_empty() => s.to_string(),
+                    _ => continue,  // skip modelos without SKU (incomplete data)
+                };
+                let modelo_type = m.get("type").and_then(|v| v.as_str()).map(String::from);
+                let sleeve = m.get("sleeve").and_then(|v| v.as_str()).map(String::from);
+                let price = m.get("price").and_then(|v| v.as_f64());
+                let display = format!(
+                    "{} · {} {} · {}/{}",
+                    sku,
+                    season.as_deref().unwrap_or(""),
+                    variant.as_deref().unwrap_or(""),
+                    modelo_type.as_deref().unwrap_or("?"),
+                    sleeve.as_deref().unwrap_or("?")
+                );
+                out.push(ModeloOption {
+                    sku,
+                    family_parent_id: family_parent_id.clone(),
+                    team: team.clone(),
+                    season: season.clone(),
+                    variant: variant.clone(),
+                    modelo_type,
+                    sleeve,
+                    price,
+                    published,
+                    confederation: confederation.clone(),
+                    country: country.clone(),
+                    display,
+                });
+            }
+        }
+    }
+
+    // Sort: published first, then by team, then by sku
+    out.sort_by(|a, b| {
+        b.published.cmp(&a.published)
+            .then_with(|| a.team.cmp(&b.team))
+            .then_with(|| a.sku.cmp(&b.sku))
+    });
+
+    Ok(out)
+}
+
+#[tauri::command]
+async fn cmd_list_catalog_modelos() -> std::result::Result<Vec<ModeloOption>, String> {
+    impl_list_catalog_modelos().await.map_err(|e| e.to_string())
+}
+
+// ─── R2: Wishlist + Promote-to-batch ────
+//
+// Convention (per lib.rs:2730-2742): impl_X (pub testable) + cmd_X (#[tauri::command] shim).
+// All 5 R2 commands (list/create/update/cancel/promote) follow this split.
+//
+// D7=B (post-v0.4.0 fix): catalog_modelo_sku_exists() validates the modelo SKU
+// (e.g. "ARG-2026-L-FS"), not the family parent ID (e.g. "argentina-2026-home").
+// catalog_family_exists() is retained for any future caller needing parent lookup.
+// Tests override catalog path via env var ELCLUB_CATALOG_PATH for fixture isolation.
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WishlistItem {
+    pub wishlist_item_id:      i64,
+    pub family_id:             String,
+    pub jersey_id:             Option<String>,
+    pub size:                  Option<String>,
+    pub player_name:           Option<String>,
+    pub player_number:         Option<i64>,
+    pub patch:                 Option<String>,
+    pub version:               Option<String>,
+    pub customer_id:           Option<String>,
+    pub expected_usd:          Option<f64>,
+    pub status:                String,
+    pub promoted_to_import_id: Option<String>,
+    pub created_at:            String,
+    pub notes:                 Option<String>,
+}
+
+/// Legacy D7=B validation (parent-level): returns true if `family_id` exists in catalog.json
+/// at the family level (kebab-case parent like "argentina-2026-home"). Retained for any
+/// future caller needing parent lookup; wishlist now uses catalog_modelo_sku_exists() instead.
+/// Overridable via ELCLUB_CATALOG_PATH env var (tests use fixtures).
+#[allow(dead_code)]
+fn catalog_family_exists(family_id: &str) -> Result<bool> {
+    let path = std::env::var("ELCLUB_CATALOG_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| catalog_path());
+
+    if !path.exists() {
+        return Err(ErpError::Other(format!(
+            "catalog.json not found at {:?} · cannot validate family_id (D7=B)",
+            path
+        )));
+    }
+
+    let raw = std::fs::read_to_string(&path).map_err(|e| {
+        ErpError::Other(format!("failed reading catalog.json: {}", e))
+    })?;
+    let catalog: serde_json::Value = serde_json::from_str(&raw).map_err(|e| {
+        ErpError::Other(format!("invalid catalog.json: {}", e))
+    })?;
+
+    let families = catalog.as_array().ok_or_else(|| {
+        ErpError::Other("catalog.json root not an array".into())
+    })?;
+
+    Ok(families.iter().any(|f| {
+        f.get("family_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s == family_id)
+            .unwrap_or(false)
+    }))
+}
+
+/// D7=B (corrected): validates that `sku` exists as a `modelo.sku` in catalog.json
+/// (NOT as a family.family_id parent). The wishlist stores modelo SKUs.
+fn catalog_modelo_sku_exists(sku: &str) -> Result<bool> {
+    let path = std::env::var("ELCLUB_CATALOG_PATH")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| catalog_path());
+    if !path.exists() {
+        return Err(ErpError::Other(format!(
+            "catalog.json not found at {:?} · cannot validate SKU (D7=B)", path
+        )));
+    }
+    let raw = std::fs::read_to_string(&path).map_err(|e| {
+        ErpError::Other(format!("failed reading catalog.json: {}", e))
+    })?;
+    let catalog: serde_json::Value = serde_json::from_str(&raw).map_err(|e| {
+        ErpError::Other(format!("invalid catalog.json: {}", e))
+    })?;
+    let families = catalog.as_array().ok_or_else(|| {
+        ErpError::Other("catalog.json root not an array".into())
+    })?;
+    Ok(families.iter().any(|f| {
+        f.get("modelos")
+            .and_then(|m| m.as_array())
+            .map(|modelos| modelos.iter().any(|m| {
+                m.get("sku").and_then(|s| s.as_str()).map(|s| s == sku).unwrap_or(false)
+            }))
+            .unwrap_or(false)
+    }))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModeloOption {
+    pub sku:                String,           // "ARG-2026-L-FS" · the modelo identifier
+    pub family_parent_id:   String,           // "argentina-2026-home" · catalog family_id
+    pub team:               String,           // "Argentina"
+    pub season:             Option<String>,   // "2026"
+    pub variant:            Option<String>,   // "home"/"away"/"third"/"special"
+    pub modelo_type:        Option<String>,   // "fan_adult"/"player_adult"/"woman"/"kid"/"baby"/"retro_adult"
+    pub sleeve:             Option<String>,   // "short"/"long"
+    pub price:              Option<f64>,
+    pub published:          bool,
+    pub confederation:      Option<String>,   // "UEFA"/"Conmebol"/"CAF"/"Concacaf"/"AFC" · null for clubs
+    pub country:            Option<String>,   // meta_country · null for clubs
+    pub display:            String,           // "ARG-2026-L-FS · Argentina 2026 home · fan_adult/short"
+}
+
+/// Re-reads canonical WishlistItem row by id. Used post-tx by impl_X commands.
+fn read_wishlist_item_by_id(conn: &rusqlite::Connection, wishlist_item_id: i64) -> Result<WishlistItem> {
+    conn.query_row(
+        "SELECT wishlist_item_id, family_id, jersey_id, size, player_name, player_number,
+                patch, version, customer_id, expected_usd, status, promoted_to_import_id,
+                created_at, notes
+         FROM import_wishlist WHERE wishlist_item_id = ?1",
+        rusqlite::params![wishlist_item_id],
+        |row| Ok(WishlistItem {
+            wishlist_item_id:      row.get(0)?,
+            family_id:             row.get(1)?,
+            jersey_id:             row.get(2)?,
+            size:                  row.get(3)?,
+            player_name:           row.get(4)?,
+            player_number:         row.get(5)?,
+            patch:                 row.get(6)?,
+            version:               row.get(7)?,
+            customer_id:           row.get(8)?,
+            expected_usd:          row.get(9)?,
+            status:                row.get(10)?,
+            promoted_to_import_id: row.get(11)?,
+            created_at:            row.get(12)?,
+            notes:                 row.get(13)?,
+        }),
+    ).map_err(ErpError::from)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListWishlistInput {
+    pub status: Option<String>,  // 'active' | 'promoted' | 'cancelled' | None (all)
+}
+
+/// List wishlist items, optionally filtered by status. Default: all items, ordered by created_at DESC.
+pub async fn impl_list_wishlist(input: ListWishlistInput) -> Result<Vec<WishlistItem>> {
+    let conn = open_db()?;
+    let (sql, params): (&str, Vec<Box<dyn rusqlite::ToSql>>) = match input.status.as_deref() {
+        Some(s) if !s.is_empty() => (
+            "SELECT wishlist_item_id, family_id, jersey_id, size, player_name, player_number,
+                    patch, version, customer_id, expected_usd, status, promoted_to_import_id,
+                    created_at, notes
+             FROM import_wishlist WHERE status = ?1
+             ORDER BY created_at DESC, wishlist_item_id DESC",
+            vec![Box::new(s.to_string())],
+        ),
+        _ => (
+            "SELECT wishlist_item_id, family_id, jersey_id, size, player_name, player_number,
+                    patch, version, customer_id, expected_usd, status, promoted_to_import_id,
+                    created_at, notes
+             FROM import_wishlist
+             ORDER BY created_at DESC, wishlist_item_id DESC",
+            vec![],
+        ),
+    };
+
+    let mut stmt = conn.prepare(sql)?;
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
+    let rows = stmt.query_map(&param_refs[..], |row| {
+        Ok(WishlistItem {
+            wishlist_item_id:      row.get(0)?,
+            family_id:             row.get(1)?,
+            jersey_id:             row.get(2)?,
+            size:                  row.get(3)?,
+            player_name:           row.get(4)?,
+            player_number:         row.get(5)?,
+            patch:                 row.get(6)?,
+            version:               row.get(7)?,
+            customer_id:           row.get(8)?,
+            expected_usd:          row.get(9)?,
+            status:                row.get(10)?,
+            promoted_to_import_id: row.get(11)?,
+            created_at:            row.get(12)?,
+            notes:                 row.get(13)?,
+        })
+    })?;
+
+    let mut items = Vec::new();
+    for r in rows {
+        items.push(r?);
+    }
+    Ok(items)
+}
+
+#[tauri::command]
+async fn cmd_list_wishlist(input: ListWishlistInput) -> Result<Vec<WishlistItem>> {
+    impl_list_wishlist(input).await
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateWishlistItemInput {
+    pub family_id:     String,
+    pub jersey_id:     Option<String>,
+    pub size:          Option<String>,
+    pub player_name:   Option<String>,
+    pub player_number: Option<i64>,
+    pub patch:         Option<String>,
+    pub version:       Option<String>,
+    pub customer_id:   Option<String>,
+    pub expected_usd:  Option<f64>,
+    pub notes:         Option<String>,
+}
+
+/// D7=B: family_id must exist in catalog.json. Validates server-side before INSERT.
+pub async fn impl_create_wishlist_item(input: CreateWishlistItemInput) -> Result<WishlistItem> {
+    if input.family_id.trim().is_empty() {
+        return Err(ErpError::Other("family_id is required".into()));
+    }
+
+    // D7=B validation (corrected · validates modelo SKU, not family parent)
+    if !catalog_modelo_sku_exists(&input.family_id)? {
+        return Err(ErpError::Other(format!(
+            "SKU '{}' no existe como modelo en catalog (D7=B) · audit/scrape it first via Vault",
+            input.family_id
+        )));
+    }
+
+    // Note: version is now auto-populated from the selected modelo (e.g. "fan_adult/short"),
+    // so the legacy fan/fan-w/player whitelist is gone. Free-form string accepted.
+
+    // Validate expected_usd if provided
+    if let Some(usd) = input.expected_usd {
+        if usd < 0.0 {
+            return Err(ErpError::Other("expected_usd cannot be negative".into()));
+        }
+    }
+
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    tx.execute(
+        "INSERT INTO import_wishlist
+         (family_id, jersey_id, size, player_name, player_number, patch, version,
+          customer_id, expected_usd, status, notes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'active', ?10)",
+        rusqlite::params![
+            input.family_id,
+            input.jersey_id,
+            input.size,
+            input.player_name,
+            input.player_number,
+            input.patch,
+            input.version,
+            input.customer_id,
+            input.expected_usd,
+            input.notes,
+        ],
+    )?;
+
+    let new_id = tx.last_insert_rowid();
+    tx.commit()?;
+
+    read_wishlist_item_by_id(&conn, new_id)
+}
+
+#[tauri::command]
+async fn cmd_create_wishlist_item(input: CreateWishlistItemInput) -> Result<WishlistItem> {
+    impl_create_wishlist_item(input).await
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateWishlistItemInput {
+    pub wishlist_item_id: i64,
+    pub size:             Option<String>,
+    pub player_name:      Option<String>,
+    pub player_number:    Option<i64>,
+    pub patch:            Option<String>,
+    pub version:          Option<String>,
+    pub customer_id:      Option<String>,
+    pub expected_usd:     Option<f64>,
+    pub notes:            Option<String>,
+    // Note: family_id NOT editable post-create (would require re-validation + status implications)
+}
+
+/// Edit a wishlist item. Status guard: only 'active' items can be edited.
+pub async fn impl_update_wishlist_item(input: UpdateWishlistItemInput) -> Result<WishlistItem> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    let status: String = tx.query_row(
+        "SELECT status FROM import_wishlist WHERE wishlist_item_id = ?1",
+        rusqlite::params![input.wishlist_item_id],
+        |row| row.get(0),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => {
+            ErpError::NotFound(format!("Wishlist item {}", input.wishlist_item_id))
+        }
+        other => other.into(),
+    })?;
+
+    if status != "active" {
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "cannot update wishlist item with status '{}' (only 'active' is editable)",
+            status
+        )));
+    }
+
+    // Note: version legacy whitelist (fan/fan-w/player) removed · cascade picker
+    // auto-populates as "{type}/{sleeve}" (e.g. "fan_adult/short") from selected modelo.
+    if let Some(usd) = input.expected_usd {
+        if usd < 0.0 {
+            tx.rollback()?;
+            return Err(ErpError::Other("expected_usd cannot be negative".into()));
+        }
+    }
+
+    tx.execute(
+        "UPDATE import_wishlist
+         SET size          = COALESCE(?1, size),
+             player_name   = COALESCE(?2, player_name),
+             player_number = COALESCE(?3, player_number),
+             patch         = COALESCE(?4, patch),
+             version       = COALESCE(?5, version),
+             customer_id   = COALESCE(?6, customer_id),
+             expected_usd  = COALESCE(?7, expected_usd),
+             notes         = COALESCE(?8, notes)
+         WHERE wishlist_item_id = ?9",
+        rusqlite::params![
+            input.size,
+            input.player_name,
+            input.player_number,
+            input.patch,
+            input.version,
+            input.customer_id,
+            input.expected_usd,
+            input.notes,
+            input.wishlist_item_id,
+        ],
+    )?;
+
+    tx.commit()?;
+
+    read_wishlist_item_by_id(&conn, input.wishlist_item_id)
+}
+
+#[tauri::command]
+async fn cmd_update_wishlist_item(input: UpdateWishlistItemInput) -> Result<WishlistItem> {
+    impl_update_wishlist_item(input).await
+}
+
+/// Soft-delete a wishlist item by setting status='cancelled'.
+/// Idempotent: cancelling already-cancelled is OK.
+/// Cannot cancel a 'promoted' item (would orphan the linked import row).
+pub async fn impl_cancel_wishlist_item(wishlist_item_id: i64) -> Result<WishlistItem> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    let status: String = tx.query_row(
+        "SELECT status FROM import_wishlist WHERE wishlist_item_id = ?1",
+        rusqlite::params![wishlist_item_id],
+        |row| row.get(0),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => {
+            ErpError::NotFound(format!("Wishlist item {}", wishlist_item_id))
+        }
+        other => other.into(),
+    })?;
+
+    if status == "promoted" {
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "cannot cancel wishlist item already promoted to a batch (use the batch's cancel flow)"
+        )));
+    }
+
+    if status != "cancelled" {
+        tx.execute(
+            "UPDATE import_wishlist SET status = 'cancelled' WHERE wishlist_item_id = ?1",
+            rusqlite::params![wishlist_item_id],
+        )?;
+    }
+
+    tx.commit()?;
+
+    read_wishlist_item_by_id(&conn, wishlist_item_id)
+}
+
+#[tauri::command]
+async fn cmd_cancel_wishlist_item(wishlist_item_id: i64) -> Result<WishlistItem> {
+    impl_cancel_wishlist_item(wishlist_item_id).await
+}
+
+// ─── R2: Promote Wishlist → Batch (transactional · CORE COMMAND) ────
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromoteWishlistInput {
+    pub wishlist_item_ids: Vec<i64>,
+    pub import_id:         String,
+    pub status:            String,            // 'paid' (default UI · paid_at required) or 'draft' (paid_at optional)
+    pub paid_at:           Option<String>,    // required iff status='paid'
+    pub supplier:          Option<String>,
+    pub bruto_usd:         f64,               // sum of expected_usd OR manual override (must be > 0)
+    pub fx:                f64,
+    pub notes:             Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PromoteWishlistResult {
+    pub import:             Import,
+    pub import_items_count: i64,
+}
+
+/// Promote a set of wishlist items to a new import.
+///
+/// DESTINATION (Diego decision 2026-04-28 ~19:00 · supersedes earlier split):
+/// - ALL items go into single table `import_items` (created by R6 apply_imp_schema.py)
+/// - customer_id nullable column distinguishes: NULL = stock-future · NOT NULL = assigned
+/// - Status defaults to 'pending' on insert (will become 'arrived' on close_import in R4)
+/// - sale_item_id and jersey_id_published populated later by Comercial / Inventario flows (v0.5+)
+///
+/// REASON for single-table redesign: peer review found the earlier split (sale_items vs jerseys)
+/// inejecutable due to schema constraints — sale_items.sale_id NOT NULL · sale_items.customer_id
+/// doesn't exist · jerseys CHECK constraints (variant in {home,away,third,special}) incompatible.
+///
+/// STATUS handling (Diego decision 2026-04-28 ~18:30):
+/// - Default UI: status='paid' + paid_at=today (Diego pays supplier the moment he promotes most of the time)
+/// - Toggle OFF: status='draft' + paid_at=NULL (rare · queue without committing to payment yet)
+/// - After 'paid', Diego can manually call `cmd_mark_in_transit` (paid → in_transit) before arrival.
+///
+/// EVENTS (peer review 2026-04-28 ~19:00): inbox_events table EXISTS in production (Comercial-shipped).
+/// We INSERT a synchronous "import_promoted" row inside the same tx · graceful degradation if the
+/// table is missing (logged, not raised). Time-based events (wishlist > 20 · assigned > 30d) need
+/// cron infrastructure → deferred to post-R6.
+///
+/// Atomic: either all items get linked + import created + wishlist rows updated + event logged, or nothing.
+///
+/// Validations:
+/// - At least 1 wishlist_item_id provided
+/// - import_id format valid (IMP-YYYY-MM-DD)
+/// - import_id does not already exist
+/// - status in {'paid', 'draft'}
+/// - if status='paid' → paid_at REQUIRED (YYYY-MM-DD)
+/// - if status='draft' → paid_at can be None
+/// - All wishlist items exist AND status='active'
+/// - bruto_usd > 0 · fx > 0
+///
+/// On success:
+/// - Inserts imports row (status=input.status, bruto_usd=input.bruto_usd, n_units=count)
+/// - Inserts N rows into import_items (one per promoted wishlist item, status='pending')
+/// - Updates wishlist rows (status='promoted', promoted_to_import_id=new_id)
+/// - Inserts 1 row into inbox_events (type='import_promoted', metadata=summary) · best-effort
+pub async fn impl_promote_wishlist_to_batch(input: PromoteWishlistInput) -> Result<PromoteWishlistResult> {
+    // Validations BEFORE opening tx
+    if input.wishlist_item_ids.is_empty() {
+        return Err(ErpError::Other("must select at least 1 wishlist item to promote".into()));
+    }
+    if !is_valid_import_id(&input.import_id) {
+        return Err(ErpError::Other(format!(
+            "import_id format inválido: '{}' · esperado IMP-YYYY-MM-DD",
+            input.import_id
+        )));
+    }
+    if !["paid", "draft"].contains(&input.status.as_str()) {
+        return Err(ErpError::Other(format!(
+            "status must be 'paid' or 'draft' · got '{}'",
+            input.status
+        )));
+    }
+    if input.status == "paid" {
+        match &input.paid_at {
+            None => return Err(ErpError::Other(
+                "paid_at required when status='paid' (Diego confirmed default toggle ON)".into()
+            )),
+            Some(d) if chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").is_err() => {
+                return Err(ErpError::Other(format!(
+                    "paid_at format inválido: '{}' · esperado YYYY-MM-DD",
+                    d
+                )));
+            }
+            _ => {}
+        }
+    }
+    if let Some(d) = &input.paid_at {
+        // Even when status='draft', if user provided paid_at it must parse
+        if chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").is_err() {
+            return Err(ErpError::Other(format!(
+                "paid_at format inválido: '{}' · esperado YYYY-MM-DD",
+                d
+            )));
+        }
+    }
+    if input.fx <= 0.0 {
+        return Err(ErpError::Other(format!("fx must be > 0 · got {}", input.fx)));
+    }
+    if input.bruto_usd <= 0.0 {
+        return Err(ErpError::Other(format!("bruto_usd must be > 0 · got {}", input.bruto_usd)));
+    }
+
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    // Duplicate import_id guard
+    let import_exists: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM imports WHERE import_id = ?1)",
+        rusqlite::params![&input.import_id],
+        |row| row.get::<_, i64>(0).map(|n| n != 0),
+    )?;
+    if import_exists {
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "Import {} already exists · choose a different import_id",
+            input.import_id
+        )));
+    }
+
+    // Fetch all wishlist items in one query (Vec<WishlistItem>)
+    // Build placeholders for IN clause
+    let placeholders: String = (0..input.wishlist_item_ids.len())
+        .map(|i| format!("?{}", i + 1))
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT wishlist_item_id, family_id, jersey_id, size, player_name, player_number,
+                patch, version, customer_id, expected_usd, status, promoted_to_import_id,
+                created_at, notes
+         FROM import_wishlist
+         WHERE wishlist_item_id IN ({})",
+        placeholders
+    );
+    let mut stmt = tx.prepare(&sql)?;
+    let params_vec: Vec<Box<dyn rusqlite::ToSql>> = input
+        .wishlist_item_ids
+        .iter()
+        .map(|id| Box::new(*id) as Box<dyn rusqlite::ToSql>)
+        .collect();
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|b| b.as_ref()).collect();
+    let rows = stmt.query_map(&param_refs[..], |row| {
+        Ok(WishlistItem {
+            wishlist_item_id:      row.get(0)?,
+            family_id:             row.get(1)?,
+            jersey_id:             row.get(2)?,
+            size:                  row.get(3)?,
+            player_name:           row.get(4)?,
+            player_number:         row.get(5)?,
+            patch:                 row.get(6)?,
+            version:               row.get(7)?,
+            customer_id:           row.get(8)?,
+            expected_usd:          row.get(9)?,
+            status:                row.get(10)?,
+            promoted_to_import_id: row.get(11)?,
+            created_at:            row.get(12)?,
+            notes:                 row.get(13)?,
+        })
+    })?;
+
+    let mut items: Vec<WishlistItem> = Vec::new();
+    for r in rows {
+        items.push(r?);
+    }
+    drop(stmt);
+
+    // Verify ALL requested IDs were found
+    if items.len() != input.wishlist_item_ids.len() {
+        let found_ids: std::collections::HashSet<i64> =
+            items.iter().map(|i| i.wishlist_item_id).collect();
+        let missing: Vec<i64> = input
+            .wishlist_item_ids
+            .iter()
+            .filter(|id| !found_ids.contains(id))
+            .copied()
+            .collect();
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "wishlist items not found: {:?}",
+            missing
+        )));
+    }
+
+    // Verify ALL items have status='active'
+    let non_active: Vec<(i64, String)> = items
+        .iter()
+        .filter(|i| i.status != "active")
+        .map(|i| (i.wishlist_item_id, i.status.clone()))
+        .collect();
+    if !non_active.is_empty() {
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "cannot promote items not active: {:?} (only 'active' items can be promoted)",
+            non_active
+        )));
+    }
+
+    // Compute aggregate stats
+    let n_units: i64 = items.len() as i64;
+    let supplier = input
+        .supplier
+        .as_ref()
+        .filter(|s| !s.trim().is_empty())
+        .cloned()
+        .unwrap_or_else(|| "Bond Soccer Jersey".to_string());
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+    // INSERT imports row · status + bruto_usd come from input (Diego decision: default 'paid', toggle for 'draft')
+    tx.execute(
+        "INSERT INTO imports
+         (import_id, paid_at, supplier, bruto_usd, fx, n_units, status, notes, created_at, carrier)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'DHL')",
+        rusqlite::params![
+            input.import_id,
+            input.paid_at,             // Option<String> — NULL if status='draft' and toggle OFF
+            supplier,
+            input.bruto_usd,
+            input.fx,
+            n_units,
+            input.status,              // 'paid' or 'draft'
+            input.notes,
+            now,
+        ],
+    )?;
+
+    // INSERT all items into single destination table import_items (Diego decision 2026-04-28 ~19:00):
+    // - Single table for ALL promoted items (assigned + stock-future)
+    // - customer_id nullable column distinguishes them (NULL = stock-future · NOT NULL = assigned)
+    // - status='pending' on insert · close_import (R4) flips to 'arrived' + sets unit_cost_usd/gtq
+    // - sale_item_id and jersey_id_published get populated by Comercial / Inventario flows later
+    let mut import_items_count: i64 = 0;
+    let mut n_assigned: i64 = 0;
+    let mut n_stock: i64 = 0;
+    for item in &items {
+        tx.execute(
+            "INSERT INTO import_items
+             (import_id, wishlist_item_id, family_id, jersey_id, size, player_name, player_number,
+              patch, version, customer_id, expected_usd, status, notes)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'pending', ?12)",
+            rusqlite::params![
+                input.import_id,
+                item.wishlist_item_id,
+                item.family_id,
+                item.jersey_id,
+                item.size,
+                item.player_name,
+                item.player_number,
+                item.patch,
+                item.version,
+                item.customer_id,        // nullable: NULL = stock-future · NOT NULL = assigned
+                item.expected_usd,
+                item.notes,
+            ],
+        )?;
+        import_items_count += 1;
+        if item.customer_id.is_some() { n_assigned += 1; } else { n_stock += 1; }
+
+        // UPDATE wishlist row · status='promoted' · promoted_to_import_id=new_id
+        tx.execute(
+            "UPDATE import_wishlist
+             SET status = 'promoted',
+                 promoted_to_import_id = ?1
+             WHERE wishlist_item_id = ?2",
+            rusqlite::params![input.import_id, item.wishlist_item_id],
+        )?;
+    }
+
+    // BONUS: log inbox_events row (type='import_promoted'). Best-effort: if the table doesn't exist
+    // (older deployment), we silently skip rather than failing the entire promote.
+    // Real production schema: id/type/severity/title/description/module/metadata/action_label/action_target/created_at(unixepoch)/...
+    let metadata_json = serde_json::json!({
+        "import_id":   &input.import_id,
+        "n_items":     import_items_count,
+        "n_assigned":  n_assigned,
+        "n_stock":     n_stock,
+        "supplier":    &supplier,
+        "status":      &input.status,
+    }).to_string();
+    let title = format!("{} promovido", &input.import_id);
+    let description = format!(
+        "{} items movidos a batch ({} assigned · {} stock-future)",
+        import_items_count, n_assigned, n_stock
+    );
+    let action_target = format!("importaciones:{}", &input.import_id);
+    let _ = tx.execute(
+        "INSERT INTO inbox_events
+         (type, severity, title, description, module, metadata, action_label, action_target)
+         VALUES ('import_promoted', 'info', ?1, ?2, 'importaciones', ?3, 'Ver batch', ?4)",
+        rusqlite::params![title, description, metadata_json, action_target],
+    ); // intentionally swallow error — graceful degradation if inbox_events missing
+
+    tx.commit()?;
+
+    // Re-read canonical Import using same connection
+    let import = read_import_by_id(&conn, &input.import_id)?;
+
+    Ok(PromoteWishlistResult {
+        import,
+        import_items_count,
+    })
+}
+
+#[tauri::command]
+async fn cmd_promote_wishlist_to_batch(input: PromoteWishlistInput) -> Result<PromoteWishlistResult> {
+    impl_promote_wishlist_to_batch(input).await
+}
+
+/// Mark an import as in_transit (state guard: only allowed from 'paid').
+/// Optional `tracking_code` overwrites existing only if Some (COALESCE semantics).
+///
+/// State machine (full): draft → paid → in_transit → arrived → closed
+/// (cancelled available from any active state via cmd_cancel_import).
+///
+/// Diego decision (2026-04-28): "después del paid puedo manualmente marcar in_transit
+/// cuando el chino confirme el envío, antes que registre arrival."
+pub async fn impl_mark_in_transit(
+    import_id: String,
+    tracking_code: Option<String>,
+) -> Result<Import> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    // 1. Fetch current status (assert exists)
+    let current_status: String = tx.query_row(
+        "SELECT status FROM imports WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+        |row| row.get(0),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => ErpError::NotFound(format!("Import {}", import_id)),
+        other => other.into(),
+    })?;
+
+    // 2. State guard: only 'paid' → 'in_transit' allowed
+    if current_status != "paid" {
+        tx.rollback()?;
+        if current_status == "in_transit" {
+            return Err(ErpError::Other(format!(
+                "Import {} is already in_transit · this is a one-way state transition",
+                import_id
+            )));
+        }
+        return Err(ErpError::Other(format!(
+            "Import {} has status '{}' · must be 'paid' to mark in_transit (state machine: draft → paid → in_transit → arrived → closed)",
+            import_id, current_status
+        )));
+    }
+
+    // 3. UPDATE — COALESCE preserves existing tracking_code if input is None
+    tx.execute(
+        "UPDATE imports
+         SET status = 'in_transit',
+             tracking_code = COALESCE(?1, tracking_code)
+         WHERE import_id = ?2",
+        rusqlite::params![tracking_code, import_id],
+    )?;
+
+    tx.commit()?;
+
+    // 4. Re-read canonical Import
+    read_import_by_id(&conn, &import_id)
+}
+
+#[tauri::command]
+async fn cmd_mark_in_transit(
+    import_id: String,
+    tracking_code: Option<String>,
+) -> Result<Import> {
+    impl_mark_in_transit(import_id, tracking_code).await
 }
 
 // ─── R1.5 Completion: Create / Register Arrival / Update / Cancel ────
@@ -2979,9 +4982,13 @@ pub struct UpdateImportInput {
     pub notes: Option<String>,
     pub tracking_code: Option<String>,
     pub carrier: Option<String>,
+    /// YYYY-MM-DD · empty/None = no change · invalid = error
+    pub paid_at: Option<String>,
+    /// YYYY-MM-DD · empty/None = no change · invalid = error
+    pub arrived_at: Option<String>,
 }
 
-/// Business logic for editing notes/tracking_code/carrier on an existing import.
+/// Business logic for editing notes/tracking_code/carrier/paid_at/arrived_at on an existing import.
 /// Status guard: cannot update if status='closed' or 'cancelled'.
 /// pub so integration tests can call directly (Task 4 has smoke-only · this future-proofs).
 pub async fn impl_update_import(input: UpdateImportInput) -> Result<Import> {
@@ -3005,16 +5012,44 @@ pub async fn impl_update_import(input: UpdateImportInput) -> Result<Import> {
         )));
     }
 
+    // Validate + normalize paid_at/arrived_at: empty string → None (no change), valid YYYY-MM-DD → Some, invalid → error.
+    let paid_at_norm: Option<String> = match input.paid_at.as_deref() {
+        None => None,
+        Some(s) if s.is_empty() => None,
+        Some(s) => {
+            if chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").is_err() {
+                tx.rollback()?;
+                return Err(ErpError::Other(format!("invalid paid_at '{}' · expected YYYY-MM-DD", s)));
+            }
+            Some(s.to_string())
+        }
+    };
+    let arrived_at_norm: Option<String> = match input.arrived_at.as_deref() {
+        None => None,
+        Some(s) if s.is_empty() => None,
+        Some(s) => {
+            if chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d").is_err() {
+                tx.rollback()?;
+                return Err(ErpError::Other(format!("invalid arrived_at '{}' · expected YYYY-MM-DD", s)));
+            }
+            Some(s.to_string())
+        }
+    };
+
     tx.execute(
         "UPDATE imports
          SET notes = COALESCE(?1, notes),
              tracking_code = COALESCE(?2, tracking_code),
-             carrier = COALESCE(?3, carrier)
-         WHERE import_id = ?4",
+             carrier = COALESCE(?3, carrier),
+             paid_at = COALESCE(?4, paid_at),
+             arrived_at = COALESCE(?5, arrived_at)
+         WHERE import_id = ?6",
         rusqlite::params![
             input.notes,
             input.tracking_code,
             input.carrier,
+            paid_at_norm,
+            arrived_at_norm,
             input.import_id,
         ],
     )?;
@@ -3074,6 +5109,68 @@ pub async fn impl_cancel_import(import_id: String) -> Result<Import> {
 #[tauri::command]
 async fn cmd_cancel_import(import_id: String) -> Result<Import> {
     impl_cancel_import(import_id).await
+}
+
+/// Hard delete an import + cascade child rows. Only allowed when status='draft' or 'cancelled'.
+/// - Deletes import_items + import_free_unit cascade
+/// - Restores import_wishlist rows (status='active', promoted_to_import_id=NULL)
+/// - Decouples sale_items.import_id and jerseys.import_id (preserves sales/catalog)
+/// - Deletes the imports row
+/// pub so integration tests can call directly.
+pub async fn impl_delete_import(import_id: String) -> Result<()> {
+    let mut conn = open_db()?;
+    let tx = conn.transaction()?;
+
+    let status: String = tx.query_row(
+        "SELECT status FROM imports WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+        |row| row.get(0),
+    ).map_err(|e| match e {
+        rusqlite::Error::QueryReturnedNoRows => ErpError::NotFound(format!("Import {}", import_id)),
+        other => other.into(),
+    })?;
+
+    if status != "draft" && status != "cancelled" {
+        tx.rollback()?;
+        return Err(ErpError::Other(format!(
+            "cannot delete import with status '{}' · cancel first or it must be draft",
+            status
+        )));
+    }
+
+    tx.execute(
+        "DELETE FROM import_items WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+    )?;
+    tx.execute(
+        "DELETE FROM import_free_unit WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+    )?;
+    tx.execute(
+        "UPDATE import_wishlist SET status='active', promoted_to_import_id=NULL WHERE promoted_to_import_id = ?1",
+        rusqlite::params![&import_id],
+    )?;
+    tx.execute(
+        "UPDATE sale_items SET import_id=NULL WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+    )?;
+    tx.execute(
+        "UPDATE jerseys SET import_id=NULL WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+    )?;
+    tx.execute(
+        "DELETE FROM imports WHERE import_id = ?1",
+        rusqlite::params![&import_id],
+    )?;
+
+    tx.commit()?;
+    Ok(())
+}
+
+/// Tauri command — delegates to impl_delete_import.
+#[tauri::command]
+async fn cmd_delete_import(import_id: String) -> Result<()> {
+    impl_delete_import(import_id).await
 }
 
 #[tauri::command]
@@ -5580,6 +7677,257 @@ fn list_saved_views(args: ListSavedViewsArgs) -> Result<Vec<SavedViewOut>> {
     Ok(rows.filter_map(|r| r.ok()).collect())
 }
 
+// ─── IMP-R6 Settings ────────────────────────────────────────────
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ImpSetting {
+    pub key: String,
+    pub value: String,
+    pub updated_at: Option<String>,
+    pub updated_by: Option<String>,
+}
+
+/// Default values per key · returned if row doesn't exist in imp_settings.
+fn imp_setting_default(key: &str) -> Option<&'static str> {
+    match key {
+        "default_fx" => Some("7.73"),
+        "default_free_ratio" => Some("10"),
+        "default_wishlist_target" => Some("20"),
+        "threshold_wishlist_unbatched_days" => Some("30"),
+        "threshold_paid_unarrived_days" => Some("14"),
+        "threshold_cost_overrun_pct" => Some("30"),
+        "threshold_free_unit_unassigned_days" => Some("7"),
+        _ => None,
+    }
+}
+
+const ALL_IMP_SETTING_KEYS: &[&str] = &[
+    "default_fx",
+    "default_free_ratio",
+    "default_wishlist_target",
+    "threshold_wishlist_unbatched_days",
+    "threshold_paid_unarrived_days",
+    "threshold_cost_overrun_pct",
+    "threshold_free_unit_unassigned_days",
+];
+
+pub fn impl_get_imp_settings(conn: &rusqlite::Connection) -> rusqlite::Result<Vec<ImpSetting>> {
+    let mut out: Vec<ImpSetting> = Vec::with_capacity(ALL_IMP_SETTING_KEYS.len());
+    let mut stmt = conn.prepare(
+        "SELECT key, value, updated_at, updated_by FROM imp_settings WHERE key = ?1"
+    )?;
+    for &key in ALL_IMP_SETTING_KEYS {
+        let row: Option<ImpSetting> = stmt
+            .query_row([key], |r| {
+                Ok(ImpSetting {
+                    key: r.get(0)?,
+                    value: r.get(1)?,
+                    updated_at: r.get(2)?,
+                    updated_by: r.get(3)?,
+                })
+            })
+            .ok();
+        match row {
+            Some(s) => out.push(s),
+            None => out.push(ImpSetting {
+                key: key.to_string(),
+                value: imp_setting_default(key).unwrap_or("").to_string(),
+                updated_at: None,
+                updated_by: None,
+            }),
+        }
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+fn cmd_get_imp_settings() -> std::result::Result<Vec<ImpSetting>, String> {
+    let conn = rusqlite::Connection::open(db_path()).map_err(|e| e.to_string())?;
+    impl_get_imp_settings(&conn).map_err(|e| e.to_string())
+}
+
+/// Validates a setting value against its key's expected type.
+fn validate_setting_value(key: &str, value: &str) -> std::result::Result<(), String> {
+    match key {
+        "default_fx" => {
+            let v: f64 = value.parse().map_err(|_| format!("'{}' debe ser numérico", key))?;
+            if v <= 0.0 || v > 50.0 {
+                return Err(format!("'{}' fuera de rango (0,50]", key));
+            }
+        }
+        "default_free_ratio" | "default_wishlist_target" => {
+            let v: i64 = value.parse().map_err(|_| format!("'{}' debe ser entero", key))?;
+            if v <= 0 {
+                return Err(format!("'{}' debe ser > 0", key));
+            }
+        }
+        "threshold_wishlist_unbatched_days"
+        | "threshold_paid_unarrived_days"
+        | "threshold_free_unit_unassigned_days" => {
+            let v: i64 = value.parse().map_err(|_| format!("'{}' debe ser entero", key))?;
+            if v <= 0 || v > 365 {
+                return Err(format!("'{}' fuera de rango (0,365]", key));
+            }
+        }
+        "threshold_cost_overrun_pct" => {
+            let v: f64 = value.parse().map_err(|_| format!("'{}' debe ser numérico", key))?;
+            if v <= 0.0 || v > 500.0 {
+                return Err(format!("'{}' fuera de rango (0,500]", key));
+            }
+        }
+        _ => return Err(format!("Key desconocida: '{}'", key)),
+    }
+    Ok(())
+}
+
+pub fn impl_update_imp_setting_at(
+    conn: &rusqlite::Connection,
+    key: &str,
+    value: &str,
+) -> std::result::Result<ImpSetting, String> {
+    validate_setting_value(key, value)?;
+    let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    conn.execute(
+        "INSERT INTO imp_settings (key, value, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, 'diego')
+         ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at, updated_by=excluded.updated_by",
+        rusqlite::params![key, value, now],
+    ).map_err(|e| e.to_string())?;
+    Ok(ImpSetting {
+        key: key.to_string(),
+        value: value.to_string(),
+        updated_at: Some(now),
+        updated_by: Some("diego".to_string()),
+    })
+}
+
+#[tauri::command]
+fn cmd_update_imp_setting(key: String, value: String) -> std::result::Result<ImpSetting, String> {
+    let conn = rusqlite::Connection::open(db_path()).map_err(|e| e.to_string())?;
+    impl_update_imp_setting_at(&conn, &key, &value)
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MigrationLog {
+    pub last_migration_run_at: Option<String>,
+    pub imports_count: i64,
+    pub sale_items_linked: i64,
+    pub jerseys_linked: i64,
+    pub wishlist_count: i64,
+    pub free_units_count: i64,
+}
+
+pub fn impl_get_migration_log(conn: &rusqlite::Connection) -> rusqlite::Result<MigrationLog> {
+    let last: Option<String> = conn
+        .query_row(
+            "SELECT MAX(created_at) FROM imports",
+            [],
+            |r| r.get::<_, Option<String>>(0),
+        )
+        .unwrap_or(None);
+
+    let imports_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM imports", [], |r| r.get(0))
+        .unwrap_or(0);
+    let sale_items_linked: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sale_items WHERE import_id IS NOT NULL",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    let jerseys_linked: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM jerseys WHERE import_id IS NOT NULL",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+    let wishlist_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM import_wishlist", [], |r| r.get(0))
+        .unwrap_or(0);
+    let free_units_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM import_free_unit", [], |r| r.get(0))
+        .unwrap_or(0);
+
+    Ok(MigrationLog {
+        last_migration_run_at: last,
+        imports_count,
+        sale_items_linked,
+        jerseys_linked,
+        wishlist_count,
+        free_units_count,
+    })
+}
+
+#[tauri::command]
+fn cmd_get_migration_log() -> std::result::Result<MigrationLog, String> {
+    let conn = rusqlite::Connection::open(db_path()).map_err(|e| e.to_string())?;
+    impl_get_migration_log(&conn).map_err(|e| e.to_string())
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct IntegrationStatus {
+    pub name: String,
+    pub status: String,    // 'active' | 'disabled'
+    pub last_read_at: Option<String>,
+    pub note: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct IntegrationsStatus {
+    pub integrations: Vec<IntegrationStatus>,
+}
+
+#[tauri::command]
+fn cmd_get_integrations_status() -> std::result::Result<IntegrationsStatus, String> {
+    // Last DB modification timestamp as proxy for "last read"
+    let last_read = std::fs::metadata(db_path())
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| {
+            let dt = chrono::DateTime::<chrono::Local>::from(
+                std::time::UNIX_EPOCH + d
+            );
+            dt.format("%Y-%m-%d %H:%M:%S").to_string()
+        });
+
+    Ok(IntegrationsStatus {
+        integrations: vec![
+            IntegrationStatus {
+                name: "elclub.db (SQLite local)".to_string(),
+                status: "active".to_string(),
+                last_read_at: last_read,
+                note: Some("Source-of-truth compartido con Streamlit (read-only allá)".to_string()),
+            },
+            IntegrationStatus {
+                name: "PayPal screenshot OCR".to_string(),
+                status: "disabled".to_string(),
+                last_read_at: None,
+                note: Some("v0.5 future · captura bruto_usd automática".to_string()),
+            },
+            IntegrationStatus {
+                name: "DHL tracking API".to_string(),
+                status: "disabled".to_string(),
+                last_read_at: None,
+                note: Some("v0.5 future · webhook DHL para arrived_at + shipping_gtq".to_string()),
+            },
+        ],
+    })
+}
+
+#[tauri::command]
+fn cmd_resync_migration() -> std::result::Result<String, String> {
+    // INTENTIONAL STUB · v0.4.0 doesn't re-run Streamlit migration (would risk overwriting
+    // Tauri-authoritative state). Re-enable in v0.5 with proper merge logic.
+    Err("Re-sync deshabilitado en v0.4.0 · Streamlit migration ya corrió en R1. Para v0.5 con merge logic.".to_string())
+}
+
 // ─── App entry ───────────────────────────────────────────────────────
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -5671,7 +8019,35 @@ pub fn run() {
             cmd_register_arrival,
             cmd_update_import,
             cmd_cancel_import,
+            cmd_delete_import,
             cmd_export_imports_csv,
+            // Importaciones R2 (Wishlist + Promote-to-batch + state machine)
+            cmd_list_wishlist,
+            cmd_create_wishlist_item,
+            cmd_update_wishlist_item,
+            cmd_cancel_wishlist_item,
+            cmd_promote_wishlist_to_batch,
+            cmd_mark_in_transit,
+            // Importaciones R3 (Margen Real · cross-Comercial queries)
+            cmd_get_margen_real,
+            cmd_get_batch_margen_breakdown,
+            cmd_get_margen_pulso,
+            // Importaciones R4 (Free units ledger)
+            cmd_list_free_units,
+            cmd_assign_free_unit,
+            cmd_unassign_free_unit,
+            // Importaciones R5 (Supplier scorecard · Bond + multi-supplier scaffold)
+            cmd_get_supplier_metrics,
+            cmd_get_supplier_detail,
+            cmd_get_most_requested_unpublished,
+            // Importaciones R4.1 (Catalog modelos picker · post-MSI fix)
+            cmd_list_catalog_modelos,
+            // Importaciones R6 (Settings · migration log · integrations)
+            cmd_get_imp_settings,
+            cmd_update_imp_setting,
+            cmd_get_migration_log,
+            cmd_get_integrations_status,
+            cmd_resync_migration,
             // Finanzas R1
             cmd_compute_profit_snapshot,
             cmd_get_home_snapshot,
@@ -5758,5 +8134,106 @@ mod imp_r15_helper_tests {
     fn test_csv_escape_with_newline() {
         assert_eq!(csv_escape("line1\nline2"), "\"line1\nline2\"");
         assert_eq!(csv_escape("crlf\r\n"), "\"crlf\r\n\"");
+    }
+}
+
+#[cfg(test)]
+mod imp_r2_helper_tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    // Race-fix: ELCLUB_CATALOG_PATH is process-global. Without serialization,
+    // parallel test threads pollute each other's env (e.g., the missing-file
+    // test sets a bad path and the known/unknown tests then fail intermittently).
+    // ENV_LOCK serializes any test that mutates this env var.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn fixture_path() -> std::path::PathBuf {
+        let mut p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        p.push("tests/fixtures/catalog_minimal.json");
+        p
+    }
+
+    #[test]
+    fn test_catalog_family_exists_known() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::env::set_var("ELCLUB_CATALOG_PATH", fixture_path());
+        // family.family_id is the kebab-case parent — what catalog_family_exists checks
+        assert!(catalog_family_exists("argentina-2026-home").unwrap());
+        assert!(catalog_family_exists("france-2026-home").unwrap());
+    }
+
+    #[test]
+    fn test_catalog_family_exists_unknown() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::env::set_var("ELCLUB_CATALOG_PATH", fixture_path());
+        // Modelo SKUs are NOT family.family_id values — must return false
+        assert!(!catalog_family_exists("ARG-2026-L-FS").unwrap());
+        assert!(!catalog_family_exists("FAKE-XXXX-X-XX").unwrap());
+        assert!(!catalog_family_exists("").unwrap());
+    }
+
+    #[test]
+    fn test_catalog_family_exists_missing_file() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::env::set_var("ELCLUB_CATALOG_PATH", "/nonexistent/path.json");
+        let result = catalog_family_exists("argentina-2026-home");
+        assert!(result.is_err());
+        assert!(format!("{:?}", result.unwrap_err()).contains("not found"));
+    }
+
+    // ─── R4.1: catalog_modelo_sku_exists (modelo-level D7=B) ────
+    #[test]
+    fn test_catalog_modelo_sku_exists_known() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::env::set_var("ELCLUB_CATALOG_PATH", fixture_path());
+        // Modelo SKUs (uppercase) — what the wishlist actually stores
+        assert!(catalog_modelo_sku_exists("ARG-2026-L-FS").unwrap());
+        assert!(catalog_modelo_sku_exists("ARG-2026-L-PS").unwrap());
+        assert!(catalog_modelo_sku_exists("FRA-2026-L-FS").unwrap());
+        assert!(catalog_modelo_sku_exists("BRA-2026-L-FS").unwrap());
+    }
+
+    #[test]
+    fn test_catalog_modelo_sku_exists_unknown() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::env::set_var("ELCLUB_CATALOG_PATH", fixture_path());
+        // Family kebab-parent IDs are NOT modelo SKUs — must return false
+        assert!(!catalog_modelo_sku_exists("argentina-2026-home").unwrap());
+        assert!(!catalog_modelo_sku_exists("FAKE-XXXX-X-XX").unwrap());
+        assert!(!catalog_modelo_sku_exists("").unwrap());
+    }
+
+    #[test]
+    fn test_catalog_modelo_sku_exists_missing_file() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::env::set_var("ELCLUB_CATALOG_PATH", "/nonexistent/path.json");
+        let result = catalog_modelo_sku_exists("ARG-2026-L-FS");
+        assert!(result.is_err());
+        assert!(format!("{:?}", result.unwrap_err()).contains("not found"));
+    }
+
+    #[test]
+    fn test_impl_list_catalog_modelos_sorted_published_first() {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        std::env::set_var("ELCLUB_CATALOG_PATH", fixture_path());
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let modelos = rt.block_on(impl_list_catalog_modelos()).unwrap();
+
+        // Fixture has 3 families with 4 modelos total (ARG has 2)
+        assert_eq!(modelos.len(), 4);
+
+        // Confederation populated correctly
+        let arg = modelos.iter().find(|m| m.sku == "ARG-2026-L-FS").unwrap();
+        assert_eq!(arg.team, "Argentina");
+        assert_eq!(arg.confederation.as_deref(), Some("Conmebol"));
+        assert_eq!(arg.modelo_type.as_deref(), Some("fan_adult"));
+        assert_eq!(arg.sleeve.as_deref(), Some("short"));
+        assert!(arg.published);
+        assert!(arg.display.contains("ARG-2026-L-FS"));
+        assert!(arg.display.contains("fan_adult/short"));
+
+        let fra = modelos.iter().find(|m| m.sku == "FRA-2026-L-FS").unwrap();
+        assert_eq!(fra.confederation.as_deref(), Some("UEFA"));
     }
 }

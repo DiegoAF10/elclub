@@ -236,6 +236,278 @@ export interface UpdateImportInput {
 	notes?: string;
 	trackingCode?: string;
 	carrier?: string;
+	paidAt?: string;       // YYYY-MM-DD · empty = no change · invalid = server error
+	arrivedAt?: string;    // YYYY-MM-DD · empty = no change · invalid = server error
+}
+
+// ─── R2: Wishlist ───
+import type { WishlistItem } from '$lib/data/wishlist';
+
+export interface ListWishlistInput {
+	status?: 'active' | 'promoted' | 'cancelled';  // omitted = all
+}
+
+export interface CreateWishlistItemInput {
+	familyId:      string;          // D7=B: must exist in catalog.json
+	jerseyId?:     string;
+	size?:         string;
+	playerName?:   string;
+	playerNumber?: number;
+	patch?:        string;          // 'WC' | 'Champions' | undefined
+	version?:      'fan' | 'fan-w' | 'player';
+	customerId?:   string;
+	expectedUsd?:  number;          // >= 0
+	notes?:        string;
+}
+
+export interface UpdateWishlistItemInput {
+	wishlistItemId: number;
+	size?:          string;
+	playerName?:    string;
+	playerNumber?:  number;
+	patch?:         string;
+	version?:       'fan' | 'fan-w' | 'player';
+	customerId?:    string;
+	expectedUsd?:   number;
+	notes?:         string;
+	// Note: familyId NOT editable post-create
+}
+
+export interface PromoteWishlistInput {
+	wishlistItemIds: number[];      // length >= 1
+	importId:        string;        // regex IMP-YYYY-MM-DD enforced server-side
+	status:          'paid' | 'draft';  // Diego decision 2026-04-28: default UI = 'paid'
+	paidAt?:         string;        // YYYY-MM-DD · REQUIRED iff status='paid'
+	supplier?:       string;        // default 'Bond Soccer Jersey' if empty
+	brutoUsd:        number;        // > 0 · sum of expected_usd OR manual override
+	fx:              number;        // > 0 · default 7.73 cliente
+	notes?:          string;
+}
+
+export interface PromoteWishlistResult {
+	import:            Import;
+	importItemsCount:  number;       // count of import_items rows inserted (= wishlistItemIds.length)
+}
+
+// ─── R3: Margen Real ────────────────────────────────────────────────
+// camelCase field names match Rust serde rename — transparent translation
+
+export interface MargenFilter {
+	periodFrom?: string;       // YYYY-MM-DD
+	periodTo?: string;         // YYYY-MM-DD
+	supplier?: string;
+	includePipeline?: boolean; // default false (closed only)
+}
+
+export interface BatchMargenSummary {
+	importId: string;
+	supplier: string;
+	paidAt: string | null;
+	arrivedAt: string | null;
+	status: string;
+	nUnits: number | null;
+	totalLandedGtq: number | null;
+	nSalesLinked: number;
+	nItemsLinked: number;
+	revenueTotalGtq: number;        // SUM(sale_items.unit_price) WHERE import_id=?
+	margenBrutoGtq: number;
+	margenPct: number | null;
+	nStockPendiente: number;        // count import_items WHERE status='pending' (R6 single source)
+	valorStockPendienteGtq: number; // SUM(COALESCE(import_items.unit_cost_gtq, imports.unit_cost)) for pending items
+	nFreeUnits: number;
+	valorFreeUnitsGtq: number | null; // null hasta que se decida D-FREE valuation rule
+}
+
+export interface LinkedSale {
+	saleId: number;                 // Rust i64
+	occurredAt: string | null;      // production col: sales.occurred_at
+	customerId: number | null;      // production col: sales.customer_id is INTEGER
+	total: number;                  // production col: sales.total (NOT total_gtq)
+	nItemsFromBatch: number;
+}
+
+export interface PendingItem {
+	importItemId: number;
+	familyId: string;               // production col (NOT sku)
+	jerseyId: string | null;
+	size: string | null;
+	playerName: string | null;
+	playerNumber: number | null;
+	patch: string | null;
+	version: string | null;
+	customerId: string | null;      // NULL = stock-future · populated = assigned to specific customer
+	expectedUsd: number | null;
+	unitCostGtq: number | null;     // null hasta que close (R4) corra prorrateo
+	status: string;                 // 'pending' | 'arrived' | 'sold' | 'published' | 'cancelled'
+}
+
+export interface FreeUnitRow {
+	freeUnitId: number;
+	destination: string | null;
+	destinationRef: string | null;
+	assignedAt: string | null;
+	notes: string | null;
+}
+
+export interface BatchMargenDetail {
+	summary: BatchMargenSummary;
+	linkedSales: LinkedSale[];
+	pendingItems: PendingItem[];
+	freeUnits: FreeUnitRow[];
+}
+
+export interface MargenPulso {
+	nBatchesClosed: number;
+	revenueTotalYtdGtq: number;
+	landedTotalYtdGtq: number;
+	margenTotalYtdGtq: number;
+	margenPctAvg: number | null;
+	bestBatchId: string | null;
+	bestBatchMargenPct: number | null;
+	worstBatchId: string | null;
+	worstBatchMargenPct: number | null;
+	capitalAmarradoGtq: number;
+}
+
+// ─── R4: Free Units (regalos · scrap · destinos) ────────────────────
+// Rust uses #[serde(rename_all = "camelCase")] so wire format is already camelCase.
+
+export type FreeUnitDestination = 'vip' | 'mystery' | 'garantizada' | 'personal';
+
+export interface FreeUnit {
+	freeUnitId: number;
+	importId: string;
+	familyId: string | null;
+	jerseyId: string | null;
+	destination: FreeUnitDestination | null;
+	destinationRef: string | null;
+	assignedAt: string | null;
+	assignedBy: string | null;
+	notes: string | null;
+	createdAt: string;
+	// Joined display fields (no extra query needed)
+	importSupplier: string | null;
+	importPaidAt: string | null;
+}
+
+export interface AssignFreeUnitInput {
+	freeUnitId: number;
+	destination: FreeUnitDestination;
+	destinationRef?: string | null;   // required if destination='vip'
+	familyId?: string | null;
+	jerseyId?: string | null;
+	notes?: string | null;
+}
+
+export interface FreeUnitFilter {
+	importId?: string;
+	destination?: FreeUnitDestination | 'unassigned';
+	status?: 'assigned' | 'unassigned';
+}
+
+// ─── R5: Supplier Scorecard + Feedback Loop ─────────────────────────
+// Rust uses #[serde(rename_all = "camelCase")] so wire format is camelCase.
+
+export interface ContactInfo {
+	label: string;
+	paymentMethod: string;
+	carrier: string;
+}
+
+export interface PriceBand {
+	baseUsd: number | null;
+	patchUsd: number | null;
+	patchNameUsd: number | null;
+	source: string;  // "hardcoded:Bond" | "tbd"
+}
+
+export interface SupplierBatchSummary {
+	importId: string;
+	paidAt: string | null;
+	arrivedAt: string | null;
+	status: string;
+	nUnits: number | null;
+	totalLandedGtq: number | null;
+	leadTimeDays: number | null;
+}
+
+export interface SupplierMetrics {
+	supplier: string;
+	totalBatches: number;
+	closedBatches: number;
+	pipelineBatches: number;
+	leadTimeAvgDays: number | null;
+	leadTimeP50Days: number | null;
+	leadTimeP95Days: number | null;
+	leadTimeN: number;
+	totalLandedGtqYtd: number;
+	costAccuracyPct: number | null;
+	nextExpectedArrival: string | null;
+	lastBatchPaidAt: string | null;
+}
+
+export interface SupplierDetail {
+	metrics: SupplierMetrics;
+	contact: ContactInfo;
+	priceBand: PriceBand;
+	freePolicyText: string;
+	batches: SupplierBatchSummary[];   // sorted DESC by paid_at
+}
+
+export interface UnpublishedRequest {
+	familyId: string;
+	nRequests: number;
+	nPending: number;
+	nAssigned: number;
+	nStock: number;
+	lastRequestedAt: string | null;
+	published: boolean;   // siempre false en el response (filter aplicado server-side)
+}
+
+// ─── R4.1: Catalog modelos picker (cascade Tipo → Equipo → Modelo) ──
+// Wire format matches Rust ModeloOption struct (#[serde(rename_all = "camelCase")]).
+export interface ModeloOption {
+	sku: string;
+	familyParentId: string;
+	team: string;
+	season: string | null;
+	variant: string | null;
+	modeloType: string | null;
+	sleeve: string | null;
+	price: number | null;
+	published: boolean;
+	confederation: string | null;  // "UEFA"/"Conmebol"/"CAF"/"Concacaf"/"AFC" or null
+	country: string | null;
+	display: string;
+}
+
+// ─── IMP-R6 Settings ────────────────────────────────────────────────────
+
+export interface ImpSetting {
+	key: string;
+	value: string;
+	updatedAt: string | null;
+	updatedBy: string | null;
+}
+
+export interface MigrationLog {
+	lastMigrationRunAt: string | null;
+	importsCount: number;
+	saleItemsLinked: number;
+	jerseysLinked: number;
+	wishlistCount: number;
+	freeUnitsCount: number;
+}
+
+export interface IntegrationStatus {
+	name: string;
+	status: 'active' | 'disabled';
+	lastReadAt: string | null;
+	note: string | null;
+}
+
+export interface IntegrationsStatus {
+	integrations: IntegrationStatus[];
 }
 
 // ─── Capabilities — lo que cada adapter puede hacer ──────────────────
@@ -369,7 +641,41 @@ export interface Adapter {
 	registerArrival(input: RegisterArrivalInput): Promise<Import>;
 	updateImport(input: UpdateImportInput): Promise<Import>;
 	cancelImport(importId: string): Promise<Import>;
+	deleteImport(importId: string): Promise<void>;
 	exportImportsCsv(): Promise<string>;
+
+	// R2 additions
+	listWishlist(input: ListWishlistInput): Promise<WishlistItem[]>;
+	createWishlistItem(input: CreateWishlistItemInput): Promise<WishlistItem>;
+	updateWishlistItem(input: UpdateWishlistItemInput): Promise<WishlistItem>;
+	cancelWishlistItem(wishlistItemId: number): Promise<WishlistItem>;
+	promoteWishlistToBatch(input: PromoteWishlistInput): Promise<PromoteWishlistResult>;
+	markInTransit(importId: string, trackingCode?: string): Promise<Import>;
+
+	// R3 additions: Margen Real
+	getMargenReal(filter: MargenFilter): Promise<BatchMargenSummary[]>;
+	getBatchMargenBreakdown(importId: string): Promise<BatchMargenDetail>;
+	getMargenPulso(): Promise<MargenPulso>;
+
+	// R4 additions: Free Units
+	listFreeUnits(filter?: FreeUnitFilter): Promise<FreeUnit[]>;
+	assignFreeUnit(input: AssignFreeUnitInput): Promise<FreeUnit>;
+	unassignFreeUnit(freeUnitId: number): Promise<FreeUnit>;
+
+	// R5 additions: Supplier Scorecard + Feedback Loop
+	getSupplierMetrics(): Promise<SupplierMetrics[]>;
+	getSupplierDetail(supplier: string): Promise<SupplierDetail>;
+	getMostRequestedUnpublished(limit?: number): Promise<UnpublishedRequest[]>;
+
+	// R4.1: Catalog modelos picker (post-MSI fix · cascade UI for WishlistItemModal)
+	listCatalogModelos(): Promise<ModeloOption[]>;
+
+	// R6 additions: Settings · migration log · integrations
+	getImpSettings(): Promise<ImpSetting[]>;
+	updateImpSetting(key: string, value: string): Promise<ImpSetting>;
+	getMigrationLog(): Promise<MigrationLog>;
+	getIntegrationsStatus(): Promise<IntegrationsStatus>;
+	resyncMigration(): Promise<string>;  // throws on call (stub) · UI displays error
 
 	// ─── Finanzas (FIN-R1) ──────────────────────────────────────
 	computeProfitSnapshot(

@@ -12,22 +12,46 @@ import type {
 	CommitResult,
 	BackfillMetaResult,
 	CreateImportInput,
+	CreateWishlistItemInput,
 	DeleteFamilyResult,
 	DeleteSkuResult,
 	EditModeloTypeResult,
 	GitStatusInfo,
 	ListFilter,
+	ListWishlistInput,
 	MoveModeloArgs,
 	MoveModeloResult,
 	PhotoAction,
+	PromoteWishlistInput,
+	PromoteWishlistResult,
 	RegisterArrivalInput,
 	RemovePhotosResult,
 	SetFamilyVariantResult,
 	UpdateImportInput,
+	UpdateWishlistItemInput,
 	WatermarkArgs,
-	WatermarkResult
+	WatermarkResult,
+	// R3
+	MargenFilter,
+	BatchMargenSummary,
+	BatchMargenDetail,
+	MargenPulso,
+	// R4
+	FreeUnit,
+	AssignFreeUnitInput,
+	FreeUnitFilter,
+	// R5
+	SupplierMetrics,
+	SupplierDetail,
+	UnpublishedRequest,
+	ModeloOption,
+	// R6
+	ImpSetting,
+	MigrationLog,
+	IntegrationsStatus
 } from './types';
 import { NotAvailableInBrowser } from './types';
+import type { WishlistItem } from '$lib/data/wishlist';
 import type { Family } from '../data/types';
 import type { Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult } from '../data/comercial';
 import type { Import, ImportItem, ImportPulso, CloseImportResult } from '../data/importaciones';
@@ -405,8 +429,111 @@ export const browserAdapter: Adapter = {
 		throw new NotAvailableInBrowser('cancelImport');
 	},
 
+	async deleteImport(_importId: string): Promise<void> {
+		throw new NotAvailableInBrowser('deleteImport');
+	},
+
 	async exportImportsCsv(): Promise<string> {
 		throw new NotAvailableInBrowser('exportImportsCsv');
+	},
+
+	// ─── Importaciones R2 ──────────────────────────────────────────
+	async listWishlist(_input: ListWishlistInput): Promise<WishlistItem[]> {
+		throw new NotAvailableInBrowser('listWishlist');
+	},
+
+	async createWishlistItem(_input: CreateWishlistItemInput): Promise<WishlistItem> {
+		throw new NotAvailableInBrowser('createWishlistItem');
+	},
+
+	async updateWishlistItem(_input: UpdateWishlistItemInput): Promise<WishlistItem> {
+		throw new NotAvailableInBrowser('updateWishlistItem');
+	},
+
+	async cancelWishlistItem(_wishlistItemId: number): Promise<WishlistItem> {
+		throw new NotAvailableInBrowser('cancelWishlistItem');
+	},
+
+	async promoteWishlistToBatch(_input: PromoteWishlistInput): Promise<PromoteWishlistResult> {
+		throw new NotAvailableInBrowser('promoteWishlistToBatch');
+	},
+
+	async markInTransit(_importId: string, _trackingCode?: string): Promise<Import> {
+		throw new NotAvailableInBrowser('markInTransit');
+	},
+
+	// ─── Importaciones R3 (Margen Real) ────────────────────────────────
+	async getMargenReal(_filter: MargenFilter): Promise<BatchMargenSummary[]> {
+		throw new NotAvailableInBrowser('getMargenReal');
+	},
+
+	async getBatchMargenBreakdown(_importId: string): Promise<BatchMargenDetail> {
+		throw new NotAvailableInBrowser('getBatchMargenBreakdown');
+	},
+
+	async getMargenPulso(): Promise<MargenPulso> {
+		throw new NotAvailableInBrowser('getMargenPulso');
+	},
+
+	// ─── Importaciones R4 (Free Units) ─────────────────────────────────
+	async listFreeUnits(_filter?: FreeUnitFilter): Promise<FreeUnit[]> {
+		throw new NotAvailableInBrowser('listFreeUnits');
+	},
+
+	async assignFreeUnit(_input: AssignFreeUnitInput): Promise<FreeUnit> {
+		throw new NotAvailableInBrowser('assignFreeUnit');
+	},
+
+	async unassignFreeUnit(_freeUnitId: number): Promise<FreeUnit> {
+		throw new NotAvailableInBrowser('unassignFreeUnit');
+	},
+
+	// ─── Importaciones R5 (Supplier Scorecard + Feedback Loop) ─────────
+	async getSupplierMetrics(): Promise<SupplierMetrics[]> {
+		throw new NotAvailableInBrowser('getSupplierMetrics');
+	},
+
+	async getSupplierDetail(_supplier: string): Promise<SupplierDetail> {
+		throw new NotAvailableInBrowser('getSupplierDetail');
+	},
+
+	async getMostRequestedUnpublished(_limit?: number): Promise<UnpublishedRequest[]> {
+		throw new NotAvailableInBrowser('getMostRequestedUnpublished');
+	},
+
+	// ─── R4.1: Catalog modelos picker (cascade UI · post-MSI fix) ──────
+	async listCatalogModelos(): Promise<ModeloOption[]> {
+		throw new NotAvailableInBrowser('listCatalogModelos');
+	},
+
+	// ─── Importaciones R6 (Settings · migration log · integrations) ────
+	async getImpSettings(): Promise<ImpSetting[]> {
+		// Browser dev preview: return defaults so SettingsTab renders
+		return [
+			{ key: 'default_fx', value: '7.73', updatedAt: null, updatedBy: null },
+			{ key: 'default_free_ratio', value: '10', updatedAt: null, updatedBy: null },
+			{ key: 'default_wishlist_target', value: '20', updatedAt: null, updatedBy: null },
+			{ key: 'threshold_wishlist_unbatched_days', value: '30', updatedAt: null, updatedBy: null },
+			{ key: 'threshold_paid_unarrived_days', value: '14', updatedAt: null, updatedBy: null },
+			{ key: 'threshold_cost_overrun_pct', value: '30', updatedAt: null, updatedBy: null },
+			{ key: 'threshold_free_unit_unassigned_days', value: '7', updatedAt: null, updatedBy: null },
+		];
+	},
+
+	async updateImpSetting(_key: string, _value: string): Promise<ImpSetting> {
+		throw new NotAvailableInBrowser('updateImpSetting');
+	},
+
+	async getMigrationLog(): Promise<MigrationLog> {
+		throw new NotAvailableInBrowser('getMigrationLog');
+	},
+
+	async getIntegrationsStatus(): Promise<IntegrationsStatus> {
+		throw new NotAvailableInBrowser('getIntegrationsStatus');
+	},
+
+	async resyncMigration(): Promise<string> {
+		throw new NotAvailableInBrowser('resyncMigration');
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────

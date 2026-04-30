@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Import } from '$lib/data/importaciones';
   import { STATUS_LABELS } from '$lib/data/importaciones';
+  import MarkInTransitModal from './MarkInTransitModal.svelte';
 
   interface Props {
     imp: Import;
@@ -8,9 +9,21 @@
     onClose: () => void;
     onCancel: () => void;
     onEdit: () => void;
+    onDelete: () => void;
+    onRefresh?: () => void;
   }
 
-  let { imp, onRegisterArrival, onClose, onCancel, onEdit }: Props = $props();
+  let { imp, onRegisterArrival, onClose, onCancel, onEdit, onDelete, onRefresh }: Props = $props();
+
+  let canDelete = $derived(imp.status === 'draft' || imp.status === 'cancelled');
+
+  // R2 addition: mark in-transit flow
+  let markInTransitModalOpen = $state(false);
+
+  function handleInTransitMarked(_updated: Import) {
+    // Trigger parent refresh (mirrors handleArrivalRegistered pattern)
+    onRefresh?.();
+  }
 
   let leadDays = $derived(computeLeadDays(imp));
   let canClose = $derived(imp.arrived_at !== null && imp.shipping_gtq !== null && imp.status !== 'closed');
@@ -69,6 +82,15 @@
     <button class="text-mono text-[11px] px-3 py-1.5 rounded-[3px] bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-3)]" onclick={onRegisterArrival}>
       📥 Registrar arrival
     </button>
+    {#if imp.status === 'paid'}
+      <button
+        onclick={() => markInTransitModalOpen = true}
+        class="text-mono text-[11px] px-3 py-1.5 rounded-[3px] bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-text-primary)] hover:bg-[var(--color-surface-3)]"
+        title="Proveedor confirmó envío · marcar como in_transit"
+      >
+        → Marcar en tránsito
+      </button>
+    {/if}
     <button
       disabled
       title="PayPal invoice viewer diferido a IMP-R5+ · upload manual via Notes por ahora"
@@ -94,6 +116,15 @@
       📝 Editar
     </button>
     <span class="flex-1"></span>
+    {#if canDelete}
+      <button
+        onclick={onDelete}
+        title="Eliminar permanentemente · solo disponible en draft o cancelled"
+        class="text-mono text-[11px] px-3 py-1.5 rounded-[3px] bg-[rgba(244,63,94,0.08)] border border-[rgba(244,63,94,0.5)] text-[var(--color-danger)] hover:bg-[rgba(244,63,94,0.18)]"
+      >
+        🗑️ Eliminar
+      </button>
+    {/if}
     <button class="text-mono text-[11px] px-3 py-1.5 rounded-[3px] bg-transparent border border-[rgba(244,63,94,0.3)] text-[var(--color-danger)] hover:bg-[rgba(244,63,94,0.10)]" onclick={onCancel}>
       🚫 Cancelar batch
     </button>
@@ -113,3 +144,11 @@
     </button>
   </div>
 </div>
+
+<MarkInTransitModal
+  open={markInTransitModalOpen}
+  importId={imp.import_id}
+  currentTrackingCode={imp.tracking_code}
+  onClose={() => markInTransitModalOpen = false}
+  onMarked={handleInTransitMarked}
+/>

@@ -8,6 +8,7 @@
   import RegisterArrivalModal from './RegisterArrivalModal.svelte';
   import EditImportModal from './EditImportModal.svelte';
   import ConfirmCancelModal from './ConfirmCancelModal.svelte';
+  import ConfirmDeleteImportModal from './ConfirmDeleteImportModal.svelte';
   import type { Import, ImportItem } from '$lib/data/importaciones';
 
   interface Props {
@@ -25,6 +26,7 @@
   let showArrivalModal = $state(false);
   let showEditModal = $state(false);
   let showCancelModal = $state(false);
+  let showDeleteModal = $state(false);
 
   $effect(() => {
     if (imp) {
@@ -35,6 +37,7 @@
       showArrivalModal = false;
       showEditModal = false;
       showCancelModal = false;
+      showDeleteModal = false;
     }
   });
 
@@ -68,6 +71,11 @@
     if (!imp) return;
     showCancelModal = true;
   }
+
+  function handleDelete() {
+    if (!imp) return;
+    showDeleteModal = true;
+  }
 </script>
 
 <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -82,6 +90,8 @@
       onClose={handleClose}
       onCancel={handleCancel}
       onEdit={handleEdit}
+      onDelete={handleDelete}
+      onRefresh={onUpdated}
     />
     <ImportDetailSubtabs bind:activeSubtab itemsCount={items.length} />
 
@@ -116,4 +126,11 @@
   imp={imp}
   onClose={() => { showCancelModal = false; }}
   onCancelled={() => { onUpdated(); showCancelModal = false; }}
+/>
+
+<ConfirmDeleteImportModal
+  open={showDeleteModal}
+  imp={imp}
+  onClose={() => { showDeleteModal = false; }}
+  onDeleted={() => { onUpdated(); showDeleteModal = false; }}
 />
