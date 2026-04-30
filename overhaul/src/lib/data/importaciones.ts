@@ -25,8 +25,8 @@ export interface Import {
 }
 
 export interface ImportItem {
-  // Linkeable a sale_items o jerseys, polymorphic
-  source_table: 'sale_items' | 'jerseys';
+  // Linkeable a sale_items, jerseys (legacy R1) o import_items (single-source post-R6).
+  source_table: 'sale_items' | 'jerseys' | 'import_items';
   source_id: number;
   import_id: string;
   family_id: string | null;
@@ -41,6 +41,17 @@ export interface ImportItem {
   customer_id: string | null;       // null = stock futuro
   customer_name: string | null;     // joined
   is_free_unit: boolean;
+  // Supplier WA mini-feature (v0.4.6) · only populated for source_table='import_items'.
+  sent_to_supplier_at: string | null;       // ISO 8601 localtime · NULL = no enviado
+  sent_to_supplier_via: 'china' | 'hk' | null;
+}
+
+export interface SupplierMessage {
+  item_id: number;
+  text: string;            // multi-line formatted message (Name/Number/Size/Patch/Version)
+  hero_url: string;        // R2 hero JPG URL (img.elclub.club/families/{family_id}/01.jpg)
+  wa_china_url: string;    // wa.me/...?text=... pre-encoded
+  wa_hk_url: string;
 }
 
 export interface ImportPulso {

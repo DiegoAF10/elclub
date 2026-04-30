@@ -57,7 +57,7 @@ import type {
 } from './types';
 import type { WishlistItem } from '$lib/data/wishlist';
 import type { ComercialEvent, DetectedEvent, EventStatus, OrderForModal, PeriodRange, Lead, ConversationMeta, ConversationMessage, Customer, MetaSyncStatus, CustomerProfile, CreateCustomerArgs, CreateOrderArgs, CreateOrderItem, Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, SaleAttribution, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult, UpdateSaleArgs } from '../data/comercial';
-import type { Import, ImportItem, ImportPulso, CloseImportResult } from '../data/importaciones';
+import type { Import, ImportItem, ImportPulso, CloseImportResult, SupplierMessage } from '../data/importaciones';
 import type { Family } from '../data/types';
 import type { Expense, ExpenseInput, ProfitSnapshot, HomeSnapshot, RecentExpense } from '../data/finanzas';
 import { transformFamily } from './transform';
@@ -672,6 +672,19 @@ export const tauriAdapter: Adapter = {
 
 	async resyncMigration(): Promise<string> {
 		return await invoke<string>('cmd_resync_migration');  // throws "Re-sync deshabilitado..."
+	},
+
+	// ─── Supplier WA mini-feature (v0.4.6) ────────────────────────────
+	async getSupplierMessage(itemId: number): Promise<SupplierMessage> {
+		return invoke<SupplierMessage>('cmd_get_supplier_message', { itemId });
+	},
+
+	async copyHeroToClipboard(heroUrl: string): Promise<void> {
+		return invoke<void>('cmd_copy_hero_to_clipboard', { heroUrl });
+	},
+
+	async markItemSent(itemId: number, supplier: 'china' | 'hk'): Promise<void> {
+		return invoke<void>('cmd_mark_item_sent', { itemId, supplier });
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────

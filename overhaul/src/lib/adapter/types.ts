@@ -2,7 +2,7 @@
 // Implementaciones concretas: browser.ts (dev sin Tauri) + tauri.ts (app nativa).
 
 import type { Family, Status } from '../data/types';
-import type { Import, ImportItem, ImportPulso, CloseImportResult } from '../data/importaciones';
+import type { Import, ImportItem, ImportPulso, CloseImportResult, SupplierMessage } from '../data/importaciones';
 import type { Expense, ExpenseInput, ProfitSnapshot, HomeSnapshot, RecentExpense } from '../data/finanzas';
 import type {
 	ComercialEvent,
@@ -677,6 +677,11 @@ export interface Adapter {
 	getIntegrationsStatus(): Promise<IntegrationsStatus>;
 	resyncMigration(): Promise<string>;  // throws on call (stub) · UI displays error
 
+	// Supplier WA mini-feature (v0.4.6) · per-item send to Bond Soccer Jersey
+	getSupplierMessage(itemId: number): Promise<SupplierMessage>;
+	copyHeroToClipboard(heroUrl: string): Promise<void>;
+	markItemSent(itemId: number, supplier: 'china' | 'hk'): Promise<void>;
+
 	// ─── Finanzas (FIN-R1) ──────────────────────────────────────
 	computeProfitSnapshot(
 		periodStart: string,
@@ -756,7 +761,7 @@ export interface CatalogModeloRow {
 }
 
 // ─── IMP-R1 ──────────────────────────────────────────────────────────
-export type { Import, ImportStatus, ImportItem, ImportPulso, ImportFilter, CloseImportResult } from '../data/importaciones';
+export type { Import, ImportStatus, ImportItem, ImportPulso, ImportFilter, CloseImportResult, SupplierMessage } from '../data/importaciones';
 export { STATUS_LABELS as IMPORT_STATUS_LABELS, STATUS_PROGRESS as IMPORT_STATUS_PROGRESS } from '../data/importaciones';
 
 // ─── Finanzas (FIN-R1) ─────────────────────────────────────────────

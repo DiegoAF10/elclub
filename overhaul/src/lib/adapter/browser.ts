@@ -54,7 +54,7 @@ import { NotAvailableInBrowser } from './types';
 import type { WishlistItem } from '$lib/data/wishlist';
 import type { Family } from '../data/types';
 import type { Campaign, CampaignDetail, FunnelAwarenessReal, MetaSyncResult, BackfillAttributionResult, ImportOrdersResult, SalesListResult, CustomerSearchResult } from '../data/comercial';
-import type { Import, ImportItem, ImportPulso, CloseImportResult } from '../data/importaciones';
+import type { Import, ImportItem, ImportPulso, CloseImportResult, SupplierMessage } from '../data/importaciones';
 import type { Expense, ExpenseInput, ProfitSnapshot, HomeSnapshot, RecentExpense } from '../data/finanzas';
 import { transformFamily } from './transform';
 
@@ -534,6 +534,17 @@ export const browserAdapter: Adapter = {
 
 	async resyncMigration(): Promise<string> {
 		throw new NotAvailableInBrowser('resyncMigration');
+	},
+
+	// ─── Supplier WA mini-feature (v0.4.6) ────────────────────────────
+	async getSupplierMessage(_itemId: number): Promise<SupplierMessage> {
+		throw new NotAvailableInBrowser('getSupplierMessage');
+	},
+	async copyHeroToClipboard(_heroUrl: string): Promise<void> {
+		throw new NotAvailableInBrowser('copyHeroToClipboard');
+	},
+	async markItemSent(_itemId: number, _supplier: 'china' | 'hk'): Promise<void> {
+		throw new NotAvailableInBrowser('markItemSent');
 	},
 
 	// ─── Finanzas (FIN-R1) ─────────────────────────────────────────────
