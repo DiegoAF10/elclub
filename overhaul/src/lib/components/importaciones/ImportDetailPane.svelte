@@ -99,7 +99,7 @@
       {#if activeSubtab === 'overview'}
         <OverviewSubtab {imp} {items} />
       {:else if activeSubtab === 'items'}
-        <ItemsSubtab {items} />
+        <ItemsSubtab {items} onRefresh={() => imp && loadItems(imp.import_id)} />
       {:else if activeSubtab === 'costos'}
         <CostosSubtab {imp} {items} />
       {/if}
